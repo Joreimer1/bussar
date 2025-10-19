@@ -1,0 +1,825 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stadsvandring - Träningsapp</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+            background: linear-gradient(180deg, #1a1a1a 0%, #2d2d2d 100%);
+            color: white;
+            margin: 0;
+            padding: 0;
+        }
+        
+        .container {
+            max-width: 100%;
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .header {
+            background: linear-gradient(180deg, #000 0%, #1a1a1a 100%);
+            padding: 10px 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #333;
+        }
+        
+        .header h1 {
+            font-size: 16px;
+            margin: 0;
+            color: #fff;
+            font-weight: 600;
+        }
+        
+        #map {
+            flex: 1;
+            width: 100%;
+            position: relative;
+        }
+        
+        .info {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(180deg, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.95) 100%);
+            backdrop-filter: blur(10px);
+            padding: 20px;
+            border-top: 1px solid #333;
+            z-index: 1000;
+        }
+        
+        .stats-display {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .stat-box {
+            text-align: center;
+        }
+        
+        .stat-label {
+            font-size: 11px;
+            color: #999;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 5px;
+        }
+        
+        .stat-value {
+            font-size: 48px;
+            font-weight: 300;
+            color: #fff;
+            line-height: 1;
+        }
+        
+        .stat-unit {
+            font-size: 18px;
+            color: #999;
+            margin-left: 5px;
+        }
+        
+        .stat-value.time {
+            font-size: 36px;
+        }
+        
+        .controls {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 10px;
+        }
+        
+        button {
+            padding: 15px 20px;
+            background: linear-gradient(180deg, #ff6600 0%, #ff4400 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            box-shadow: 0 4px 12px rgba(255, 102, 0, 0.3);
+            transition: all 0.2s;
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(255, 102, 0, 0.4);
+        }
+        
+        button:active {
+            transform: translateY(0);
+        }
+        
+        button:disabled {
+            background: #555;
+            cursor: not-allowed;
+            box-shadow: none;
+            opacity: 0.5;
+        }
+        
+        button.secondary {
+            background: linear-gradient(180deg, #444 0%, #333 100%);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+        
+        button.secondary:hover {
+            background: linear-gradient(180deg, #555 0%, #444 100%);
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+        }
+        
+        .status {
+            margin: 10px 0;
+            padding: 10px 15px;
+            border-radius: 8px;
+            font-size: 13px;
+            text-align: center;
+        }
+        
+        .status.loading {
+            background-color: rgba(255, 193, 7, 0.2);
+            color: #ffc107;
+            border: 1px solid rgba(255, 193, 7, 0.3);
+        }
+        
+        .status.success {
+            background-color: rgba(76, 175, 80, 0.2);
+            color: #4caf50;
+            border: 1px solid rgba(76, 175, 80, 0.3);
+        }
+        
+        .status.error {
+            background-color: rgba(244, 67, 54, 0.2);
+            color: #f44336;
+            border: 1px solid rgba(244, 67, 54, 0.3);
+        }
+        
+        .distance-info {
+            display: none;
+        }
+        
+        .hikes-section {
+            background: linear-gradient(180deg, #1a1a1a 0%, #0a0a0a 100%);
+            border-radius: 0;
+            padding: 20px;
+            box-shadow: none;
+            border-top: 1px solid #333;
+        }
+        
+        .hikes-section h2 {
+            margin-bottom: 15px;
+            color: #fff;
+            font-size: 18px;
+            font-weight: 600;
+        }
+        
+        .hike-list {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        
+        .hike-item {
+            padding: 15px;
+            margin-bottom: 10px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .hike-info {
+            flex: 1;
+        }
+        
+        .hike-name {
+            font-weight: 600;
+            color: #fff;
+            font-size: 15px;
+        }
+        
+        .hike-stats {
+            font-size: 12px;
+            color: #999;
+            margin-top: 5px;
+        }
+        
+        .hike-actions {
+            display: flex;
+            gap: 5px;
+        }
+        
+        .hike-actions button {
+            padding: 8px 12px;
+            font-size: 12px;
+            background: linear-gradient(180deg, #ff6600 0%, #ff4400 100%);
+        }
+        
+        .hike-actions button:hover {
+            background: linear-gradient(180deg, #ff7700 0%, #ff5500 100%);
+        }
+        
+        .hike-actions button.delete {
+            background: linear-gradient(180deg, #dc3545 0%, #c82333 100%);
+        }
+        
+        .hike-actions button.delete:hover {
+            background: linear-gradient(180deg, #e04555 0%, #d52333 100%);
+        }
+        
+        .stats-summary {
+            margin: 15px 0;
+            padding: 15px;
+            background: rgba(255, 102, 0, 0.1);
+            border-left: 4px solid #ff6600;
+            border-radius: 8px;
+        }
+        
+        .stats-summary p {
+            margin: 0;
+            color: #fff;
+            font-weight: 600;
+            font-size: 14px;
+        }
+        
+        input[type="text"] {
+            padding: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            font-size: 15px;
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+        }
+        
+        input[type="text"]::placeholder {
+            color: #999;
+        }
+        
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #ff6600;
+            background: rgba(255, 255, 255, 0.15);
+        }
+        
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+        }
+        
+        .modal.active {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .modal-content {
+            background: linear-gradient(180deg, #2d2d2d 0%, #1a1a1a 100%);
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+            max-width: 400px;
+            width: 90%;
+            border: 1px solid #444;
+        }
+        
+        .modal-content h2 {
+            margin-bottom: 15px;
+            color: #fff;
+        }
+        
+        .modal-content p {
+            color: #ccc;
+        }
+        
+        .modal-content input {
+            width: 100%;
+            margin: 15px 0;
+            padding: 12px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            color: #fff;
+            font-size: 15px;
+        }
+        
+        .modal-content input::placeholder {
+            color: #999;
+        }
+        
+        .modal-content input:focus {
+            outline: none;
+            border-color: #ff6600;
+            background: rgba(255, 255, 255, 0.15);
+        }
+        
+        .modal-buttons {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .modal-buttons button {
+            flex: 1;
+        }
+        
+        @media (max-width: 768px) {
+            #map {
+                height: 60vh;
+            }
+            
+            .stat-value {
+                font-size: 36px;
+            }
+            
+            .stat-value.time {
+                font-size: 28px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🏃 Stadsvandring</h1>
+        </div>
+        
+        <div id="map"></div>
+        
+        <div class="info">
+            <div class="stats-display">
+                <div class="stat-box">
+                    <div class="stat-label">Tid</div>
+                    <div class="stat-value time" id="timeDisplay">00:00:00</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-label">Distans</div>
+                    <div>
+                        <span class="stat-value" id="distanceDisplay">0.00</span>
+                        <span class="stat-unit">km</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="controls">
+                <button id="trackBtn">START</button>
+                <button id="stopBtn" class="secondary" disabled>STOPP</button>
+            </div>
+            <div id="status"></div>
+        </div>
+        
+        <div class="hikes-section">
+            <h2>📊 Dina promenader</h2>
+            <div class="controls">
+                <button id="showAllBtn" class="secondary">Visa alla vägar</button>
+                <button id="clearAllBtn" class="secondary">Radera alla</button>
+            </div>
+            <div id="statsSummary" class="stats-summary" style="display: none;">
+                <p id="totalStats"></p>
+            </div>
+            <div class="hike-list" id="hikeList">
+                <p style="color: #999;">Inga sparade promenader ännu.</p>
+            </div>
+        </div>
+    </div>
+
+    <div id="saveModal" class="modal">
+        <div class="modal-content">
+            <h2>Spara promenad</h2>
+            <p>Ge denna promenad ett namn:</p>
+            <input type="text" id="hikeName" placeholder="T.ex: Södermalm vandring" />
+            <div class="modal-buttons">
+                <button id="saveCancelBtn" class="secondary">Avbryt</button>
+                <button id="saveConfirmBtn">Spara</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // IndexedDB Setup
+        let db;
+        const dbName = 'StadvandringDB';
+        const storeName = 'hikes';
+
+        // Initiera IndexedDB
+        function initDB() {
+            return new Promise((resolve, reject) => {
+                const request = indexedDB.open(dbName, 1);
+                
+                request.onerror = () => reject(request.error);
+                request.onsuccess = () => {
+                    db = request.result;
+                    resolve();
+                };
+                
+                request.onupgradeneeded = (event) => {
+                    db = event.target.result;
+                    if (!db.objectStoreNames.contains(storeName)) {
+                        db.createObjectStore(storeName, { keyPath: 'id', autoIncrement: true });
+                    }
+                };
+            });
+        }
+
+        // Spara promenad i IndexedDB
+        function saveHike(name, trackingPoints, totalDistance) {
+            return new Promise((resolve, reject) => {
+                const transaction = db.transaction([storeName], 'readwrite');
+                const store = transaction.objectStore(storeName);
+                
+                const hike = {
+                    name: name,
+                    date: new Date().toLocaleString('sv-SE'),
+                    distance: totalDistance,
+                    points: trackingPoints,
+                    timestamp: Date.now()
+                };
+                
+                const request = store.add(hike);
+                request.onerror = () => reject(request.error);
+                request.onsuccess = () => resolve(request.result);
+            });
+        }
+
+        // Hämta alla promenader
+        function getAllHikes() {
+            return new Promise((resolve, reject) => {
+                const transaction = db.transaction([storeName], 'readonly');
+                const store = transaction.objectStore(storeName);
+                const request = store.getAll();
+                
+                request.onerror = () => reject(request.error);
+                request.onsuccess = () => resolve(request.result);
+            });
+        }
+
+        // Radera promenad
+        function deleteHike(id) {
+            return new Promise((resolve, reject) => {
+                const transaction = db.transaction([storeName], 'readwrite');
+                const store = transaction.objectStore(storeName);
+                const request = store.delete(id);
+                
+                request.onerror = () => reject(request.error);
+                request.onsuccess = () => resolve();
+            });
+        }
+
+        // Radera alla promenader
+        function deleteAllHikes() {
+            return new Promise((resolve, reject) => {
+                const transaction = db.transaction([storeName], 'readwrite');
+                const store = transaction.objectStore(storeName);
+                const request = store.clear();
+                
+                request.onerror = () => reject(request.error);
+                request.onsuccess = () => resolve();
+            });
+        }
+
+        // Initiera kartan
+        const map = L.map('map').setView([59.3293, 18.0686], 12);
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors',
+            maxZoom: 19
+        }).addTo(map);
+
+        // Variabler för spårning
+        let gpsMarker = null;
+        let watchId = null;
+        let isTracking = false;
+        let trackingPoints = [];
+        let polyline = null;
+        let totalDistance = 0;
+        let displayedPolylines = [];
+        let startTime = null;
+        let timerInterval = null;
+
+        function showStatus(message, type) {
+            const statusEl = document.getElementById('status');
+            statusEl.textContent = message;
+            statusEl.className = 'status ' + type;
+        }
+
+        function handleGPS(position) {
+            const lat = position.coords.latitude;
+            const lng = position.coords.longitude;
+            const accuracy = position.coords.accuracy;
+
+            if (gpsMarker) {
+                map.removeLayer(gpsMarker);
+            }
+
+            gpsMarker = L.marker([lat, lng], {
+                icon: L.icon({
+                    iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png',
+                    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+                    iconSize: [25, 41],
+                    iconAnchor: [12, 41],
+                    popupAnchor: [1, -34],
+                    shadowSize: [41, 41]
+                })
+            })
+            .bindPopup(`Din position<br>Lat: ${lat.toFixed(4)}<br>Lng: ${lng.toFixed(4)}`)
+            .addTo(map)
+            .openPopup();
+
+            map.setView([lat, lng], 15);
+            showStatus(`✓ Position hämtad! Noggrannhet: ±${accuracy.toFixed(0)}m`, 'success');
+
+            if (isTracking) {
+                updateTracking([lat, lng]);
+            }
+        }
+
+        function handleGPSError(error) {
+            let message = 'Kunde inte hämta position. ';
+            if (error.code === error.PERMISSION_DENIED) message += 'Du nekade åtkomst till GPS.';
+            else if (error.code === error.POSITION_UNAVAILABLE) message += 'GPS-data är inte tillgänglig.';
+            else if (error.code === error.TIMEOUT) message += 'Tidsöverträffning vid GPS-sökning.';
+            showStatus(message, 'error');
+        }
+
+        function calculateDistance(lat1, lng1, lat2, lng2) {
+            const R = 6371;
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLng = (lng2 - lng1) * Math.PI / 180;
+            const a = 
+                Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                Math.sin(dLng / 2) * Math.sin(dLng / 2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            return R * c;
+        }
+
+        function updateTracking(coords) {
+            trackingPoints.push(coords);
+
+            if (trackingPoints.length > 1) {
+                const prevPoint = trackingPoints[trackingPoints.length - 2];
+                const distance = calculateDistance(prevPoint[0], prevPoint[1], coords[0], coords[1]);
+                totalDistance += distance;
+            }
+
+            if (polyline) {
+                map.removeLayer(polyline);
+            }
+            polyline = L.polyline(trackingPoints, {
+                color: '#ff6600',
+                weight: 3,
+                opacity: 0.8,
+                lineCap: 'round'
+            }).addTo(map);
+
+            updateDistanceInfo();
+        }
+
+        function updateDistanceInfo() {
+            const km = totalDistance.toFixed(2);
+            document.getElementById('distanceDisplay').textContent = km;
+        }
+
+        function updateTimer() {
+            if (!startTime) return;
+            const elapsed = Date.now() - startTime;
+            const hours = Math.floor(elapsed / 3600000);
+            const minutes = Math.floor((elapsed % 3600000) / 60000);
+            const seconds = Math.floor((elapsed % 60000) / 1000);
+            
+            const timeStr = 
+                String(hours).padStart(2, '0') + ':' +
+                String(minutes).padStart(2, '0') + ':' +
+                String(seconds).padStart(2, '0');
+            
+            document.getElementById('timeDisplay').textContent = timeStr;
+        }
+
+        async function displayAllHikes() {
+            const hikes = await getAllHikes();
+            const hikeListEl = document.getElementById('hikeList');
+            
+            if (hikes.length === 0) {
+                hikeListEl.innerHTML = '<p style="color: #999;">Inga sparade promenader ännu.</p>';
+                document.getElementById('statsSummary').style.display = 'none';
+                return;
+            }
+
+            let html = '';
+            let totalKm = 0;
+            
+            hikes.forEach(hike => {
+                totalKm += hike.distance;
+                const km = hike.distance.toFixed(2);
+                html += `
+                    <div class="hike-item">
+                        <div class="hike-info">
+                            <div class="hike-name">${hike.name}</div>
+                            <div class="hike-stats">${hike.date} • ${km} km</div>
+                        </div>
+                        <div class="hike-actions">
+                            <button onclick="showHikeOnMap(${hike.id})">Visa</button>
+                            <button class="delete" onclick="removeHike(${hike.id})">Radera</button>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            hikeListEl.innerHTML = html;
+            
+            const statsSummary = document.getElementById('statsSummary');
+            statsSummary.style.display = 'block';
+            document.getElementById('totalStats').textContent = 
+                `📊 Totalt: ${hikes.length} promenader • ${totalKm.toFixed(2)} km`;
+        }
+
+        async function showAllHikesOnMap() {
+            const hikes = await getAllHikes();
+            
+            // Rensa tidigare vägar
+            displayedPolylines.forEach(line => map.removeLayer(line));
+            displayedPolylines = [];
+            
+            if (hikes.length === 0) {
+                showStatus('Inga sparade promenader att visa.', 'error');
+                return;
+            }
+
+            const colors = ['#ff0000', '#00ff00', '#0000ff', '#ffff00', '#ff00ff', '#00ffff', '#ff6600', '#6600ff'];
+            
+            hikes.forEach((hike, index) => {
+                const color = colors[index % colors.length];
+                const line = L.polyline(hike.points, {
+                    color: color,
+                    weight: 2,
+                    opacity: 0.6,
+                    lineCap: 'round'
+                }).addTo(map).bindPopup(`${hike.name}<br>${hike.distance.toFixed(2)} km`);
+                
+                displayedPolylines.push(line);
+            });
+
+            showStatus(`✓ Visar alla ${hikes.length} promenader på kartan!`, 'success');
+        }
+
+        async function showHikeOnMap(id) {
+            const transaction = db.transaction([storeName], 'readonly');
+            const store = transaction.objectStore(storeName);
+            const request = store.get(id);
+            
+            request.onsuccess = () => {
+                const hike = request.result;
+                
+                // Rensa tidigare vägar
+                displayedPolylines.forEach(line => map.removeLayer(line));
+                displayedPolylines = [];
+                
+                const line = L.polyline(hike.points, {
+                    color: '#ff6600',
+                    weight: 3,
+                    opacity: 0.8,
+                    lineCap: 'round'
+                }).addTo(map).bindPopup(`${hike.name}<br>${hike.distance.toFixed(2)} km`);
+                
+                displayedPolylines.push(line);
+                map.fitBounds(line.getBounds());
+                showStatus(`Visar: ${hike.name}`, 'success');
+            };
+        }
+
+        async function removeHike(id) {
+            if (confirm('Är du säker på att du vill radera denna promenad?')) {
+                await deleteHike(id);
+                displayAllHikes();
+                showStatus('Promenad raderad.', 'success');
+            }
+        }
+
+        // Knappar
+        document.getElementById('trackBtn').addEventListener('click', function() {
+            if (!navigator.geolocation) {
+                showStatus('Din webbläsare stöder inte GPS.', 'error');
+                return;
+            }
+
+            isTracking = true;
+            trackingPoints = [];
+            totalDistance = 0;
+            startTime = Date.now();
+            
+            document.getElementById('trackBtn').disabled = true;
+            document.getElementById('stopBtn').disabled = false;
+            
+            showStatus('🔴 Spårning aktiv - Du är igång!', 'success');
+            updateDistanceInfo();
+            
+            timerInterval = setInterval(updateTimer, 1000);
+
+            watchId = navigator.geolocation.watchPosition(handleGPS, handleGPSError, {
+                enableHighAccuracy: true,
+                timeout: 5000,
+                maximumAge: 0
+            });
+        });
+
+        document.getElementById('stopBtn').addEventListener('click', function() {
+            isTracking = false;
+            if (watchId) {
+                navigator.geolocation.clearWatch(watchId);
+            }
+            if (timerInterval) {
+                clearInterval(timerInterval);
+            }
+            
+            document.getElementById('trackBtn').disabled = false;
+            document.getElementById('stopBtn').disabled = true;
+            showStatus('⏹ Spårning stoppad. Spara för att lagra denna promenad!', 'success');
+            
+            if (trackingPoints.length > 0 && totalDistance > 0) {
+                setTimeout(() => {
+                    document.getElementById('saveModal').classList.add('active');
+                }, 500);
+            }
+        });
+
+        document.getElementById('saveCancelBtn').addEventListener('click', function() {
+            document.getElementById('saveModal').classList.remove('active');
+            trackingPoints = [];
+            totalDistance = 0;
+            startTime = null;
+            if (polyline) {
+                map.removeLayer(polyline);
+                polyline = null;
+            }
+            document.getElementById('distanceDisplay').textContent = '0.00';
+            document.getElementById('timeDisplay').textContent = '00:00:00';
+        }); {
+
+
+        document.getElementById('saveConfirmBtn').addEventListener('click', async function() {
+            const name = document.getElementById('hikeName').value.trim();
+            if (!name) {
+                alert('Ge promenaden ett namn!');
+                return;
+            }
+
+            await saveHike(name, trackingPoints, totalDistance);
+            document.getElementById('saveModal').classList.remove('active');
+            document.getElementById('hikeName').value = '';
+            
+            trackingPoints = [];
+            totalDistance = 0;
+            startTime = null;
+            if (polyline) {
+                map.removeLayer(polyline);
+                polyline = null;
+            }
+            document.getElementById('distanceDisplay').textContent = '0.00';
+            document.getElementById('timeDisplay').textContent = '00:00:00';
+            
+            displayAllHikes();
+            showStatus(`✓ Promenad "${name}" sparad!`, 'success');
+        });
+
+        document.getElementById('showAllBtn').addEventListener('click', showAllHikesOnMap);
+
+        document.getElementById('clearAllBtn').addEventListener('click', async function() {
+            if (confirm('Är du säker på att du vill radera ALLA promenader? Detta går inte att ångra!')) {
+                await deleteAllHikes();
+                displayedPolylines.forEach(line => map.removeLayer(line));
+                displayedPolylines = [];
+                displayAllHikes();
+                showStatus('Alla promenader raderade.', 'success');
+            }
+        });
+
+        // Initiera
+        initDB().then(() => {
+            displayAllHikes();
+        });
+    </script>
+</body>
+</html>
