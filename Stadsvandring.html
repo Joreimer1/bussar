@@ -50,6 +50,7 @@
             flex: 1;
             width: 100%;
             position: relative;
+            min-height: 400px;
         }
         
         .info {
@@ -501,12 +502,20 @@
         }
 
         // Initiera kartan
-        const map = L.map('map').setView([59.3293, 18.0686], 12);
+        const map = L.map('map', {
+            zoomControl: true,
+            attributionControl: true
+        }).setView([59.3293, 18.0686], 13);
 
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '© OpenStreetMap contributors',
             maxZoom: 19
         }).addTo(map);
+
+        // Fixa kartans storlek efter lite fördröjning
+        setTimeout(() => {
+            map.invalidateSize();
+        }, 100);
 
         // Variabler för spårning
         let gpsMarker = null;
@@ -544,11 +553,13 @@
                     shadowSize: [41, 41]
                 })
             })
-            .bindPopup(`Din position<br>Lat: ${lat.toFixed(4)}<br>Lng: ${lng.toFixed(4)}`)
-            .addTo(map)
-            .openPopup();
+            .bindPopup(`Din position<br>Lat: ${lat.toFixed(4)}<br>Lng: ${lng.toFixed(4)}<br>Noggrannhet: ±${accuracy.toFixed(0)}m`)
+            .addTo(map);
 
-            map.setView([lat, lng], 15);
+            if (!isTracking) {
+                map.setView([lat, lng], 15);
+            }
+            
             showStatus(`✓ Position hämtad! Noggrannhet: ±${accuracy.toFixed(0)}m`, 'success');
 
             if (isTracking) {
