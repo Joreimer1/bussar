@@ -165,8 +165,10 @@
             margin-top: 10px;
             padding: 10px 15px;
             border-radius: 8px;
-            font-size: 13px;
+            font-size: 12px;
             text-align: center;
+            max-height: 100px;
+            overflow-y: auto;
         }
         
         .status.loading {
@@ -389,7 +391,7 @@
 <body>
     <div class="app-container">
         <div class="header">
-            <h1>🏃 Stadsvandring v0.3</h1>
+            <h1>🏃 Stadsvandring</h1>
         </div>
         
         <div class="map-container">
@@ -638,20 +640,42 @@
         }
 
         async function matchRouteToRoads(points) {
+            if (points.length < 2) {
+                return { 
+                    success: false, 
+                    error: `För få punkter (${points.length}). Behöver minst 2.` 
+                };
+            }
+            
             // Konvertera till OSRM format: lng,lat (observera ordningen!)
             const coordinates = points.map(p => `${p[1]},${p[0]}`).join(';');
             
             // OSRM map matching API
-            const url = `https://router.project-osrm.org/match/v1/foot/${coordinates}?overview=full&geometries=geojson`;
+            const url = `https://router.project-osrm.org/match/v1/foot/${coordinates}?overview=full&geometries=geojson&radiuses=${points.map(() => '25').join(';')}`;
             
             try {
-                showStatus('🔄 Justerar rutt till gator...', 'loading');
+                showStatus(`🔄 Justerar ${points.length} GPS-punkter till gator...`, 'loading');
                 const response = await fetch(url);
+                
+                if (!response.ok) {
+                    return { 
+                        success: false, 
+                        error: `HTTP ${response.status}: ${response.statusText}` 
+                    };
+                }
+                
                 const data = await response.json();
                 
                 if (data.code === 'Ok' && data.matchings && data.matchings.length > 0) {
-                    // Hämta den matchade geometrin
                     const matchedCoords = data.matchings[0].geometry.coordinates;
+                    
+                    if (!matchedCoords || matchedCoords.length === 0) {
+                        return { 
+                            success: false, 
+                            error: 'Ingen geometri returnerad från OSRM' 
+                        };
+                    }
+                    
                     // Konvertera tillbaka till [lat, lng] format för Leaflet
                     const leafletCoords = matchedCoords.map(c => [c[1], c[0]]);
                     
@@ -667,15 +691,20 @@
                     return {
                         success: true,
                         coordinates: leafletCoords,
-                        distance: newDistance
+                        distance: newDistance,
+                        matchedPoints: leafletCoords.length
                     };
                 } else {
-                    console.warn('Map matching misslyckades:', data);
-                    return { success: false };
+                    return { 
+                        success: false, 
+                        error: `OSRM kod: ${data.code}. ${data.message || 'Kunde inte matcha till gator'}` 
+                    };
                 }
             } catch (error) {
-                console.error('Map matching error:', error);
-                return { success: false };
+                return { 
+                    success: false, 
+                    error: `Nätverksfel: ${error.message}` 
+                };
             }
         }
 
@@ -841,10 +870,16 @@
             document.getElementById('stopBtn').disabled = true;
             
             if (trackingPoints.length > 0 && totalDistance > 0) {
+                showStatus(`📍 Har ${trackingPoints.length} GPS-punkter. Matchar till gator...`, 'loading');
+                
                 // Försök matcha rutten till gator
                 const matched = await matchRouteToRoads(trackingPoints);
                 
                 if (matched.success) {
+                    // Spara båda versionerna tillfälligt för jämförelse
+                    const originalPoints = [...trackingPoints];
+                    const originalDistance = totalDistance;
+                    
                     // Uppdatera med matchad rutt
                     trackingPoints = matched.coordinates;
                     totalDistance = matched.distance;
@@ -853,6 +888,16 @@
                     if (polyline) {
                         map.removeLayer(polyline);
                     }
+                    
+                    // Rita både original (röd, tunn) och matchad (grön, tjock)
+                    const originalLine = L.polyline(originalPoints, {
+                        color: '#ff0000',
+                        weight: 2,
+                        opacity: 0.4,
+                        lineCap: 'round',
+                        dashArray: '5, 5'
+                    }).addTo(map);
+                    
                     polyline = L.polyline(trackingPoints, {
                         color: '#00ff00',
                         weight: 4,
@@ -861,16 +906,16 @@
                     }).addTo(map);
                     
                     updateDisplay();
-                    showStatus('✓ Rutt justerad till gator!', 'success');
+                    showStatus(`✓ Matchad! ${originalPoints.length}→${matched.matchedPoints} punkter. Distans: ${originalDistance.toFixed(2)}→${totalDistance.toFixed(2)}km`, 'success');
                 } else {
-                    showStatus('⚠️ Kunde ej justera rutt (använder rå GPS)', 'error');
+                    showStatus(`❌ Matching misslyckades: ${matched.error}. Använder original GPS-data.`, 'error');
                 }
                 
                 setTimeout(() => {
                     document.getElementById('saveModal').classList.add('active');
-                }, 1000);
+                }, 2000);
             } else {
-                showStatus('⏹ Stoppad', 'success');
+                showStatus('⏹ Stoppad (ingen data att spara)', 'success');
             }
         });
 
