@@ -164,14 +164,18 @@
             
             if (priceInKr < 1) {
                 // Grönt under 1 kr - ju lägre pris, desto grönare
-                const intensity = Math.max(0, Math.min(1, (1 - priceInKr) * 1.5));
-                const green = Math.floor(220 - intensity * 40);
-                return `rgb(${Math.floor(240 - intensity * 40)}, ${green}, ${Math.floor(240 - intensity * 40)})`;
+                const intensity = Math.max(0, Math.min(1, (1 - priceInKr) * 2));
+                const red = Math.floor(200 - intensity * 100);
+                const green = Math.floor(255 - intensity * 55);
+                const blue = Math.floor(200 - intensity * 100);
+                return `rgb(${red}, ${green}, ${blue})`;
             } else {
                 // Rött över 1 kr - ju högre pris, desto rödare
-                const intensity = Math.max(0, Math.min(1, (priceInKr - 1) * 0.8));
-                const red = Math.floor(240 + intensity * 15);
-                return `rgb(${red}, ${Math.floor(240 - intensity * 100)}, ${Math.floor(240 - intensity * 100)})`;
+                const intensity = Math.max(0, Math.min(1, (priceInKr - 1) * 1.2));
+                const red = Math.floor(255);
+                const green = Math.floor(200 - intensity * 120);
+                const blue = Math.floor(200 - intensity * 120);
+                return `rgb(${red}, ${green}, ${blue})`;
             }
         }
         
@@ -307,26 +311,39 @@
                 plugins: [{
                     id: 'currentTimeLine',
                     afterDatasetsDraw(chart) {
-                        const { ctx, chartArea: { top, bottom }, scales: { x } } = chart;
-                        const xPos = x.getPixelForValue(currentHour);
+                        const { ctx, chartArea: { top, bottom, left, right }, scales: { x } } = chart;
                         
-                        ctx.save();
-                        ctx.strokeStyle = '#dc2626';
-                        ctx.lineWidth = 3;
-                        ctx.setLineDash([8, 4]);
-                        ctx.beginPath();
-                        ctx.moveTo(xPos, top);
-                        ctx.lineTo(xPos, bottom);
-                        ctx.stroke();
-                        ctx.setLineDash([]);
+                        // Hitta index för aktuell timme i data
+                        let currentIndex = -1;
+                        for (let i = 0; i < pricesData.length; i++) {
+                            const priceTime = new Date(pricesData[i].time_start);
+                            if (priceTime.getHours() === currentHour) {
+                                currentIndex = i;
+                                break;
+                            }
+                        }
                         
-                        // Rita en liten etikett
-                        ctx.fillStyle = '#dc2626';
-                        ctx.font = 'bold 12px Arial';
-                        ctx.textAlign = 'center';
-                        ctx.fillText('NU', xPos, top - 5);
-                        
-                        ctx.restore();
+                        if (currentIndex >= 0) {
+                            const xPos = x.getPixelForValue(currentIndex);
+                            
+                            ctx.save();
+                            ctx.strokeStyle = '#dc2626';
+                            ctx.lineWidth = 3;
+                            ctx.setLineDash([8, 4]);
+                            ctx.beginPath();
+                            ctx.moveTo(xPos, top);
+                            ctx.lineTo(xPos, bottom);
+                            ctx.stroke();
+                            ctx.setLineDash([]);
+                            
+                            // Rita en liten etikett
+                            ctx.fillStyle = '#dc2626';
+                            ctx.font = 'bold 12px Arial';
+                            ctx.textAlign = 'center';
+                            ctx.fillText('NU', xPos, top - 5);
+                            
+                            ctx.restore();
+                        }
                     }
                 }]
             });
