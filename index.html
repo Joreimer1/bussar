@@ -1,264 +1,125 @@
 <!DOCTYPE html>
 <html lang="sv">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SL Avgångar</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
-            background-color: #f0f0f0;
-            padding: 20px;
-        }
-        
-        .container {
-            max-width: 600px;
-            margin: 0 auto;
-        }
-        
-        .header {
-            display: flex;
-            align-items: center;
-            gap: 15px;
-            margin-bottom: 30px;
-            padding: 20px;
-            background: white;
-            border-radius: 12px;
-        }
-        
-        .bus-icon {
-            font-size: 32px;
-            background: black;
-            color: white;
-            padding: 10px;
-            border-radius: 8px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            width: 52px;
-            height: 52px;
-        }
-        
-        .header-text h1 {
-            font-size: 28px;
-            font-weight: 600;
-            color: #333;
-        }
-        
-        .column-headers {
-            display: grid;
-            grid-template-columns: auto 1fr;
-            gap: 40px;
-            padding: 0 20px;
-            margin-bottom: 15px;
-            font-size: 12px;
-            font-weight: 600;
-            color: #999;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-        
-        .column-headers div:last-child {
-            padding-left: 80px;
-        }
-        
-        .departures {
-            background: white;
-            border-radius: 12px;
-            overflow: hidden;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        }
-        
-        .departure-row {
-            display: grid;
-            grid-template-columns: auto 1fr;
-            gap: 40px;
-            padding: 18px 20px;
-            border-bottom: 1px solid #eee;
-            align-items: center;
-        }
-        
-        .departure-row:last-child {
-            border-bottom: none;
-        }
-        
-        .departure-info {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-        
-        .bus-number {
-            background: black;
-            color: white;
-            font-size: 20px;
-            font-weight: 700;
-            width: 44px;
-            height: 44px;
-            border-radius: 6px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex-shrink: 0;
-        }
-        
-        .destination {
-            font-size: 16px;
-            font-weight: 500;
-            color: #333;
-        }
-        
-        .time {
-            font-size: 24px;
-            font-weight: 600;
-            color: #008B8B;
-            text-align: right;
-        }
-        
-        .time.urgent {
-            color: #DC143C;
-        }
-        
-        .timestamp {
-            text-align: center;
-            font-size: 12px;
-            color: #999;
-            margin-top: 20px;
-            padding: 0 20px;
-        }
-    </style>
+  <meta charset="UTF-8" />
+  <title>Elprisindikator SE3</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-gauge@3.3.1"></script>
+  <style>
+    body {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      background: radial-gradient(circle at center, #f5f7fa 0%, #c3cfe2 100%);
+      font-family: "Segoe UI", sans-serif;
+      margin: 0;
+    }
+    #container {
+      width: 340px;
+      text-align: center;
+    }
+    canvas {
+      width: 100% !important;
+      height: auto !important;
+    }
+    #status {
+      font-size: 2rem;
+      font-weight: 600;
+      margin-top: 20px;
+      text-transform: uppercase;
+      transition: color 0.5s ease;
+    }
+  </style>
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <div class="bus-icon">🚌</div>
-            <div class="header-text">
-                <h1>Bussavgångar</h1>
-            </div>
-        </div>
-        
-        <div class="column-headers">
-            <div>Buss nr</div>
-            <div>Avgår om:</div>
-        </div>
-        
-        <div class="departures" id="departures">
-            <div class="departure-row">
-                <div class="departure-info">
-                    <div class="bus-number">-</div>
-                    <div class="destination">Hämtar data...</div>
-                </div>
-                <div class="time">-</div>
-            </div>
-        </div>
-        
-        <div class="timestamp" id="timestamp"></div>
-    </div>
+  <div id="container">
+    <canvas id="gaugeCanvas"></canvas>
+    <div id="status">Hämtar...</div>
+  </div>
 
-    <script>
-        let allDepartures = [];
-        let lastFetchTime = null;
+  <script>
+    const ctx = document.getElementById("gaugeCanvas").getContext("2d");
 
-        async function getSlDepartures(siteId) {
-            try {
-                const response = await fetch(`https://transport.integration.sl.se/v1/sites/${siteId}/departures`);
-                const data = await response.json();
-                
-                const departures = [];
-                
-                data.departures.forEach(departure => {
-                    if (departure.direction_code === 2) {
-                        departures.push(departure);
-                    }
-                });
-                
-                return departures;
-            } catch (error) {
-                console.error('Fel vid hämtning av data:', error);
-                return [];
-            }
+    const gaugeChart = new Chart(ctx, {
+      type: "gauge",
+      data: {
+        datasets: [
+          {
+            value: 0,
+            data: [1.5, 2.25, 4],
+            backgroundColor: ["#4CAF50", "#FFEB3B", "#F44336"],
+            borderWidth: 0,
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        valueLabel: { display: false },
+        needle: {
+          radiusPercentage: 2,
+          widthPercentage: 3.2,
+          lengthPercentage: 80,
+          color: "#444",
+        },
+        plugins: {
+          legend: { display: false },
+          datalabels: { display: false },
+        },
+      },
+    });
+
+    async function fetchPrices() {
+      const statusEl = document.getElementById("status");
+      try {
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, "0");
+        const day = String(now.getDate()).padStart(2, "0");
+        const url = `https://www.elprisetjustnu.se/api/v1/prices/${year}/${month}-${day}_SE3.json`;
+
+        const resp = await fetch(url);
+        if (!resp.ok) throw new Error("Kunde inte hämta API-data");
+        const data = await resp.json();
+
+        // Filtrera ut framtida tider (efter just nu)
+        const future = data.filter(d => new Date(d.time_start) > now);
+
+        // Ta de 8 första kvartalen (≈ 2 timmar)
+        const next8 = future.slice(0, 8);
+        if (next8.length === 0) throw new Error("Inga framtida priser hittades");
+
+        const sum = next8.reduce((acc, d) => acc + d.SEK_per_kWh, 0);
+        let text = "";
+        let color = "";
+
+        if (sum < 1.5) {
+          text = "LÅGT PRIS";
+          color = "#4CAF50";
+        } else if (sum < 2.25) {
+          text = "MEDELPRIS";
+          color = "#FFC107";
+        } else {
+          text = "HÖGT PRIS";
+          color = "#F44336";
         }
 
-        function formatTimeRemaining(expectedTime) {
-            const now = new Date();
-            const expected = new Date(expectedTime);
-            const diffMs = expected - now;
-            
-            if (diffMs <= 0) {
-                return null;
-            }
-            
-            const totalSeconds = Math.floor(diffMs / 1000);
-            const minutes = Math.floor(totalSeconds / 60);
-            const seconds = totalSeconds % 60;
-            
-            const secStr = seconds < 10 ? '0' + seconds : seconds;
-            
-            return `${minutes} min ${secStr} sek`;
-        }
+        gaugeChart.data.datasets[0].value = sum;
+        gaugeChart.update();
 
-        async function fetchDepartures() {
-            let departures1301 = await getSlDepartures(1301);
-            const departures1463 = await getSlDepartures(1463);
-            
-            // Filtrera bort buss 66 från 1301
-            departures1301 = departures1301.filter(d => d.line.id !== 66);
-            
-            allDepartures = [...departures1301, ...departures1463];
-            allDepartures.sort((a, b) => new Date(a.expected) - new Date(b.expected));
-            lastFetchTime = new Date();
-        }
+        statusEl.textContent = text;
+        statusEl.style.color = color;
+      } catch (err) {
+        console.error(err);
+        statusEl.textContent = "Fel vid hämtning";
+        statusEl.style.color = "#000";
+      }
+    }
 
-        function updateDisplay() {
-            let html = '';
-            
-            allDepartures.forEach(departure => {
-                const timeRemaining = formatTimeRemaining(departure.expected);
-                
-                if (timeRemaining) {
-                    const busNumber = departure.line.id;
-                    
-                    // Kolla om det är 2 minuter eller mindre kvar
-                    const now = new Date();
-                    const expected = new Date(departure.expected);
-                    const diffMs = expected - now;
-                    const totalMinutes = Math.floor(diffMs / 60000);
-                    const urgentClass = totalMinutes <= 2 ? ' urgent' : '';
-                    
-                    html += `
-                        <div class="departure-row">
-                            <div class="departure-info">
-                                <div class="bus-number">${busNumber}</div>
-                            </div>
-                            <div class="time${urgentClass}">${timeRemaining}</div>
-                        </div>
-                    `;
-                }
-            });
-            
-            if (html === '') {
-                html = '<div class="departure-row"><div class="departure-info"><div class="destination">Inga avgångar</div></div></div>';
-            }
-            
-            document.getElementById('departures').innerHTML = html;
-            document.getElementById('timestamp').textContent = 'API-anrop gjort: ' + lastFetchTime.toLocaleTimeString('sv-SE');
-        }
-
-        async function init() {
-            await fetchDepartures();
-            updateDisplay();
-            
-            setInterval(updateDisplay, 1000);
-            setInterval(fetchDepartures, 60000);
-        }
-
-        init();
-    </script>
+    fetchPrices();
+    setInterval(fetchPrices, 10 * 60 * 1000); // Uppdatera var 10:e minut
+  </script>
 </body>
 </html>
