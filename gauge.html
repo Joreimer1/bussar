@@ -3,9 +3,11 @@
 <head>
   <meta charset="UTF-8" />
   <title>Elprisindikator SE3</title>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-gauge@3.3.1"></script>
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <!-- Gauge-plugin (rätt version för Chart.js v4) -->
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-gauge@3.4.0/dist/chartjs-chart-gauge.min.js"></script>
+
   <style>
     body {
       display: flex;
@@ -13,7 +15,7 @@
       align-items: center;
       justify-content: center;
       height: 100vh;
-      background: radial-gradient(circle at center, #f5f7fa 0%, #c3cfe2 100%);
+      background: radial-gradient(circle at center, #eef2f3 0%, #d9e2ec 100%);
       font-family: "Segoe UI", sans-serif;
       margin: 0;
     }
@@ -43,6 +45,9 @@
   <script>
     const ctx = document.getElementById("gaugeCanvas").getContext("2d");
 
+    // Registrera gauge-pluginet innan användning
+    Chart.register(window['chartjs-chart-gauge']);
+
     const gaugeChart = new Chart(ctx, {
       type: "gauge",
       data: {
@@ -57,7 +62,6 @@
       },
       options: {
         responsive: true,
-        valueLabel: { display: false },
         needle: {
           radiusPercentage: 2,
           widthPercentage: 3.2,
@@ -78,55 +82,31 @@
         const year = now.getFullYear();
         const month = String(now.getMonth() + 1).padStart(2, "0");
         const day = String(now.getDate()).padStart(2, "0");
-        const url = `https://corsproxy.io/?https://www.elprisetjustnu.se/api/v1/prices/${year}/${month}-${day}_SE3.json`;
 
+        const url = `https://corsproxy.io/?https://www.elprisetjustnu.se/api/v1/prices/${year}/${month}-${day}_SE3.json`;
         const resp = await fetch(url);
         if (!resp.ok) throw new Error("Kunde inte hämta API-data");
         const data = await resp.json();
 
-        console.log("📦 API-data:", data);
-
-        // Filtrera framtida tider
         const nowTime = now.getTime();
         const future = data.filter(d => new Date(d.time_start).getTime() > nowTime);
+        const next2 = future.slice(0, 2);
 
-        console.log("⏳ Framtida datapunkter:", future.length);
+        const field = next2[0]?.SEK_per_kWh ?? next2[0]?.SEK_per_kWh_avg;
+        if (!field) throw new Error("Prisfält saknas");
 
-        const next8 = future.slice(0, 8);
-        if (next8.length === 0) {
-          statusEl.textContent = "Inga framtida priser";
-          statusEl.style.color = "#000";
-          return;
-        }
-
-        // Fältnamnet kan heta SEK_per_kWh eller SEK_per_kWh_avg
-        const field = next8[0].SEK_per_kWh !== undefined
-          ? "SEK_per_kWh"
-          : next8[0].SEK_per_kWh_avg !== undefined
-          ? "SEK_per_kWh_avg"
-          : null;
-
-        if (!field) {
-          console.error("❌ Hittar inte prisfält i API-data:", next8[0]);
-          statusEl.textContent = "Fel i datan";
-          statusEl.style.color = "#000";
-          return;
-        }
-
-        const sum = next8.reduce((acc, d) => acc + d[field], 0);
-        console.log("💰 Summa för 2 timmar:", sum);
+        const sum = next2.reduce((acc, d) => acc + (d.SEK_per_kWh ?? d.SEK_per_kWh_avg ?? 0), 0);
 
         let text = "";
         let color = "";
-
         if (sum < 1.5) {
-          text = "LÅGT PRIS";
+          text = "LÅGT";
           color = "#4CAF50";
         } else if (sum < 2.25) {
-          text = "MEDELPRIS";
+          text = "MEDEL";
           color = "#FFC107";
         } else {
-          text = "HÖGT PRIS";
+          text = "HÖGT";
           color = "#F44336";
         }
 
@@ -136,14 +116,14 @@
         statusEl.textContent = text;
         statusEl.style.color = color;
       } catch (err) {
-        console.error("⚠️ Fel:", err);
+        console.error("Fel:", err);
         statusEl.textContent = "Fel vid hämtning";
         statusEl.style.color = "#000";
       }
     }
 
     fetchPrices();
-    setInterval(fetchPrices, 10 * 60 * 1000); // Uppdatera var 10:e minut
+    setInterval(fetchPrices, 10 * 60 * 1000);
   </script>
 </body>
 </html>
