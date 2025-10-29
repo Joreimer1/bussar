@@ -78,19 +78,44 @@
         const year = now.getFullYear();
         const month = String(now.getMonth() + 1).padStart(2, "0");
         const day = String(now.getDate()).padStart(2, "0");
-        // 🚀 Proxy för att undvika CORS-fel
         const url = `https://corsproxy.io/?https://www.elprisetjustnu.se/api/v1/prices/${year}/${month}-${day}_SE3.json`;
 
         const resp = await fetch(url);
         if (!resp.ok) throw new Error("Kunde inte hämta API-data");
         const data = await resp.json();
 
-        // Filtrera framtida tider (efter nu)
-        const future = data.filter(d => new Date(d.time_start) > now);
-        const next8 = future.slice(0, 8); // 8 kvart = 2 timmar
-        if (next8.length === 0) throw new Error("Inga framtida priser hittades");
+        console.log("📦 API-data:", data);
 
-        const sum = next8.reduce((acc, d) => acc + d.SEK_per_kWh, 0);
+        // Filtrera framtida tider
+        const nowTime = now.getTime();
+        const future = data.filter(d => new Date(d.time_start).getTime() > nowTime);
+
+        console.log("⏳ Framtida datapunkter:", future.length);
+
+        const next8 = future.slice(0, 8);
+        if (next8.length === 0) {
+          statusEl.textContent = "Inga framtida priser";
+          statusEl.style.color = "#000";
+          return;
+        }
+
+        // Fältnamnet kan heta SEK_per_kWh eller SEK_per_kWh_avg
+        const field = next8[0].SEK_per_kWh !== undefined
+          ? "SEK_per_kWh"
+          : next8[0].SEK_per_kWh_avg !== undefined
+          ? "SEK_per_kWh_avg"
+          : null;
+
+        if (!field) {
+          console.error("❌ Hittar inte prisfält i API-data:", next8[0]);
+          statusEl.textContent = "Fel i datan";
+          statusEl.style.color = "#000";
+          return;
+        }
+
+        const sum = next8.reduce((acc, d) => acc + d[field], 0);
+        console.log("💰 Summa för 2 timmar:", sum);
+
         let text = "";
         let color = "";
 
@@ -111,7 +136,7 @@
         statusEl.textContent = text;
         statusEl.style.color = color;
       } catch (err) {
-        console.error(err);
+        console.error("⚠️ Fel:", err);
         statusEl.textContent = "Fel vid hämtning";
         statusEl.style.color = "#000";
       }
