@@ -3,83 +3,110 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Aktuellt Elpris</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <title>Elpris Dagsdiagram</title>
     <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 20px;
-            transition: background-color 0.3s ease;
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
         }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+            padding: 20px;
+            transition: background-color 0.5s ease;
+        }
+        
         .container {
+            max-width: 900px;
+            margin: 0 auto;
             background: white;
             border-radius: 12px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
             padding: 30px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
         }
+        
         h1 {
+            font-size: 28px;
+            font-weight: 600;
             color: #333;
             margin-bottom: 10px;
         }
-        .region-selector {
+        
+        .current-price {
+            font-size: 48px;
+            font-weight: 700;
+            color: #008B8B;
             margin: 20px 0;
         }
+        
+        .price-unit {
+            font-size: 18px;
+            color: #666;
+            font-weight: 400;
+        }
+        
+        .chart-container {
+            margin: 30px 0;
+            position: relative;
+            height: 400px;
+        }
+        
+        canvas {
+            width: 100%;
+            height: 100%;
+        }
+        
+        .info {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+            margin-top: 30px;
+        }
+        
+        .info-box {
+            background: #f8f8f8;
+            padding: 15px;
+            border-radius: 8px;
+        }
+        
+        .info-label {
+            font-size: 12px;
+            color: #999;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+        }
+        
+        .info-value {
+            font-size: 24px;
+            font-weight: 600;
+            color: #333;
+        }
+        
+        .timestamp {
+            text-align: center;
+            font-size: 12px;
+            color: #999;
+            margin-top: 20px;
+        }
+        
+        .area-selector {
+            margin: 20px 0;
+        }
+        
         select {
             padding: 10px 15px;
             font-size: 16px;
             border: 2px solid #ddd;
             border-radius: 8px;
-            cursor: pointer;
             background: white;
+            cursor: pointer;
         }
-        .current-price {
-            font-size: 48px;
-            font-weight: bold;
-            color: #2563eb;
-            margin: 20px 0;
-        }
-        .price-unit {
-            font-size: 24px;
-            color: #666;
-        }
-        .stats {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-            gap: 15px;
-            margin: 20px 0;
-        }
-        .stat-card {
-            background: #f8f9fa;
-            padding: 15px;
-            border-radius: 8px;
-        }
-        .stat-label {
-            font-size: 14px;
-            color: #666;
-            margin-bottom: 5px;
-        }
-        .stat-value {
-            font-size: 24px;
-            font-weight: bold;
-            color: #333;
-        }
-        .chart-container {
-            position: relative;
-            height: 400px;
-            margin: 30px 0;
-        }
-        .footer {
-            text-align: center;
-            color: #666;
-            font-size: 14px;
-            margin-top: 30px;
-        }
-        .loading {
-            text-align: center;
-            padding: 50px;
-            color: #666;
+        
+        select:focus {
+            outline: none;
+            border-color: #008B8B;
         }
     </style>
 </head>
@@ -87,153 +114,156 @@
     <div class="container">
         <h1>Aktuellt Elpris</h1>
         
-        <div class="region-selector">
-            <select id="regionSelect">
+        <div class="area-selector">
+            <select id="priceArea" onchange="loadPrices()">
                 <option value="SE3">SE3 - Stockholm</option>
                 <option value="SE1">SE1 - Luleå</option>
                 <option value="SE2">SE2 - Sundsvall</option>
                 <option value="SE4">SE4 - Malmö</option>
             </select>
         </div>
-
-        <div id="loading" class="loading">Laddar elpriser...</div>
         
-        <div id="content" style="display: none;">
-            <div class="current-price">
-                <span id="currentPrice">--</span>
-                <span class="price-unit">öre/kWh</span>
+        <div class="current-price">
+            <span id="currentPrice">--</span> <span class="price-unit">öre/kWh</span>
+        </div>
+        
+        <div class="chart-container">
+            <canvas id="priceChart"></canvas>
+        </div>
+        
+        <div class="info">
+            <div class="info-box">
+                <div class="info-label">Lägsta pris idag</div>
+                <div class="info-value" id="minPrice">--</div>
             </div>
-
-            <div class="stats">
-                <div class="stat-card">
-                    <div class="stat-label">Lägsta pris idag</div>
-                    <div class="stat-value" id="minPrice">--</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-label">Högsta pris idag</div>
-                    <div class="stat-value" id="maxPrice">--</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-label">Medelpris idag</div>
-                    <div class="stat-value" id="avgPrice">--</div>
-                </div>
+            <div class="info-box">
+                <div class="info-label">Högsta pris idag</div>
+                <div class="info-value" id="maxPrice">--</div>
             </div>
-
-            <div class="chart-container">
-                <canvas id="priceChart"></canvas>
+            <div class="info-box">
+                <div class="info-label">Medelpris idag</div>
+                <div class="info-value" id="avgPrice">--</div>
             </div>
         </div>
-
-        <div class="footer">
-            Elpriser tillhandahålls av <a href="https://www.elprisetjustnu.se/" target="_blank">Elpriset just nu.se</a>
-        </div>
+        
+        <div class="timestamp" id="timestamp"></div>
+        
+        <p style="margin-top: 20px; text-align: center; font-size: 12px; color: #999;">
+            <a href="https://www.elprisetjustnu.se" style="color: #008B8B; text-decoration: none;">Elpriser tillhandahålls av Elpriset just nu.se</a>
+        </p>
     </div>
 
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
     <script>
         let chart = null;
-        let currentRegion = 'SE3';
-
+        let pricesData = [];
+        
         // Funktion för att beräkna bakgrundsfärg baserat på pris
-        function getBackgroundColor(price) {
-            const priceInKr = price / 100; // Konvertera öre till kr
+        function getBackgroundColor(priceInOre) {
+            const priceInKr = priceInOre / 100;
             
             if (priceInKr < 1) {
                 // Grönt under 1 kr - ju lägre pris, desto grönare
                 const intensity = Math.max(0, Math.min(1, (1 - priceInKr) * 1.5));
-                const green = Math.floor(220 - intensity * 60); // 160-220
+                const green = Math.floor(220 - intensity * 40);
                 return `rgb(${Math.floor(240 - intensity * 40)}, ${green}, ${Math.floor(240 - intensity * 40)})`;
             } else {
                 // Rött över 1 kr - ju högre pris, desto rödare
-                const intensity = Math.max(0, Math.min(1, (priceInKr - 1) * 0.5));
-                const red = Math.floor(255 - intensity * 55); // 200-255
-                return `rgb(${red}, ${Math.floor(240 - intensity * 80)}, ${Math.floor(240 - intensity * 80)})`;
+                const intensity = Math.max(0, Math.min(1, (priceInKr - 1) * 0.8));
+                const red = Math.floor(240 + intensity * 15);
+                return `rgb(${red}, ${Math.floor(240 - intensity * 100)}, ${Math.floor(240 - intensity * 100)})`;
             }
         }
-
-        function updateBackgroundColor(prices) {
-            if (!prices || prices.length === 0) return;
+        
+        async function loadPrices() {
+            const area = document.getElementById('priceArea').value;
+            const today = new Date();
+            const year = today.getFullYear();
+            const month = String(today.getMonth() + 1).padStart(2, '0');
+            const day = String(today.getDate()).padStart(2, '0');
             
-            const currentHour = new Date().getHours();
-            const currentPrice = prices[currentHour];
+            const url = `https://www.elprisetjustnu.se/api/v1/prices/${year}/${month}-${day}_${area}.json`;
             
-            if (currentPrice) {
-                document.body.style.backgroundColor = getBackgroundColor(currentPrice.SEK_per_kWh * 100);
-            }
-        }
-
-        async function fetchPrices(region) {
             try {
-                const today = new Date().toISOString().split('T')[0];
-                const response = await fetch(`https://www.elprisetjustnu.se/api/v1/prices/${today}_${region}.json`);
+                const response = await fetch(url);
+                pricesData = await response.json();
                 
-                if (!response.ok) {
-                    throw new Error('Kunde inte hämta elpriser');
-                }
-                
-                const prices = await response.json();
-                return prices;
+                updateDisplay();
+                createChart();
             } catch (error) {
-                console.error('Fel vid hämtning av priser:', error);
-                return null;
+                console.error('Fel vid hämtning av elpris:', error);
+                document.getElementById('currentPrice').textContent = 'Fel';
             }
         }
-
-        function updateDisplay(prices) {
-            if (!prices || prices.length === 0) {
-                document.getElementById('loading').textContent = 'Kunde inte ladda elpriser';
-                return;
+        
+        function updateDisplay() {
+            const now = new Date();
+            const currentHour = now.getHours();
+            
+            // Hitta aktuell timme
+            let currentPrice = null;
+            for (let price of pricesData) {
+                const priceTime = new Date(price.time_start);
+                if (priceTime.getHours() === currentHour) {
+                    currentPrice = price;
+                    break;
+                }
             }
-
-            const currentHour = new Date().getHours();
-            const currentPrice = prices[currentHour];
             
             if (currentPrice) {
-                const priceInOre = Math.round(currentPrice.SEK_per_kWh * 100);
-                document.getElementById('currentPrice').textContent = priceInOre;
+                const priceWithVat = (currentPrice.SEK_per_kWh * 1.25 * 100).toFixed(2);
+                document.getElementById('currentPrice').textContent = priceWithVat;
+                
+                // Uppdatera bakgrundsfärg baserat på aktuellt pris
+                document.body.style.backgroundColor = getBackgroundColor(parseFloat(priceWithVat));
             }
-
-            const pricesInOre = prices.map(p => Math.round(p.SEK_per_kWh * 100));
-            const minPrice = Math.min(...pricesInOre);
-            const maxPrice = Math.max(...pricesInOre);
-            const avgPrice = Math.round(pricesInOre.reduce((a, b) => a + b, 0) / pricesInOre.length);
-
-            document.getElementById('minPrice').textContent = minPrice;
-            document.getElementById('maxPrice').textContent = maxPrice;
-            document.getElementById('avgPrice').textContent = avgPrice;
-
-            updateChart(prices);
-            updateBackgroundColor(prices);
-
-            document.getElementById('loading').style.display = 'none';
-            document.getElementById('content').style.display = 'block';
-        }
-
-        function updateChart(prices) {
-            const ctx = document.getElementById('priceChart');
-            const currentHour = new Date().getHours();
             
-            const labels = prices.map((_, i) => `${i.toString().padStart(2, '0')}:00`);
-            const data = prices.map(p => Math.round(p.SEK_per_kWh * 100));
-
+            // Beräkna statistik
+            const prices = pricesData.map(p => p.SEK_per_kWh * 1.25 * 100);
+            const minPrice = Math.min(...prices).toFixed(2);
+            const maxPrice = Math.max(...prices).toFixed(2);
+            const avgPrice = (prices.reduce((a, b) => a + b, 0) / prices.length).toFixed(2);
+            
+            document.getElementById('minPrice').textContent = minPrice + ' öre';
+            document.getElementById('maxPrice').textContent = maxPrice + ' öre';
+            document.getElementById('avgPrice').textContent = avgPrice + ' öre';
+            
+            document.getElementById('timestamp').textContent = 
+                'Uppdaterad: ' + now.toLocaleString('sv-SE');
+        }
+        
+        function createChart() {
+            const ctx = document.getElementById('priceChart').getContext('2d');
+            
+            const labels = pricesData.map(p => {
+                const date = new Date(p.time_start);
+                return date.getHours().toString().padStart(2, '0') + ':00';
+            });
+            
+            const prices = pricesData.map(p => (p.SEK_per_kWh * 1.25 * 100).toFixed(2));
+            
+            const now = new Date();
+            const currentHour = now.getHours();
+            
             if (chart) {
                 chart.destroy();
             }
-
+            
             chart = new Chart(ctx, {
                 type: 'line',
                 data: {
                     labels: labels,
                     datasets: [{
-                        label: 'Pris (öre/kWh)',
-                        data: data,
-                        borderColor: '#2563eb',
-                        backgroundColor: 'rgba(37, 99, 235, 0.1)',
+                        label: 'Pris (öre/kWh inkl. moms)',
+                        data: prices,
+                        borderColor: '#008B8B',
+                        backgroundColor: 'rgba(0, 139, 139, 0.1)',
                         borderWidth: 3,
                         fill: true,
                         tension: 0.4,
-                        pointRadius: 4,
-                        pointHoverRadius: 6,
-                        pointBackgroundColor: '#2563eb',
+                        pointRadius: 5,
+                        pointHoverRadius: 7,
+                        pointBackgroundColor: '#008B8B',
                         pointBorderColor: '#fff',
                         pointBorderWidth: 2
                     }]
@@ -248,12 +278,6 @@
                         tooltip: {
                             backgroundColor: 'rgba(0, 0, 0, 0.8)',
                             padding: 12,
-                            titleFont: {
-                                size: 14
-                            },
-                            bodyFont: {
-                                size: 16
-                            },
                             callbacks: {
                                 label: function(context) {
                                     return context.parsed.y + ' öre/kWh';
@@ -267,9 +291,6 @@
                             ticks: {
                                 callback: function(value) {
                                     return value + ' öre';
-                                },
-                                font: {
-                                    size: 12
                                 }
                             },
                             grid: {
@@ -277,36 +298,8 @@
                             }
                         },
                         x: {
-                            ticks: {
-                                font: {
-                                    size: 11
-                                },
-                                maxRotation: 45,
-                                minRotation: 45
-                            },
                             grid: {
                                 display: false
-                            }
-                        }
-                    },
-                    // Lägger till vertikal linje för aktuell tid
-                    plugins: {
-                        annotation: {
-                            annotations: {
-                                currentTime: {
-                                    type: 'line',
-                                    xMin: currentHour,
-                                    xMax: currentHour,
-                                    borderColor: '#dc2626',
-                                    borderWidth: 2,
-                                    borderDash: [5, 5],
-                                    label: {
-                                        enabled: true,
-                                        content: 'Nu',
-                                        position: 'start',
-                                        backgroundColor: '#dc2626'
-                                    }
-                                }
                             }
                         }
                     }
@@ -319,37 +312,41 @@
                         
                         ctx.save();
                         ctx.strokeStyle = '#dc2626';
-                        ctx.lineWidth = 2;
-                        ctx.setLineDash([5, 5]);
+                        ctx.lineWidth = 3;
+                        ctx.setLineDash([8, 4]);
                         ctx.beginPath();
                         ctx.moveTo(xPos, top);
                         ctx.lineTo(xPos, bottom);
                         ctx.stroke();
                         ctx.setLineDash([]);
+                        
+                        // Rita en liten etikett
+                        ctx.fillStyle = '#dc2626';
+                        ctx.font = 'bold 12px Arial';
+                        ctx.textAlign = 'center';
+                        ctx.fillText('NU', xPos, top - 5);
+                        
                         ctx.restore();
                     }
                 }]
             });
         }
-
-        async function loadPrices() {
-            document.getElementById('loading').style.display = 'block';
-            document.getElementById('content').style.display = 'none';
-            
-            const prices = await fetchPrices(currentRegion);
-            updateDisplay(prices);
-        }
-
-        document.getElementById('regionSelect').addEventListener('change', (e) => {
-            currentRegion = e.target.value;
-            loadPrices();
-        });
-
+        
         // Ladda priser vid start
         loadPrices();
-
-        // Uppdatera varje minut
-        setInterval(loadPrices, 60000);
+        
+        // Uppdatera varje timme
+        setInterval(() => {
+            loadPrices();
+        }, 3600000);
+        
+        // Uppdatera display varje minut för att hålla aktuell timme uppdaterad
+        setInterval(() => {
+            if (pricesData.length > 0) {
+                updateDisplay();
+                createChart();
+            }
+        }, 60000);
     </script>
 </body>
 </html>
