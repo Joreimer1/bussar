@@ -38,10 +38,9 @@
     </div>
 
     <script type="module">
-      import { Chart, registerables } from "https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.esm.js";
-      import { GaugeController, GaugeArc } from "https://cdn.jsdelivr.net/npm/chartjs-chart-gauge@3.4.0/dist/chartjs-chart-gauge.esm.js";
+      import { Chart, registerables } from "https://cdn.jsdelivr.net/npm/chart.js/+esm";
+      import { GaugeController, GaugeArc } from "https://cdn.jsdelivr.net/npm/chartjs-chart-gauge/+esm";
 
-      // Registrera allt som behövs
       Chart.register(...registerables, GaugeController, GaugeArc);
 
       const ctx = document.getElementById("gaugeCanvas").getContext("2d");
@@ -79,8 +78,8 @@
           const year = now.getFullYear();
           const month = String(now.getMonth() + 1).padStart(2, "0");
           const day = String(now.getDate()).padStart(2, "0");
-
           const url = `https://corsproxy.io/?https://www.elprisetjustnu.se/api/v1/prices/${year}/${month}-${day}_SE3.json`;
+
           const resp = await fetch(url);
           if (!resp.ok) throw new Error("Kunde inte hämta API-data");
           const data = await resp.json();
