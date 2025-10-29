@@ -1,129 +1,126 @@
 <!DOCTYPE html>
 <html lang="sv">
-<head>
-  <meta charset="UTF-8" />
-  <title>Elprisindikator SE3</title>
-  <!-- Chart.js -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-  <!-- Gauge-plugin (rätt version för Chart.js v4) -->
-  <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-gauge@3.4.0/dist/chartjs-chart-gauge.min.js"></script>
-
-  <style>
-    body {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      height: 100vh;
-      background: radial-gradient(circle at center, #eef2f3 0%, #d9e2ec 100%);
-      font-family: "Segoe UI", sans-serif;
-      margin: 0;
-    }
-    #container {
-      width: 340px;
-      text-align: center;
-    }
-    canvas {
-      width: 100% !important;
-      height: auto !important;
-    }
-    #status {
-      font-size: 2rem;
-      font-weight: 600;
-      margin-top: 20px;
-      text-transform: uppercase;
-      transition: color 0.5s ease;
-    }
-  </style>
-</head>
-<body>
-  <div id="container">
-    <canvas id="gaugeCanvas"></canvas>
-    <div id="status">Hämtar...</div>
-  </div>
-
-  <script>
-    const ctx = document.getElementById("gaugeCanvas").getContext("2d");
-
-    // Registrera gauge-pluginet innan användning
-    Chart.register(window['chartjs-chart-gauge']);
-
-    const gaugeChart = new Chart(ctx, {
-      type: "gauge",
-      data: {
-        datasets: [
-          {
-            value: 0,
-            data: [1.5, 2.25, 4],
-            backgroundColor: ["#4CAF50", "#FFEB3B", "#F44336"],
-            borderWidth: 0,
-          },
-        ],
-      },
-      options: {
-        responsive: true,
-        needle: {
-          radiusPercentage: 2,
-          widthPercentage: 3.2,
-          lengthPercentage: 80,
-          color: "#444",
-        },
-        plugins: {
-          legend: { display: false },
-          datalabels: { display: false },
-        },
-      },
-    });
-
-    async function fetchPrices() {
-      const statusEl = document.getElementById("status");
-      try {
-        const now = new Date();
-        const year = now.getFullYear();
-        const month = String(now.getMonth() + 1).padStart(2, "0");
-        const day = String(now.getDate()).padStart(2, "0");
-
-        const url = `https://corsproxy.io/?https://www.elprisetjustnu.se/api/v1/prices/${year}/${month}-${day}_SE3.json`;
-        const resp = await fetch(url);
-        if (!resp.ok) throw new Error("Kunde inte hämta API-data");
-        const data = await resp.json();
-
-        const nowTime = now.getTime();
-        const future = data.filter(d => new Date(d.time_start).getTime() > nowTime);
-        const next2 = future.slice(0, 2);
-
-        const field = next2[0]?.SEK_per_kWh ?? next2[0]?.SEK_per_kWh_avg;
-        if (!field) throw new Error("Prisfält saknas");
-
-        const sum = next2.reduce((acc, d) => acc + (d.SEK_per_kWh ?? d.SEK_per_kWh_avg ?? 0), 0);
-
-        let text = "";
-        let color = "";
-        if (sum < 1.5) {
-          text = "LÅGT";
-          color = "#4CAF50";
-        } else if (sum < 2.25) {
-          text = "MEDEL";
-          color = "#FFC107";
-        } else {
-          text = "HÖGT";
-          color = "#F44336";
-        }
-
-        gaugeChart.data.datasets[0].value = sum;
-        gaugeChart.update();
-
-        statusEl.textContent = text;
-        statusEl.style.color = color;
-      } catch (err) {
-        console.error("Fel:", err);
-        statusEl.textContent = "Fel vid hämtning";
-        statusEl.style.color = "#000";
+  <head>
+    <meta charset="UTF-8" />
+    <title>Elprisindikator SE3</title>
+    <style>
+      body {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100vh;
+        background: radial-gradient(circle at center, #eef2f3 0%, #d9e2ec 100%);
+        font-family: "Segoe UI", sans-serif;
+        margin: 0;
       }
-    }
+      #container {
+        width: 340px;
+        text-align: center;
+      }
+      canvas {
+        width: 100% !important;
+        height: auto !important;
+      }
+      #status {
+        font-size: 2rem;
+        font-weight: 600;
+        margin-top: 20px;
+        text-transform: uppercase;
+        transition: color 0.5s ease;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="container">
+      <canvas id="gaugeCanvas"></canvas>
+      <div id="status">Hämtar...</div>
+    </div>
 
-    fetchPrices();
-    setInterval(fetchPrices, 10 * 60 * 1000);
-  </script>
-</body>
+    <script type="module">
+      import { Chart, registerables } from "https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.esm.js";
+      import { GaugeController, GaugeArc } from "https://cdn.jsdelivr.net/npm/chartjs-chart-gauge@3.4.0/dist/chartjs-chart-gauge.esm.js";
+
+      // Registrera allt som behövs
+      Chart.register(...registerables, GaugeController, GaugeArc);
+
+      const ctx = document.getElementById("gaugeCanvas").getContext("2d");
+
+      const gaugeChart = new Chart(ctx, {
+        type: "gauge",
+        data: {
+          datasets: [
+            {
+              value: 0,
+              data: [1.5, 2.25, 4],
+              backgroundColor: ["#4CAF50", "#FFEB3B", "#F44336"],
+              borderWidth: 0,
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          needle: {
+            radiusPercentage: 2,
+            widthPercentage: 3.2,
+            lengthPercentage: 80,
+            color: "#444",
+          },
+          plugins: {
+            legend: { display: false },
+          },
+        },
+      });
+
+      async function fetchPrices() {
+        const statusEl = document.getElementById("status");
+        try {
+          const now = new Date();
+          const year = now.getFullYear();
+          const month = String(now.getMonth() + 1).padStart(2, "0");
+          const day = String(now.getDate()).padStart(2, "0");
+
+          const url = `https://corsproxy.io/?https://www.elprisetjustnu.se/api/v1/prices/${year}/${month}-${day}_SE3.json`;
+          const resp = await fetch(url);
+          if (!resp.ok) throw new Error("Kunde inte hämta API-data");
+          const data = await resp.json();
+
+          const nowTime = now.getTime();
+          const future = data.filter((d) => new Date(d.time_start).getTime() > nowTime);
+          const next2 = future.slice(0, 2);
+
+          const sum = next2.reduce(
+            (acc, d) => acc + (d.SEK_per_kWh ?? d.SEK_per_kWh_avg ?? 0),
+            0
+          );
+
+          let text = "";
+          let color = "";
+          if (sum < 1.5) {
+            text = "LÅGT";
+            color = "#4CAF50";
+          } else if (sum < 2.25) {
+            text = "MEDEL";
+            color = "#FFC107";
+          } else {
+            text = "HÖGT";
+            color = "#F44336";
+          }
+
+          gaugeChart.data.datasets[0].value = sum;
+          gaugeChart.update();
+
+          statusEl.textContent = text;
+          statusEl.style.color = color;
+        } catch (err) {
+          console.error("Fel:", err);
+          statusEl.textContent = "Fel vid hämtning";
+          statusEl.style.color = "#000";
+        }
+      }
+
+      fetchPrices();
+      setInterval(fetchPrices, 10 * 60 * 1000);
+    </script>
+  </body>
 </html>
