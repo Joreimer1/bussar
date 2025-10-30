@@ -135,9 +135,33 @@
         const lon = 18.0977;
         
         const weatherSymbols = {
-            1: '☀️', 2: '🌤️', 3: '⛅', 4: '☁️', 5: '🌦️', 6: '🌧️',
-            7: '⛈️', 8: '🌨️', 9: '🌦️', 10: '🌧️', 11: '⛈️',
-            12: '🌨️', 13: '🌨️', 14: '🌨️', 15: '🌫️'
+            1: '☀️',   // Klart
+            2: '🌤️',   // Lätt molnighet
+            3: '🌤️',   // Halvklart
+            4: '🌥️',   // Molnigt
+            5: '☁️',   // Mulet
+            6: '☁️',   // Mulet
+            7: '🌫️',   // Dimma
+            8: '🌦️',   // Lätt regn
+            9: '🌧️',   // Regn
+            10: '⛈️',  // Kraftigt regn
+            11: '⛈️',  // Åska
+            12: '🌨️',  // Lätt snöfall
+            13: '❄️',   // Snöfall
+            14: '❄️',   // Kraftigt snöfall
+            15: '🌨️',  // Snöblandat regn
+            16: '🌨️',  // Snöblandat regn
+            17: '🌨️',  // Snöblandat regn
+            18: '🌧️',  // Lätt regn
+            19: '🌧️',  // Regn
+            20: '⛈️',  // Kraftigt regn
+            21: '⛈️',  // Åska
+            22: '🌨️',  // Lätt snöblandat regn
+            23: '🌨️',  // Snöblandat regn
+            24: '🌨️',  // Kraftigt snöblandat regn
+            25: '🌨️',  // Lätt snöfall
+            26: '❄️',   // Snöfall
+            27: '❄️'   // Kraftigt snöfall
         };
 
         async function fetchWeatherData() {
@@ -175,8 +199,10 @@
             const temp = getParameterValue(current, 't');
             const windSpeed = getParameterValue(current, 'ws');
             const humidity = getParameterValue(current, 'r');
-            const precip = getParameterValue(current, 'pcat');
             const symbol = getParameterValue(current, 'Wsymb2');
+            
+            // Debug: logga symbol-värdet
+            console.log('Weather symbol code:', symbol);
             
             const weatherIcon = weatherSymbols[symbol] || '🌤️';
             
