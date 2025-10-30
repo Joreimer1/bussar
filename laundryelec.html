@@ -69,6 +69,10 @@
                     return itemHour >= currentHour && itemHour < currentHour + 2;
                 });
                 
+                console.log('Aktuell timme:', currentHour);
+                console.log('Närmaste 2 timmar:', nextTwoHours);
+                console.log('Pris per timme:', nextTwoHours.map(h => h.SEK_per_kWh));
+                
                 // Om vi inte har 2 timmar kvar idag, ta från nästa dag
                 if (nextTwoHours.length < 2) {
                     const tomorrow = new Date(now);
