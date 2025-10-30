@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Soltider Stockholm</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+        }
+        
+        .sun-info-card {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 400px;
+            width: 100%;
+        }
+        
+        .location {
+            text-align: center;
+            color: #333;
+            font-size: 1.1em;
+            margin-bottom: 8px;
+            font-weight: 500;
+        }
+        
+        .date {
+            text-align: center;
+            color: #666;
+            font-size: 0.9em;
+            margin-bottom: 25px;
+        }
+        
+        .sun-times {
+            display: flex;
+            justify-content: space-around;
+            gap: 20px;
+            margin-bottom: 25px;
+        }
+        
+        .time-block {
+            flex: 1;
+            text-align: center;
+            padding: 20px;
+            background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%);
+            border-radius: 15px;
+            transition: transform 0.2s;
+        }
+        
+        .time-block:hover {
+            transform: translateY(-5px);
+        }
+        
+        .time-block.sunrise {
+            background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
+        }
+        
+        .time-block.sunset {
+            background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%);
+        }
+        
+        .icon {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+        
+        .label {
+            font-size: 0.85em;
+            color: #555;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+        
+        .time {
+            font-size: 1.8em;
+            font-weight: bold;
+            color: #333;
+        }
+        
+        .day-length {
+            text-align: center;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            color: #666;
+        }
+        
+        .day-length-value {
+            font-size: 1.3em;
+            font-weight: bold;
+            color: #333;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="sun-info-card">
+        <div class="location">📍 Stockholm, Södermalm</div>
+        <div class="date">Torsdag 31 oktober 2025</div>
+        
+        <div class="sun-times">
+            <div class="time-block sunrise">
+                <div class="icon">🌅</div>
+                <div class="label">Soluppgång</div>
+                <div class="time">07:02</div>
+            </div>
+            
+            <div class="time-block sunset">
+                <div class="icon">🌇</div>
+                <div class="label">Solnedgång</div>
+                <div class="time">15:59</div>
+            </div>
+        </div>
+        
+        <div class="day-length">
+            <div>☀️ Dagens längd</div>
+            <div class="day-length-value">8h 57min</div>
+        </div>
+    </div>
+</body>
+</html>
