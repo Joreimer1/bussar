@@ -120,11 +120,7 @@
             <div class="current-weather" id="currentWeather"></div>
             
             <div class="chart-container">
-                <canvas id="tempChart"></canvas>
-            </div>
-            
-            <div class="chart-container">
-                <canvas id="precipChart"></canvas>
+                <canvas id="combinedChart"></canvas>
             </div>
             
             <div class="updated" id="updated"></div>
@@ -230,86 +226,57 @@
             document.getElementById('currentWeather').innerHTML = html;
         }
 
-        function createTemperatureChart(forecast) {
+        function createCombinedChart(forecast) {
             const labels = forecast.map(f => {
                 const time = new Date(f.validTime);
                 return time.getHours() + ':00';
             });
             
             const temperatures = forecast.map(f => getParameterValue(f, 't'));
-            
-            const ctx = document.getElementById('tempChart').getContext('2d');
-            new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        label: 'Temperatur (°C)',
-                        data: temperatures,
-                        borderColor: '#667eea',
-                        backgroundColor: 'rgba(102, 126, 234, 0.1)',
-                        borderWidth: 3,
-                        fill: true,
-                        tension: 0.4,
-                        pointRadius: 4,
-                        pointHoverRadius: 6
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            display: true,
-                            position: 'top'
-                        },
-                        title: {
-                            display: true,
-                            text: 'Temperatur under dagen',
-                            font: { size: 16 }
-                        }
-                    },
-                    scales: {
-                        y: {
-                            beginAtZero: false,
-                            ticks: {
-                                callback: function(value) {
-                                    return value + '°C';
-                                }
-                            }
-                        }
-                    }
-                }
-            });
-        }
-
-        function createPrecipitationChart(forecast) {
-            const labels = forecast.map(f => {
-                const time = new Date(f.validTime);
-                return time.getHours() + ':00';
-            });
-            
             const precipitation = forecast.map(f => {
                 const pmean = getParameterValue(f, 'pmean');
                 return pmean || 0;
             });
             
-            const ctx = document.getElementById('precipChart').getContext('2d');
+            const ctx = document.getElementById('combinedChart').getContext('2d');
             new Chart(ctx, {
                 type: 'bar',
                 data: {
                     labels: labels,
-                    datasets: [{
-                        label: 'Nederbörd (mm/h)',
-                        data: precipitation,
-                        backgroundColor: 'rgba(118, 75, 162, 0.7)',
-                        borderColor: '#764ba2',
-                        borderWidth: 2
-                    }]
+                    datasets: [
+                        {
+                            label: 'Nederbörd (mm/h)',
+                            data: precipitation,
+                            backgroundColor: 'rgba(118, 75, 162, 0.6)',
+                            borderColor: '#764ba2',
+                            borderWidth: 2,
+                            yAxisID: 'y-precip',
+                            type: 'bar',
+                            order: 2
+                        },
+                        {
+                            label: 'Temperatur (°C)',
+                            data: temperatures,
+                            borderColor: '#667eea',
+                            backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                            borderWidth: 3,
+                            fill: true,
+                            tension: 0.4,
+                            pointRadius: 4,
+                            pointHoverRadius: 6,
+                            yAxisID: 'y-temp',
+                            type: 'line',
+                            order: 1
+                        }
+                    ]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false,
+                    },
                     plugins: {
                         legend: {
                             display: true,
@@ -317,17 +284,47 @@
                         },
                         title: {
                             display: true,
-                            text: 'Nederbörd under dagen',
+                            text: 'Temperatur och nederbörd under dagen',
                             font: { size: 16 }
                         }
                     },
                     scales: {
-                        y: {
+                        'y-precip': {
+                            type: 'linear',
+                            position: 'left',
                             beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Nederbörd (mm/h)',
+                                color: '#764ba2'
+                            },
                             ticks: {
+                                color: '#764ba2',
                                 callback: function(value) {
                                     return value + ' mm';
                                 }
+                            },
+                            grid: {
+                                drawOnChartArea: false
+                            }
+                        },
+                        'y-temp': {
+                            type: 'linear',
+                            position: 'right',
+                            beginAtZero: false,
+                            title: {
+                                display: true,
+                                text: 'Temperatur (°C)',
+                                color: '#667eea'
+                            },
+                            ticks: {
+                                color: '#667eea',
+                                callback: function(value) {
+                                    return value + '°C';
+                                }
+                            },
+                            grid: {
+                                drawOnChartArea: true
                             }
                         }
                     }
@@ -345,8 +342,7 @@
                 }
                 
                 displayCurrentWeather(todaysForecast);
-                createTemperatureChart(todaysForecast);
-                createPrecipitationChart(todaysForecast);
+                createCombinedChart(todaysForecast);
                 
                 document.getElementById('loading').style.display = 'none';
                 document.getElementById('content').style.display = 'block';
