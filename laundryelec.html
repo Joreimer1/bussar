@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tvättel</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+        }
+        .container {
+            text-align: center;
+        }
+        h1 {
+            margin-bottom: 20px;
+            font-size: 32px;
+        }
+        .price-box {
+            padding: 40px 60px;
+            border-radius: 10px;
+            font-size: 48px;
+            font-weight: bold;
+            color: #333;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            min-width: 200px;
+        }
+        .green {
+            background-color: #4CAF50;
+        }
+        .yellow {
+            background-color: #FFEB3B;
+        }
+        .red {
+            background-color: #F44336;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Tvättel:</h1>
+        <div class="price-box" id="priceBox">Laddar...</div>
+    </div>
+
+    <script>
+        async function getElectricityPrice() {
+            try {
+                const now = new Date();
+                const year = now.getFullYear();
+                const month = String(now.getMonth() + 1).padStart(2, '0');
+                const day = String(now.getDate()).padStart(2, '0');
+                
+                const url = `https://www.elprisetjustnu.se/api/v1/prices/${year}/${month}-${day}_SE3.json`;
+                
+                const response = await fetch(url);
+                const data = await response.json();
+                
+                const currentHour = now.getHours();
+                
+                // Hitta de närmaste 2 timmarna
+                const nextTwoHours = data.filter(item => {
+                    const itemHour = new Date(item.time_start).getHours();
+                    return itemHour >= currentHour && itemHour < currentHour + 2;
+                });
+                
+                // Om vi inte har 2 timmar kvar idag, ta från nästa dag
+                if (nextTwoHours.length < 2) {
+                    const tomorrow = new Date(now);
+                    tomorrow.setDate(tomorrow.getDate() + 1);
+                    const tomorrowYear = tomorrow.getFullYear();
+                    const tomorrowMonth = String(tomorrow.getMonth() + 1).padStart(2, '0');
+                    const tomorrowDay = String(tomorrow.getDate()).padStart(2, '0');
+                    
+                    const tomorrowUrl = `https://www.elprisetjustnu.se/api/v1/prices/${tomorrowYear}/${tomorrowMonth}-${tomorrowDay}_SE3.json`;
+                    const tomorrowResponse = await fetch(tomorrowUrl);
+                    const tomorrowData = await tomorrowResponse.json();
+                    
+                    const remainingHours = 2 - nextTwoHours.length;
+                    const tomorrowHours = tomorrowData.slice(0, remainingHours);
+                    nextTwoHours.push(...tomorrowHours);
+                }
+                
+                // Beräkna summan (priset är i öre/kWh, konvertera till kronor)
+                const sum = nextTwoHours.reduce((total, item) => total + item.SEK_per_kWh, 0);
+                
+                const priceBox = document.getElementById('priceBox');
+                priceBox.textContent = sum.toFixed(2) + ' kr';
+                
+                // Sätt färg baserat på summan
+                priceBox.classList.remove('green', 'yellow', 'red');
+                if (sum < 1.75) {
+                    priceBox.classList.add('green');
+                } else if (sum <= 2.50) {
+                    priceBox.classList.add('yellow');
+                } else {
+                    priceBox.classList.add('red');
+                }
+                
+            } catch (error) {
+                console.error('Fel vid hämtning av elpris:', error);
+                document.getElementById('priceBox').textContent = 'Fel';
+            }
+        }
+        
+        getElectricityPrice();
+        // Uppdatera varje timme
+        setInterval(getElectricityPrice, 3600000);
+    </script>
+</body>
+</html>
