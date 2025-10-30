@@ -86,17 +86,17 @@
                     nextTwoHours.push(...tomorrowHours);
                 }
                 
-                // Beräkna summan (priset är i öre/kWh, konvertera till kronor)
-                const sum = nextTwoHours.reduce((total, item) => total + item.SEK_per_kWh, 0);
+                // Beräkna genomsnittet (priset är i öre/kWh, konvertera till kronor)
+                const average = nextTwoHours.reduce((total, item) => total + item.SEK_per_kWh, 0) / nextTwoHours.length;
                 
                 const priceBox = document.getElementById('priceBox');
-                priceBox.textContent = sum.toFixed(2) + ' kr';
+                priceBox.textContent = average.toFixed(2) + ' kr';
                 
-                // Sätt färg baserat på summan
+                // Sätt färg baserat på genomsnittet
                 priceBox.classList.remove('green', 'yellow', 'red');
-                if (sum < 1.75) {
+                if (average < 0.75) {
                     priceBox.classList.add('green');
-                } else if (sum <= 2.50) {
+                } else if (average <= 1.25) {
                     priceBox.classList.add('yellow');
                 } else {
                     priceBox.classList.add('red');
