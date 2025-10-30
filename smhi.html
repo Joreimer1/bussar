@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vädret idag - Östra Södermalm</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 2em;
+        }
+
+        .location {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 1.1em;
+        }
+
+        .current-weather {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 20px;
+            margin-bottom: 40px;
+        }
+
+        .weather-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 15px;
+            text-align: center;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        .weather-card .label {
+            font-size: 0.9em;
+            opacity: 0.9;
+            margin-bottom: 8px;
+        }
+
+        .weather-card .value {
+            font-size: 2em;
+            font-weight: bold;
+        }
+
+        .weather-card .unit {
+            font-size: 0.8em;
+            opacity: 0.8;
+        }
+
+        .chart-container {
+            position: relative;
+            height: 400px;
+            margin-bottom: 30px;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+            font-size: 1.2em;
+        }
+
+        .error {
+            background: #fee;
+            color: #c33;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+
+        .weather-symbol {
+            font-size: 3em;
+            margin-bottom: 10px;
+        }
+
+        .updated {
+            text-align: center;
+            color: #999;
+            font-size: 0.9em;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🌤️ Vädret idag</h1>
+        <div class="location">Östra Södermalm, Stockholm</div>
+        
+        <div id="error" class="error" style="display: none;"></div>
+        <div id="loading" class="loading">Hämtar väderdata från SMHI...</div>
+        
+        <div id="content" style="display: none;">
+            <div class="current-weather" id="currentWeather"></div>
+            
+            <div class="chart-container">
+                <canvas id="tempChart"></canvas>
+            </div>
+            
+            <div class="chart-container">
+                <canvas id="precipChart"></canvas>
+            </div>
+            
+            <div class="updated" id="updated"></div>
+        </div>
+    </div>
+
+    <script>
+        // Koordinater för Östra Södermalm, Stockholm
+        const lat = 59.3151;
+        const lon = 18.0977;
+        
+        const weatherSymbols = {
+            1: '☀️', 2: '🌤️', 3: '⛅', 4: '☁️', 5: '🌦️', 6: '🌧️',
+            7: '⛈️', 8: '🌨️', 9: '🌦️', 10: '🌧️', 11: '⛈️',
+            12: '🌨️', 13: '🌨️', 14: '🌨️', 15: '🌫️'
+        };
+
+        async function fetchWeatherData() {
+            try {
+                const url = `https://opendata-download-metfcst.smhi.se/api/category/pmp3g/version/2/geotype/point/lon/${lon}/lat/${lat}/data.json`;
+                const response = await fetch(url);
+                
+                if (!response.ok) {
+                    throw new Error('Kunde inte hämta väderdata');
+                }
+                
+                const data = await response.json();
+                return data;
+            } catch (error) {
+                console.error('Error:', error);
+                throw error;
+            }
+        }
+
+        function getParameterValue(timeSeries, parameterName) {
+            const param = timeSeries.parameters.find(p => p.name === parameterName);
+            return param ? param.values[0] : null;
+        }
+
+        function getTodaysForecast(data) {
+            const today = new Date().toISOString().split('T')[0];
+            return data.timeSeries.filter(ts => {
+                const tsDate = ts.validTime.split('T')[0];
+                return tsDate === today;
+            });
+        }
+
+        function displayCurrentWeather(forecast) {
+            const current = forecast[0];
+            const temp = getParameterValue(current, 't');
+            const windSpeed = getParameterValue(current, 'ws');
+            const humidity = getParameterValue(current, 'r');
+            const precip = getParameterValue(current, 'pcat');
+            const symbol = getParameterValue(current, 'Wsymb2');
+            
+            const weatherIcon = weatherSymbols[symbol] || '🌤️';
+            
+            const html = `
+                <div class="weather-card">
+                    <div class="weather-symbol">${weatherIcon}</div>
+                    <div class="label">Just nu</div>
+                </div>
+                <div class="weather-card">
+                    <div class="label">Temperatur</div>
+                    <div class="value">${temp?.toFixed(1)}<span class="unit">°C</span></div>
+                </div>
+                <div class="weather-card">
+                    <div class="label">Vindhastighet</div>
+                    <div class="value">${windSpeed?.toFixed(1)}<span class="unit">m/s</span></div>
+                </div>
+                <div class="weather-card">
+                    <div class="label">Luftfuktighet</div>
+                    <div class="value">${humidity?.toFixed(0)}<span class="unit">%</span></div>
+                </div>
+            `;
+            
+            document.getElementById('currentWeather').innerHTML = html;
+        }
+
+        function createTemperatureChart(forecast) {
+            const labels = forecast.map(f => {
+                const time = new Date(f.validTime);
+                return time.getHours() + ':00';
+            });
+            
+            const temperatures = forecast.map(f => getParameterValue(f, 't'));
+            
+            const ctx = document.getElementById('tempChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Temperatur (°C)',
+                        data: temperatures,
+                        borderColor: '#667eea',
+                        backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                        borderWidth: 3,
+                        fill: true,
+                        tension: 0.4,
+                        pointRadius: 4,
+                        pointHoverRadius: 6
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top'
+                        },
+                        title: {
+                            display: true,
+                            text: 'Temperatur under dagen',
+                            font: { size: 16 }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: false,
+                            ticks: {
+                                callback: function(value) {
+                                    return value + '°C';
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function createPrecipitationChart(forecast) {
+            const labels = forecast.map(f => {
+                const time = new Date(f.validTime);
+                return time.getHours() + ':00';
+            });
+            
+            const precipitation = forecast.map(f => {
+                const pmean = getParameterValue(f, 'pmean');
+                return pmean || 0;
+            });
+            
+            const ctx = document.getElementById('precipChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Nederbörd (mm/h)',
+                        data: precipitation,
+                        backgroundColor: 'rgba(118, 75, 162, 0.7)',
+                        borderColor: '#764ba2',
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top'
+                        },
+                        title: {
+                            display: true,
+                            text: 'Nederbörd under dagen',
+                            font: { size: 16 }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value) {
+                                    return value + ' mm';
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        async function init() {
+            try {
+                const data = await fetchWeatherData();
+                const todaysForecast = getTodaysForecast(data);
+                
+                if (todaysForecast.length === 0) {
+                    throw new Error('Ingen väderdata tillgänglig för idag');
+                }
+                
+                displayCurrentWeather(todaysForecast);
+                createTemperatureChart(todaysForecast);
+                createPrecipitationChart(todaysForecast);
+                
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('content').style.display = 'block';
+                
+                const updateTime = new Date().toLocaleString('sv-SE');
+                document.getElementById('updated').textContent = `Senast uppdaterad: ${updateTime}`;
+                
+            } catch (error) {
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('error').style.display = 'block';
+                document.getElementById('error').textContent = `Fel: ${error.message}. Försök igen senare.`;
+            }
+        }
+
+        init();
+    </script>
+</body>
+</html>
