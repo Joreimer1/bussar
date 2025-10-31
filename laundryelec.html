@@ -23,12 +23,24 @@
         }
         .price-box {
             padding: 40px 60px;
-            border-radius: 10px;
+            border-radius: 20px;
             font-size: 48px;
             font-weight: bold;
             color: #333;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            min-width: 200px;
+            box-shadow: 0 8px 16px rgba(0,0,0,0.15);
+            min-width: 250px;
+            position: relative;
+            transition: all 0.3s ease;
+        }
+        .price-box:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 24px rgba(0,0,0,0.2);
+        }
+        .lightning-icon {
+            font-size: 60px;
+            display: block;
+            margin-bottom: 10px;
+            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));
         }
         .green {
             background-color: #4CAF50;
@@ -45,7 +57,10 @@
 <body>
     <div class="container">
         <h1>Tvättel:</h1>
-        <div class="price-box" id="priceBox">Laddar...</div>
+        <div class="price-box" id="priceBox">
+            <span class="lightning-icon">⚡</span>
+            <span id="priceText">Laddar...</span>
+        </div>
     </div>
 
     <script>
@@ -80,7 +95,8 @@
             const average = nextTwoHours.reduce((total, item) => total + item.SEK_per_kWh, 0) / nextTwoHours.length;
             
             const priceBox = document.getElementById('priceBox');
-            priceBox.textContent = average.toFixed(2) + ' kr';
+            const priceText = document.getElementById('priceText');
+            priceText.textContent = average.toFixed(2) + ' kr';
             
             // Sätt färg baserat på genomsnittet
             priceBox.classList.remove('green', 'yellow', 'red');
@@ -120,7 +136,7 @@
                 
             } catch (error) {
                 console.error('Fel vid hämtning av elpris:', error);
-                document.getElementById('priceBox').textContent = 'Fel';
+                document.getElementById('priceText').textContent = 'Fel';
             }
         }
         
