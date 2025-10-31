@@ -30,11 +30,6 @@
             box-shadow: 0 8px 16px rgba(0,0,0,0.15);
             min-width: 250px;
             position: relative;
-            transition: all 0.3s ease;
-        }
-        .price-box:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 12px 24px rgba(0,0,0,0.2);
         }
         .lightning-icon {
             font-size: 60px;
@@ -69,30 +64,45 @@
         let cachedTomorrowData = null;
         
         async function updateDisplay() {
-            if (!cachedData) return;
+            if (!cachedData || cachedData.length === 0) {
+                console.log('Ingen cachad data finns än');
+                return;
+            }
             
             const now = new Date();
             const currentHour = now.getHours();
             
             // Hitta de närmaste 2 timmarna
-            const nextTwoHours = cachedData.filter(item => {
+            let nextTwoHours = cachedData.filter(item => {
                 const itemHour = new Date(item.time_start).getHours();
                 return itemHour >= currentHour && itemHour < currentHour + 2;
             });
             
             console.log('Aktuell timme:', currentHour);
-            console.log('Närmaste 2 timmar:', nextTwoHours);
+            console.log('Närmaste 2 timmar från idag:', nextTwoHours);
             console.log('Pris per timme:', nextTwoHours.map(h => h.SEK_per_kWh));
             
-            // Om vi inte har 2 timmar kvar idag, ta från morgondagens cache
-            if (nextTwoHours.length < 2 && cachedTomorrowData) {
-                const remainingHours = 2 - nextTwoHours.length;
-                const tomorrowHours = cachedTomorrowData.slice(0, remainingHours);
-                nextTwoHours.push(...tomorrowHours);
+            // Om vi inte har 2 timmar kvar idag, ta från morgondagens cache (om den finns)
+            if (nextTwoHours.length < 2) {
+                if (cachedTomorrowData && cachedTomorrowData.length > 0) {
+                    const remainingHours = 2 - nextTwoHours.length;
+                    const tomorrowHours = cachedTomorrowData.slice(0, remainingHours);
+                    nextTwoHours = nextTwoHours.concat(tomorrowHours);
+                    console.log('Lade till från imorgon:', tomorrowHours);
+                } else {
+                    console.log('Morgondagens data finns inte, använder bara', nextTwoHours.length, 'timme(r)');
+                }
+            }
+            
+            if (nextTwoHours.length === 0) {
+                console.error('Inga timmar hittades!');
+                return;
             }
             
             // Beräkna genomsnittet
             const average = nextTwoHours.reduce((total, item) => total + item.SEK_per_kWh, 0) / nextTwoHours.length;
+            
+            console.log('Genomsnittspris:', average);
             
             const priceBox = document.getElementById('priceBox');
             const priceText = document.getElementById('priceText');
@@ -121,16 +131,26 @@
                 const response = await fetch(url);
                 cachedData = await response.json();
                 
-                // Hämta även morgondagens priser
-                const tomorrow = new Date(now);
-                tomorrow.setDate(tomorrow.getDate() + 1);
-                const tomorrowYear = tomorrow.getFullYear();
-                const tomorrowMonth = String(tomorrow.getMonth() + 1).padStart(2, '0');
-                const tomorrowDay = String(tomorrow.getDate()).padStart(2, '0');
-                
-                const tomorrowUrl = `https://www.elprisetjustnu.se/api/v1/prices/${tomorrowYear}/${tomorrowMonth}-${tomorrowDay}_SE3.json`;
-                const tomorrowResponse = await fetch(tomorrowUrl);
-                cachedTomorrowData = await tomorrowResponse.json();
+                // Försök hämta morgondagens priser (kan misslyckas om de inte finns än)
+                try {
+                    const tomorrow = new Date(now);
+                    tomorrow.setDate(tomorrow.getDate() + 1);
+                    const tomorrowYear = tomorrow.getFullYear();
+                    const tomorrowMonth = String(tomorrow.getMonth() + 1).padStart(2, '0');
+                    const tomorrowDay = String(tomorrow.getDate()).padStart(2, '0');
+                    
+                    const tomorrowUrl = `https://www.elprisetjustnu.se/api/v1/prices/${tomorrowYear}/${tomorrowMonth}-${tomorrowDay}_SE3.json`;
+                    const tomorrowResponse = await fetch(tomorrowUrl);
+                    if (tomorrowResponse.ok) {
+                        cachedTomorrowData = await tomorrowResponse.json();
+                    } else {
+                        console.log('Morgondagens priser finns inte tillgängliga än');
+                        cachedTomorrowData = null;
+                    }
+                } catch (tomorrowError) {
+                    console.log('Kunde inte hämta morgondagens priser:', tomorrowError);
+                    cachedTomorrowData = null;
+                }
                 
                 updateDisplay();
                 
