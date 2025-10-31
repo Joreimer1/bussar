@@ -49,7 +49,51 @@
     </div>
 
     <script>
-        async function getElectricityPrice() {
+
+        let cachedData = null;
+        let cachedTomorrowData = null;
+        
+        async function updateDisplay() {
+            if (!cachedData) return;
+            
+            const now = new Date();
+            const currentHour = now.getHours();
+            
+            // Hitta de närmaste 2 timmarna
+            const nextTwoHours = cachedData.filter(item => {
+                const itemHour = new Date(item.time_start).getHours();
+                return itemHour >= currentHour && itemHour < currentHour + 2;
+            });
+            
+            console.log('Aktuell timme:', currentHour);
+            console.log('Närmaste 2 timmar:', nextTwoHours);
+            console.log('Pris per timme:', nextTwoHours.map(h => h.SEK_per_kWh));
+            
+            // Om vi inte har 2 timmar kvar idag, ta från morgondagens cache
+            if (nextTwoHours.length < 2 && cachedTomorrowData) {
+                const remainingHours = 2 - nextTwoHours.length;
+                const tomorrowHours = cachedTomorrowData.slice(0, remainingHours);
+                nextTwoHours.push(...tomorrowHours);
+            }
+            
+            // Beräkna genomsnittet
+            const average = nextTwoHours.reduce((total, item) => total + item.SEK_per_kWh, 0) / nextTwoHours.length;
+            
+            const priceBox = document.getElementById('priceBox');
+            priceBox.textContent = average.toFixed(2) + ' kr';
+            
+            // Sätt färg baserat på genomsnittet
+            priceBox.classList.remove('green', 'yellow', 'red');
+            if (average < 0.75) {
+                priceBox.classList.add('green');
+            } else if (average <= 1.25) {
+                priceBox.classList.add('yellow');
+            } else {
+                priceBox.classList.add('red');
+            }
+        }
+        
+        async function fetchPrices() {
             try {
                 const now = new Date();
                 const year = now.getFullYear();
@@ -59,52 +103,20 @@
                 const url = `https://www.elprisetjustnu.se/api/v1/prices/${year}/${month}-${day}_SE3.json`;
                 
                 const response = await fetch(url);
-                const data = await response.json();
+                cachedData = await response.json();
                 
-                const currentHour = now.getHours();
+                // Hämta även morgondagens priser
+                const tomorrow = new Date(now);
+                tomorrow.setDate(tomorrow.getDate() + 1);
+                const tomorrowYear = tomorrow.getFullYear();
+                const tomorrowMonth = String(tomorrow.getMonth() + 1).padStart(2, '0');
+                const tomorrowDay = String(tomorrow.getDate()).padStart(2, '0');
                 
-                // Hitta de närmaste 2 timmarna
-                const nextTwoHours = data.filter(item => {
-                    const itemHour = new Date(item.time_start).getHours();
-                    return itemHour >= currentHour && itemHour < currentHour + 2;
-                });
+                const tomorrowUrl = `https://www.elprisetjustnu.se/api/v1/prices/${tomorrowYear}/${tomorrowMonth}-${tomorrowDay}_SE3.json`;
+                const tomorrowResponse = await fetch(tomorrowUrl);
+                cachedTomorrowData = await tomorrowResponse.json();
                 
-                console.log('Aktuell timme:', currentHour);
-                console.log('Närmaste 2 timmar:', nextTwoHours);
-                console.log('Pris per timme:', nextTwoHours.map(h => h.SEK_per_kWh));
-                
-                // Om vi inte har 2 timmar kvar idag, ta från nästa dag
-                if (nextTwoHours.length < 2) {
-                    const tomorrow = new Date(now);
-                    tomorrow.setDate(tomorrow.getDate() + 1);
-                    const tomorrowYear = tomorrow.getFullYear();
-                    const tomorrowMonth = String(tomorrow.getMonth() + 1).padStart(2, '0');
-                    const tomorrowDay = String(tomorrow.getDate()).padStart(2, '0');
-                    
-                    const tomorrowUrl = `https://www.elprisetjustnu.se/api/v1/prices/${tomorrowYear}/${tomorrowMonth}-${tomorrowDay}_SE3.json`;
-                    const tomorrowResponse = await fetch(tomorrowUrl);
-                    const tomorrowData = await tomorrowResponse.json();
-                    
-                    const remainingHours = 2 - nextTwoHours.length;
-                    const tomorrowHours = tomorrowData.slice(0, remainingHours);
-                    nextTwoHours.push(...tomorrowHours);
-                }
-                
-                // Beräkna genomsnittet (priset är i öre/kWh, konvertera till kronor)
-                const average = nextTwoHours.reduce((total, item) => total + item.SEK_per_kWh, 0) / nextTwoHours.length;
-                
-                const priceBox = document.getElementById('priceBox');
-                priceBox.textContent = average.toFixed(2) + ' kr';
-                
-                // Sätt färg baserat på genomsnittet
-                priceBox.classList.remove('green', 'yellow', 'red');
-                if (average < 0.75) {
-                    priceBox.classList.add('green');
-                } else if (average <= 1.25) {
-                    priceBox.classList.add('yellow');
-                } else {
-                    priceBox.classList.add('red');
-                }
+                updateDisplay();
                 
             } catch (error) {
                 console.error('Fel vid hämtning av elpris:', error);
@@ -112,11 +124,11 @@
             }
         }
         
-        getElectricityPrice();
-        // Uppdatera varje timme
-        setInterval(getElectricityPrice, 3600000);
-        // Ladda om sidan efter 10 minuter
-        setTimeout(() => location.reload(), 600000);
+        fetchPrices();
+        // Hämta nytt pris var 15:e minut
+        setInterval(fetchPrices, 900000);
+        // Uppdatera visningen varje minut
+        setInterval(updateDisplay, 60000);
     </script>
 </body>
 </html>
