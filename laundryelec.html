@@ -115,6 +115,8 @@
         getElectricityPrice();
         // Uppdatera varje timme
         setInterval(getElectricityPrice, 3600000);
+        // Ladda om sidan efter 10 minuter
+        setTimeout(() => location.reload(), 600000);
     </script>
 </body>
 </html>
