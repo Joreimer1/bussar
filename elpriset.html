@@ -359,30 +359,6 @@
                     }
                 },
                 plugins: [{
-                    id: 'gradientBackground',
-                    beforeDraw(chart) {
-                        const { ctx, chartArea } = chart;
-                        
-                        if (!chartArea) return;
-                        
-                        const { top, bottom, left, right } = chartArea;
-                        
-                        // Skapa vertikal gradient från grön (botten) till röd (topp)
-                        const gradient = ctx.createLinearGradient(0, bottom, 0, top);
-                        
-                        // Enkel gradient med fasta positioner - alltid säkra värden
-                        gradient.addColorStop(0, 'rgba(100, 255, 100, 0.15)');    // Botten - grön
-                        gradient.addColorStop(0.4, 'rgba(150, 255, 150, 0.1)');   // Låga priser
-                        gradient.addColorStop(0.5, 'rgba(255, 255, 255, 0.05)');  // Mitten - vit
-                        gradient.addColorStop(0.6, 'rgba(255, 150, 150, 0.1)');   // Höga priser
-                        gradient.addColorStop(1, 'rgba(255, 100, 100, 0.15)');    // Topp - röd
-                        
-                        ctx.save();
-                        ctx.fillStyle = gradient;
-                        ctx.fillRect(left, top, right - left, bottom - top);
-                        ctx.restore();
-                    }
-                }, {
                     id: 'currentTimeLine',
                     afterDatasetsDraw(chart) {
                         const { ctx, chartArea: { top, bottom, left, right }, scales: { x } } = chart;
