@@ -363,26 +363,46 @@
                     beforeDraw(chart) {
                         const { ctx, chartArea: { top, bottom, left, right } } = chart;
                         
+                        if (!chartArea) return;
+                        
                         // Skapa vertikal gradient från grön (botten) till röd (topp)
                         const gradient = ctx.createLinearGradient(0, bottom, 0, top);
                         
                         // Beräkna var 100 öre/1 kr ligger i diagrammet
                         const yScale = chart.scales.y;
-                        const oneKrPosition = (yScale.max - 100) / (yScale.max - yScale.min);
-                        
-                        // Begränsa alla värden till 0-1 intervallet
-                        const clamp = (val) => Math.max(0, Math.min(1, val));
-                        
-                        // Grön under 1 kr
-                        gradient.addColorStop(0, 'rgba(100, 255, 100, 0.15)');
-                        gradient.addColorStop(clamp(1 - oneKrPosition - 0.1), 'rgba(150, 255, 150, 0.1)');
-                        
-                        // Övergång vid 1 kr
-                        gradient.addColorStop(clamp(1 - oneKrPosition), 'rgba(255, 255, 255, 0.05)');
-                        
-                        // Röd över 1 kr
-                        gradient.addColorStop(clamp(1 - oneKrPosition + 0.1), 'rgba(255, 150, 150, 0.1)');
-                        gradient.addColorStop(1, 'rgba(255, 100, 100, 0.15)');
+                        if (!yScale || yScale.max === undefined || yScale.min === undefined) {
+                            // Fallback till enkel gradient om skalan inte är klar
+                            gradient.addColorStop(0, 'rgba(100, 255, 100, 0.15)');
+                            gradient.addColorStop(0.5, 'rgba(255, 255, 255, 0.05)');
+                            gradient.addColorStop(1, 'rgba(255, 100, 100, 0.15)');
+                        } else {
+                            const range = yScale.max - yScale.min;
+                            if (range === 0) return;
+                            
+                            const oneKrPosition = (yScale.max - 100) / range;
+                            
+                            // Begränsa alla värden till 0-1 intervallet
+                            const clamp = (val) => Math.max(0, Math.min(1, val));
+                            
+                            const pos1 = clamp(1 - oneKrPosition);
+                            const pos0 = clamp(pos1 - 0.15);
+                            const pos2 = clamp(pos1 + 0.15);
+                            
+                            // Grön under 1 kr
+                            gradient.addColorStop(0, 'rgba(100, 255, 100, 0.15)');
+                            if (pos0 > 0) {
+                                gradient.addColorStop(pos0, 'rgba(150, 255, 150, 0.1)');
+                            }
+                            
+                            // Övergång vid 1 kr
+                            gradient.addColorStop(pos1, 'rgba(255, 255, 255, 0.05)');
+                            
+                            // Röd över 1 kr
+                            if (pos2 < 1) {
+                                gradient.addColorStop(pos2, 'rgba(255, 150, 150, 0.1)');
+                            }
+                            gradient.addColorStop(1, 'rgba(255, 100, 100, 0.15)');
+                        }
                         
                         ctx.save();
                         ctx.fillStyle = gradient;
