@@ -188,15 +188,48 @@
             
             const url = `https://www.elprisetjustnu.se/api/v1/prices/${year}/${month}-${day}_${area}.json`;
             
+            console.log('Försöker hämta priser från:', url);
+            
             try {
                 const response = await fetch(url);
-                pricesData = await response.json();
+                console.log('Response status:', response.status);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                console.log('Data mottagen:', data);
+                
+                if (!data || data.length === 0) {
+                    throw new Error('Ingen prisdata tillgänglig');
+                }
+                
+                pricesData = data;
                 
                 updateDisplay();
                 createChart();
+                
+                // Dölj eventuellt felmeddelande
+                const errorMsg = document.getElementById('errorMessage');
+                if (errorMsg) errorMsg.style.display = 'none';
+                
             } catch (error) {
                 console.error('Fel vid hämtning av elpris:', error);
                 document.getElementById('currentPrice').textContent = 'Fel';
+                
+                // Visa felmeddelande
+                let errorMsg = document.getElementById('errorMessage');
+                if (!errorMsg) {
+                    errorMsg = document.createElement('div');
+                    errorMsg.id = 'errorMessage';
+                    errorMsg.style.cssText = 'background: #fee; border: 1px solid #fcc; padding: 15px; border-radius: 8px; margin: 20px 0; color: #c00;';
+                    document.querySelector('.container').insertBefore(errorMsg, document.querySelector('.chart-container'));
+                }
+                errorMsg.style.display = 'block';
+                errorMsg.innerHTML = `<strong>Kunde inte ladda elpriser</strong><br>
+                    Fel: ${error.message}<br>
+                    <small>Detta kan bero på att API:et inte har uppdaterat data än idag, eller att det är problem med tjänsten. Försök igen om en stund.</small>`;
             }
         }
         
