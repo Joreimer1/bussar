@@ -370,15 +370,18 @@
                         const yScale = chart.scales.y;
                         const oneKrPosition = (yScale.max - 100) / (yScale.max - yScale.min);
                         
+                        // Begränsa alla värden till 0-1 intervallet
+                        const clamp = (val) => Math.max(0, Math.min(1, val));
+                        
                         // Grön under 1 kr
                         gradient.addColorStop(0, 'rgba(100, 255, 100, 0.15)');
-                        gradient.addColorStop(Math.max(0, 1 - oneKrPosition - 0.1), 'rgba(150, 255, 150, 0.1)');
+                        gradient.addColorStop(clamp(1 - oneKrPosition - 0.1), 'rgba(150, 255, 150, 0.1)');
                         
                         // Övergång vid 1 kr
-                        gradient.addColorStop(Math.max(0, Math.min(1, 1 - oneKrPosition)), 'rgba(255, 255, 255, 0.05)');
+                        gradient.addColorStop(clamp(1 - oneKrPosition), 'rgba(255, 255, 255, 0.05)');
                         
                         // Röd över 1 kr
-                        gradient.addColorStop(Math.min(1, 1 - oneKrPosition + 0.1), 'rgba(255, 150, 150, 0.1)');
+                        gradient.addColorStop(clamp(1 - oneKrPosition + 0.1), 'rgba(255, 150, 150, 0.1)');
                         gradient.addColorStop(1, 'rgba(255, 100, 100, 0.15)');
                         
                         ctx.save();
