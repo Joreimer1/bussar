@@ -204,11 +204,11 @@
         }
 
         async function fetchDepartures() {
-            let departures1301 = await getSlDepartures(1300);
-            const departures1463 = await getSlDepartures(1463);
+            let departures1300 = await getSlDepartures(1300);
+            const departures1301 = await getSlDepartures(1301);
             
             
-            allDepartures = [...departures1301, ...departures1463];
+            allDepartures = [...departures1300, ...departures1301];
             allDepartures.sort((a, b) => new Date(a.expected) - new Date(b.expected));
             lastFetchTime = new Date();
         }
