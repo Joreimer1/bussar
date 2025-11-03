@@ -205,10 +205,12 @@
 
         async function fetchDepartures() {
             let departures1300 = await getSlDepartures(1300);
-       //     const departures1301 = await getSlDepartures(1301);
+            const departures1301 = await getSlDepartures(1301);
+
+            // Filtrera bort buss 66 från 1301
+            departures1300 = departures1300.filter(d => d.line.id !== 57);
             
-            
-            allDepartures = [...departures1300];
+            allDepartures = [...departures1300, ...departures1301];
             allDepartures.sort((a, b) => new Date(a.expected) - new Date(b.expected));
             lastFetchTime = new Date();
         }
