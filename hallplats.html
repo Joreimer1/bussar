@@ -184,47 +184,6 @@
             color: #666;
         }
         
-        .manual-location {
-            margin-top: 10px;
-            padding: 10px;
-            background: #f8f9fa;
-            border-radius: 6px;
-        }
-        
-        .manual-location input {
-            width: 100%;
-            padding: 8px;
-            margin: 5px 0;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-        }
-        
-        .manual-btn {
-            background-color: #007bff;
-            color: white;
-            border: none;
-            padding: 8px 15px;
-            border-radius: 4px;
-            cursor: pointer;
-            width: 100%;
-            margin-top: 5px;
-        }
-        
-        .manual-btn:hover {
-            background-color: #0056b3;
-        }
-        
-        .debug-info {
-            background-color: #f8f9fa;
-            border-left: 4px solid #6c757d;
-            padding: 10px;
-            margin: 10px 0;
-            font-family: monospace;
-            font-size: 0.8rem;
-            white-space: pre-wrap;
-            display: none;
-        }
-        
         footer {
             text-align: center;
             padding: 15px;
@@ -253,8 +212,6 @@
     </header>
     
     <div class="container">
-        <div id="debugInfo" class="debug-info"></div>
-        
         <div id="locationCard" class="card" style="display: none;">
             <div class="location-info">
                 <div class="location-icon">📍</div>
@@ -280,20 +237,6 @@
         <div id="errorMessage" class="error" style="display: none;">
             <!-- Error messages will be inserted here -->
         </div>
-
-        <!-- Fallback for when GPS fails -->
-        <div id="manualLocation" class="card" style="display: none;">
-            <h3>Ange plats manuellt</h3>
-            <p>GPS fungerade inte. Ange en adress eller välj en plats:</p>
-            <div class="manual-location">
-                <input type="text" id="addressInput" placeholder="Ange adress (t.ex. Sergels torg, Stockholm)">
-                <button id="searchAddressBtn" class="manual-btn">Sök adress</button>
-                <p style="text-align: center; margin: 10px 0;">eller</p>
-                <button id="useCentralBtn" class="manual-btn">Använd Centralstationen</button>
-                <button id="useSlussenBtn" class="manual-btn">Använd Slussen</button>
-                <button id="useTcentralenBtn" class="manual-btn">Använd T-Centralen</button>
-            </div>
-        </div>
     </div>
     
     <footer>
@@ -307,7 +250,6 @@
         let refreshInterval = null;
         
         // DOM elements
-        const debugInfo = document.getElementById('debugInfo');
         const locationCard = document.getElementById('locationCard');
         const stopName = document.getElementById('stopName');
         const stopDistance = document.getElementById('stopDistance');
@@ -316,248 +258,83 @@
         const refreshBtn = document.getElementById('refreshBtn');
         const loadingMessage = document.getElementById('loadingMessage');
         const errorMessage = document.getElementById('errorMessage');
-        const manualLocation = document.getElementById('manualLocation');
-        const addressInput = document.getElementById('addressInput');
-        const searchAddressBtn = document.getElementById('searchAddressBtn');
-        const useCentralBtn = document.getElementById('useCentralBtn');
-        const useSlussenBtn = document.getElementById('useSlussenBtn');
-        const useTcentralenBtn = document.getElementById('useTcentralenBtn');
         
-        // Known locations as fallback
-        const knownLocations = {
-            centralstation: { lat: 59.3302, lng: 18.0576, name: "Stockholm Central" },
-            slussen: { lat: 59.3195, lng: 18.0715, name: "Slussen" },
-            tcentralen: { lat: 59.3310, lng: 18.0565, name: "T-Centralen" }
-        };
-
-        // Debug function
-        function debug(message) {
-            console.log(message);
-            debugInfo.innerHTML += `${new Date().toLocaleTimeString()}: ${message}\n`;
-            debugInfo.style.display = 'block';
-        }
-
         // Initialize the app
         document.addEventListener('DOMContentLoaded', function() {
-            debug('App startad');
+            console.log('App startad');
             
             // Request location permission and get user's position
             getLocation();
             
             // Set up refresh button
             refreshBtn.addEventListener('click', function() {
-                debug('Manuell uppdatering startad');
+                console.log('Manuell uppdatering startad');
                 if (nearestStop) {
                     fetchDepartures(nearestStop.id);
                 }
             });
-
-            // Set up manual location buttons
-            searchAddressBtn.addEventListener('click', searchAddress);
-            useCentralBtn.addEventListener('click', () => useKnownLocation('centralstation'));
-            useSlussenBtn.addEventListener('click', () => useKnownLocation('slussen'));
-            useTcentralenBtn.addEventListener('click', () => useKnownLocation('tcentralen'));
-
-            // Allow pressing Enter in address input
-            addressInput.addEventListener('keypress', function(e) {
-                if (e.key === 'Enter') {
-                    searchAddress();
-                }
-            });
         });
         
-        // Get user's current location with better error handling
+        // Get user's current location
         function getLocation() {
-            debug('Begär platsinformation...');
+            console.log('Begär platsinformation...');
             
-            if (!navigator.geolocation) {
-                showManualLocationOption('Din webbläsare stöder inte platsinformation.');
-                return;
-            }
-
-            // Try to get high accuracy position first
-            navigator.geolocation.getCurrentPosition(
-                positionSuccess,
-                positionError,
-                {
-                    enableHighAccuracy: true,
-                    timeout: 10000,
-                    maximumAge: 60000
-                }
-            );
-        }
-
-        function positionSuccess(position) {
-            userLocation = {
-                lat: position.coords.latitude,
-                lng: position.coords.longitude
-            };
-            debug(`Position hämtad: ${userLocation.lat}, ${userLocation.lng}`);
-            hideManualLocation();
-            fetchStops();
-        }
-
-        function positionError(error) {
-            debug('Geolocation error: ' + error.message);
-            
-            let errorMsg = 'Kunde inte hämta din position. ';
-            switch(error.code) {
-                case error.PERMISSION_DENIED:
-                    errorMsg = 'Platstillstånd nekat. Ange plats manuellt nedan.';
-                    break;
-                case error.POSITION_UNAVAILABLE:
-                    errorMsg = 'Platsinformation ej tillgänglig. Ange plats manuellt nedan.';
-                    break;
-                case error.TIMEOUT:
-                    errorMsg = 'Platssökning tog för lång tid. Ange plats manuellt nedan.';
-                    break;
-                default:
-                    errorMsg = 'Kunde inte hämta position. Ange plats manuellt nedan.';
-                    break;
-            }
-            
-            showManualLocationOption(errorMsg);
-        }
-        
-        // Show manual location input
-        function showManualLocationOption(message) {
-            loadingMessage.style.display = 'none';
-            errorMessage.style.display = 'block';
-            errorMessage.innerHTML = `<p>${message}</p>`;
-            manualLocation.style.display = 'block';
-        }
-
-        function hideManualLocation() {
-            manualLocation.style.display = 'none';
-            errorMessage.style.display = 'none';
-        }
-
-        // Use a known location
-        function useKnownLocation(locationKey) {
-            const location = knownLocations[locationKey];
-            if (location) {
-                userLocation = { lat: location.lat, lng: location.lng };
-                debug(`Använder känd plats: ${location.name}`);
-                hideManualLocation();
-                fetchStops();
-            }
-        }
-
-        // Search for address using Nominatim (OpenStreetMap)
-        async function searchAddress() {
-            const address = addressInput.value.trim();
-            if (!address) {
-                alert('Ange en adress');
-                return;
-            }
-
-            try {
-                searchAddressBtn.disabled = true;
-                searchAddressBtn.textContent = 'Söker...';
-                
-                debug(`Söker adress: ${address}`);
-                
-                const response = await fetch(
-                    `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address + ', Stockholm, Sweden')}&limit=1`
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    position => {
+                        userLocation = {
+                            lat: position.coords.latitude,
+                            lng: position.coords.longitude
+                        };
+                        console.log(`Position hämtad: ${userLocation.lat}, ${userLocation.lng}`);
+                        fetchStops();
+                    },
+                    error => {
+                        let errorMsg = 'Kunde inte hämta din position. ';
+                        switch(error.code) {
+                            case error.PERMISSION_DENIED:
+                                errorMsg += 'Platstillstånd nekat.';
+                                break;
+                            case error.POSITION_UNAVAILABLE:
+                                errorMsg += 'Platsinformation ej tillgänglig.';
+                                break;
+                            case error.TIMEOUT:
+                                errorMsg += 'Platssökning timeout.';
+                                break;
+                            default:
+                                errorMsg += 'Okänt fel.';
+                                break;
+                        }
+                        showError(errorMsg);
+                        console.error('Geolocation error:', error);
+                    }
                 );
-                
-                const data = await response.json();
-                
-                if (data && data.length > 0) {
-                    userLocation = {
-                        lat: parseFloat(data[0].lat),
-                        lng: parseFloat(data[0].lon)
-                    };
-                    debug(`Adress hittad: ${userLocation.lat}, ${userLocation.lng}`);
-                    hideManualLocation();
-                    fetchStops();
-                } else {
-                    alert('Adressen kunde inte hittas. Försök med en mer specifik adress.');
-                }
-                
-            } catch (error) {
-                debug('Error searching address: ' + error.message);
-                alert('Ett fel uppstod vid adresssökning.');
-            } finally {
-                searchAddressBtn.disabled = false;
-                searchAddressBtn.textContent = 'Sök adress';
+            } else {
+                showError('Din webbläsare stöder inte platsinformation.');
             }
         }
         
-        // Fetch all stops from SL API - test multiple endpoints
+        // Fetch all stops from SL API
         async function fetchStops() {
             try {
                 loadingMessage.innerHTML = '<p>Hämtar hållplatser från SL...</p>';
-                loadingMessage.style.display = 'block';
-                debug('Startar API-anrop för hållplatser...');
+                console.log('Startar API-anrop för hållplatser...');
                 
-                // Test multiple possible endpoints
-                const endpoints = [
-                    'https://transport.integration.sl.se/v1/sites?expand=true',
-                    'https://transport.integration.sl.se/v1/sites',
-                    'https://transport.integration.sl.se/v1/sites?size=1000'
-                ];
+                const response = await fetch('https://transport.integration.sl.se/v1/sites?expand=true');
+                console.log(`API-svar: ${response.status} ${response.statusText}`);
                 
-                let data = null;
-                let lastError = null;
-                
-                // Try each endpoint until one works
-                for (const endpoint of endpoints) {
-                    try {
-                        debug(`Försöker med: ${endpoint}`);
-                        const response = await fetch(endpoint);
-                        debug(`API-svar: ${response.status} ${response.statusText}`);
-                        
-                        if (!response.ok) {
-                            throw new Error(`API-svar: ${response.status} ${response.statusText}`);
-                        }
-                        
-                        data = await response.json();
-                        debug(`API-svar innehåll: ${JSON.stringify(data).substring(0, 200)}...`);
-                        
-                        // Check if we have valid data
-                        if (data && data.sites && data.sites.length > 0) {
-                            debug(`Hämtade ${data.sites.length} hållplatser från ${endpoint}`);
-                            break;
-                        } else if (data && Array.isArray(data) && data.length > 0) {
-                            // Some endpoints might return array directly
-                            debug(`Hämtade ${data.length} hållplatser (direkt array)`);
-                            data = { sites: data };
-                            break;
-                        } else {
-                            debug('Inga hållplatser i svaret, försöker nästa endpoint...');
-                            lastError = 'Inga hållplatser hittades i API-svaret.';
-                        }
-                    } catch (error) {
-                        debug(`Endpoint ${endpoint} misslyckades: ${error.message}`);
-                        lastError = error.message;
-                        continue;
-                    }
+                if (!response.ok) {
+                    throw new Error(`API-svar: ${response.status} ${response.statusText}`);
                 }
+                
+                const data = await response.json();
+                console.log('API-data mottagen:', data);
                 
                 if (!data || !data.sites || data.sites.length === 0) {
-                    // Last resort: use hardcoded stops for testing
-                    debug('Använder hårdkodade hållplatser som fallback');
-                    data = {
-                        sites: [
-                            {
-                                id: "1001",
-                                name: "T-Centralen",
-                                location: { latitude: 59.3310, longitude: 18.0565 }
-                            },
-                            {
-                                id: "1002", 
-                                name: "Slussen",
-                                location: { latitude: 59.3195, longitude: 18.0715 }
-                            },
-                            {
-                                id: "1003",
-                                name: "Gamla Stan",
-                                location: { latitude: 59.3233, longitude: 18.0680 }
-                            }
-                        ]
-                    };
+                    throw new Error('Inga hållplatser hittades i API-svaret.');
                 }
+                
+                console.log(`Hämtade ${data.sites.length} hållplatser`);
                 
                 // Find nearest stop
                 findNearestStop(data.sites);
@@ -565,13 +342,13 @@
             } catch (error) {
                 const errorMsg = 'Kunde inte hämta hållplatsinformation: ' + error.message;
                 showError(errorMsg);
-                debug('Error fetching stops: ' + error.message);
+                console.error('Error fetching stops:', error);
             }
         }
         
         // Calculate distance between two coordinates (Haversine formula)
         function calculateDistance(lat1, lon1, lat2, lon2) {
-            const R = 6371;
+            const R = 6371; // Earth's radius in kilometers
             const dLat = (lat2 - lat1) * Math.PI / 180;
             const dLon = (lon2 - lon1) * Math.PI / 180;
             const a = 
@@ -579,30 +356,23 @@
                 Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
                 Math.sin(dLon/2) * Math.sin(dLon/2);
             const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-            return R * c;
+            const distance = R * c;
+            return distance;
         }
         
         // Find the nearest stop from user's location
         function findNearestStop(stops) {
-            debug(`Söker närmaste hållplats bland ${stops.length} hållplatser...`);
+            console.log(`Söker närmaste hållplats bland ${stops.length} hållplatser...`);
             let minDistance = Infinity;
             let nearest = null;
             
             stops.forEach(stop => {
-                let lat, lng;
-                
-                // Handle different location formats
-                if (stop.location) {
-                    lat = stop.location.latitude || stop.location.lat;
-                    lng = stop.location.longitude || stop.location.lng || stop.location.lon;
-                }
-                
-                if (lat && lng) {
+                if (stop.location && stop.location.latitude && stop.location.longitude) {
                     const distance = calculateDistance(
                         userLocation.lat, 
                         userLocation.lng,
-                        lat,
-                        lng
+                        stop.location.latitude,
+                        stop.location.longitude
                     );
                     
                     if (distance < minDistance) {
@@ -614,7 +384,7 @@
             
             if (nearest) {
                 nearestStop = nearest;
-                debug(`Närmaste hållplats: ${nearest.name} (${minDistance.toFixed(3)} km)`);
+                console.log(`Närmaste hållplats: ${nearest.name} (${minDistance.toFixed(3)} km)`);
                 displayNearestStop(nearest, minDistance);
                 fetchDepartures(nearest.id);
                 
@@ -623,13 +393,12 @@
                     clearInterval(refreshInterval);
                 }
                 refreshInterval = setInterval(() => {
-                    debug('Automatisk uppdatering...');
+                    console.log('Automatisk uppdatering...');
                     fetchDepartures(nearest.id);
                 }, 30000);
                 
             } else {
-                const errorMsg = 'Kunde inte hitta någon hållplats nära dig.';
-                showError(errorMsg);
+                showError('Kunde inte hitta någon hållplats nära dig.');
             }
         }
         
@@ -638,6 +407,7 @@
             locationCard.style.display = 'block';
             stopName.textContent = stop.name || 'Okänd hållplats';
             
+            // Format distance
             const distanceInMeters = Math.round(distance * 1000);
             if (distanceInMeters < 1000) {
                 stopDistance.textContent = `${distanceInMeters} meter från din plats`;
@@ -652,42 +422,17 @@
                 refreshBtn.disabled = true;
                 refreshBtn.textContent = 'Uppdaterar...';
                 
-                debug(`Hämtar avgångar för hållplats ID: ${stopId}`);
+                console.log(`Hämtar avgångar för hållplats ID: ${stopId}`);
                 
-                // Test multiple departure endpoints
-                const endpoints = [
-                    `https://transport.integration.sl.se/v1/sites/${stopId}/departures`,
-                    `https://transport.integration.sl.se/v1/sites/${stopId}/departures?timewindow=60`
-                ];
+                const response = await fetch(`https://transport.integration.sl.se/v1/sites/${stopId}/departures`);
+                console.log(`Avgångar API-svar: ${response.status} ${response.statusText}`);
                 
-                let data = null;
-                
-                for (const endpoint of endpoints) {
-                    try {
-                        debug(`Försöker avgångar från: ${endpoint}`);
-                        const response = await fetch(endpoint);
-                        debug(`Avgångar API-svar: ${response.status} ${response.statusText}`);
-                        
-                        if (!response.ok) {
-                            throw new Error(`API-svar: ${response.status} ${response.statusText}`);
-                        }
-                        
-                        data = await response.json();
-                        debug(`Avgångar svar: ${JSON.stringify(data).substring(0, 200)}...`);
-                        
-                        if (data && data.departures && data.departures.length > 0) {
-                            debug(`Hämtade ${data.departures.length} avgångar`);
-                            break;
-                        } else if (data && Array.isArray(data) && data.length > 0) {
-                            debug(`Hämtade ${data.length} avgångar (direkt array)`);
-                            data = { departures: data };
-                            break;
-                        }
-                    } catch (error) {
-                        debug(`Avgångar endpoint misslyckades: ${error.message}`);
-                        continue;
-                    }
+                if (!response.ok) {
+                    throw new Error(`API-svar: ${response.status} ${response.statusText}`);
                 }
+                
+                const data = await response.json();
+                console.log(`Hämtade ${data.departures ? data.departures.length : 0} avgångar`);
                 
                 if (!data || !data.departures || data.departures.length === 0) {
                     displayNoDepartures();
@@ -698,7 +443,7 @@
             } catch (error) {
                 const errorMsg = 'Kunde inte hämta avgångar: ' + error.message;
                 showError(errorMsg);
-                debug('Error fetching departures: ' + error.message);
+                console.error('Error fetching departures:', error);
             } finally {
                 refreshBtn.disabled = false;
                 refreshBtn.textContent = 'Uppdatera';
@@ -711,16 +456,20 @@
             loadingMessage.style.display = 'none';
             errorMessage.style.display = 'none';
             
+            // Clear previous departures
             departuresList.innerHTML = '';
+            
+            // Show only the next 10 departures
             const nextDepartures = departures.slice(0, 10);
             
             nextDepartures.forEach(departure => {
                 const departureItem = document.createElement('div');
                 departureItem.className = 'departure-item';
                 
-                const departureTime = new Date(departure.expected || departure.time);
+                // Format time
+                const departureTime = new Date(departure.expected);
                 const now = new Date();
-                const timeDiff = Math.floor((departureTime - now) / (1000 * 60));
+                const timeDiff = Math.floor((departureTime - now) / (1000 * 60)); // Difference in minutes
                 
                 let timeDisplay;
                 if (timeDiff <= 0) {
@@ -733,20 +482,16 @@
                     timeDisplay = `<span class="time">${hours}h ${minutes}m</span>`;
                 }
                 
-                const lineNumber = departure.transport?.number || departure.lineNumber || departure.number || '?';
-                const destination = departure.destination || 'Okänd destination';
-                const platform = departure.platform;
-                const status = departure.status;
-                
+                // Create departure HTML
                 departureItem.innerHTML = `
                     <div class="line-info">
-                        <div class="line-number">${lineNumber}</div>
-                        <div class="destination">${destination}</div>
+                        <div class="line-number">${departure.transport.number || '?'}</div>
+                        <div class="destination">${departure.destination}</div>
                     </div>
                     <div class="time-info">
                         <div class="time">${timeDisplay}</div>
-                        ${platform ? `<div class="platform">Plattform ${platform}</div>` : ''}
-                        ${status ? `<div class="status">${status}</div>` : ''}
+                        ${departure.platform ? `<div class="platform">Plattform ${departure.platform}</div>` : ''}
+                        ${departure.status ? `<div class="status">${departure.status}</div>` : ''}
                     </div>
                 `;
                 
@@ -765,7 +510,6 @@
                     <p>Inga avgångar inom överskådlig framtid</p>
                 </div>
             `;
-            debug('Inga avgångar att visa');
         }
         
         // Display error message
