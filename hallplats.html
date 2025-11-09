@@ -184,6 +184,16 @@
             color: #666;
         }
         
+        .debug-info {
+            background-color: #f8f9fa;
+            border-left: 4px solid #6c757d;
+            padding: 10px;
+            margin: 10px 0;
+            font-family: monospace;
+            font-size: 0.8rem;
+            display: none;
+        }
+        
         footer {
             text-align: center;
             padding: 15px;
@@ -212,6 +222,8 @@
     </header>
     
     <div class="container">
+        <div id="debugInfo" class="debug-info"></div>
+        
         <div id="locationCard" class="card" style="display: none;">
             <div class="location-info">
                 <div class="location-icon">📍</div>
@@ -250,6 +262,7 @@
         let refreshInterval = null;
         
         // DOM elements
+        const debugInfo = document.getElementById('debugInfo');
         const locationCard = document.getElementById('locationCard');
         const stopName = document.getElementById('stopName');
         const stopDistance = document.getElementById('stopDistance');
@@ -259,13 +272,22 @@
         const loadingMessage = document.getElementById('loadingMessage');
         const errorMessage = document.getElementById('errorMessage');
         
+        // Debug function
+        function debug(message) {
+            console.log(message);
+            debugInfo.innerHTML += `<div>${new Date().toLocaleTimeString()}: ${message}</div>`;
+            debugInfo.style.display = 'block';
+        }
+        
         // Initialize the app
         document.addEventListener('DOMContentLoaded', function() {
+            debug('App startad');
             // Request location permission and get user's position
             getLocation();
             
             // Set up refresh button
             refreshBtn.addEventListener('click', function() {
+                debug('Manuell uppdatering startad');
                 if (nearestStop) {
                     fetchDepartures(nearestStop.id);
                 }
@@ -274,6 +296,7 @@
         
         // Get user's current location
         function getLocation() {
+            debug('Begär platsinformation...');
             if (navigator.geolocation) {
                 navigator.geolocation.getCurrentPosition(
                     position => {
@@ -281,40 +304,70 @@
                             lat: position.coords.latitude,
                             lng: position.coords.longitude
                         };
+                        debug(`Position hämtad: ${userLocation.lat}, ${userLocation.lng}`);
                         fetchStops();
                     },
                     error => {
-                        showError('Kunde inte hämta din position. Kontrollera att du har gett tillåtelse för platsinformation.');
-                        console.error('Geolocation error:', error);
+                        let errorMsg = 'Kunde inte hämta din position. ';
+                        switch(error.code) {
+                            case error.PERMISSION_DENIED:
+                                errorMsg += 'Platstillstånd nekat.';
+                                break;
+                            case error.POSITION_UNAVAILABLE:
+                                errorMsg += 'Platsinformation ej tillgänglig.';
+                                break;
+                            case error.TIMEOUT:
+                                errorMsg += 'Platssökning timeout.';
+                                break;
+                            default:
+                                errorMsg += 'Okänt fel.';
+                                break;
+                        }
+                        showError(errorMsg);
+                        debug('Geolocation error: ' + errorMsg);
+                    },
+                    {
+                        timeout: 10000,
+                        enableHighAccuracy: true
                     }
                 );
             } else {
-                showError('Din webbläsare stöder inte platsinformation.');
+                const errorMsg = 'Din webbläsare stöder inte platsinformation.';
+                showError(errorMsg);
+                debug(errorMsg);
             }
         }
         
         // Fetch all stops from SL API
         async function fetchStops() {
             try {
-                loadingMessage.innerHTML = '<p>Hämtar hållplatser...</p>';
+                loadingMessage.innerHTML = '<p>Hämtar hållplatser från SL...</p>';
+                debug('Startar API-anrop för hållplatser...');
                 
-                const response = await fetch('https://transport.integration.sl.se/v1/sites?expand=true');
+                const apiUrl = 'https://transport.integration.sl.se/v1/sites?expand=true';
+                debug(`API URL: ${apiUrl}`);
+                
+                const response = await fetch(apiUrl);
+                debug(`API-svar: ${response.status} ${response.statusText}`);
                 
                 if (!response.ok) {
-                    throw new Error(`API-svar: ${response.status}`);
+                    throw new Error(`API-svar: ${response.status} ${response.statusText}`);
                 }
                 
                 const data = await response.json();
+                debug(`Hämtade ${data.sites ? data.sites.length : 0} hållplatser`);
                 
                 if (!data || !data.sites || data.sites.length === 0) {
-                    throw new Error('Inga hållplatser hittades.');
+                    throw new Error('Inga hållplatser hittades i API-svaret.');
                 }
                 
                 // Find nearest stop
                 findNearestStop(data.sites);
                 
             } catch (error) {
-                showError('Kunde inte hämta hållplatsinformation: ' + error.message);
+                const errorMsg = 'Kunde inte hämta hållplatsinformation: ' + error.message;
+                showError(errorMsg);
+                debug('Error fetching stops: ' + error.message);
                 console.error('Error fetching stops:', error);
             }
         }
@@ -335,11 +388,14 @@
         
         // Find the nearest stop from user's location
         function findNearestStop(stops) {
+            debug(`Söker närmaste hållplats bland ${stops.length} hållplatser...`);
             let minDistance = Infinity;
             let nearest = null;
+            let validStops = 0;
             
             stops.forEach(stop => {
                 if (stop.location && stop.location.latitude && stop.location.longitude) {
+                    validStops++;
                     const distance = calculateDistance(
                         userLocation.lat, 
                         userLocation.lng,
@@ -354,8 +410,11 @@
                 }
             });
             
+            debug(`Hittade ${validStops} giltiga hållplatser med koordinater`);
+            
             if (nearest) {
                 nearestStop = nearest;
+                debug(`Närmaste hållplats: ${nearest.name} (${minDistance.toFixed(3)} km)`);
                 displayNearestStop(nearest, minDistance);
                 fetchDepartures(nearest.id);
                 
@@ -364,11 +423,14 @@
                     clearInterval(refreshInterval);
                 }
                 refreshInterval = setInterval(() => {
+                    debug('Automatisk uppdatering...');
                     fetchDepartures(nearest.id);
                 }, 30000);
                 
             } else {
-                showError('Kunde inte hitta någon hållplats nära dig.');
+                const errorMsg = 'Kunde inte hitta någon hållplats nära dig.';
+                showError(errorMsg);
+                debug(errorMsg);
             }
         }
         
@@ -392,13 +454,18 @@
                 refreshBtn.disabled = true;
                 refreshBtn.textContent = 'Uppdaterar...';
                 
-                const response = await fetch(`https://transport.integration.sl.se/v1/sites/${stopId}/departures`);
+                const apiUrl = `https://transport.integration.sl.se/v1/sites/${stopId}/departures`;
+                debug(`Hämtar avgångar från: ${apiUrl}`);
+                
+                const response = await fetch(apiUrl);
+                debug(`Avgångar API-svar: ${response.status} ${response.statusText}`);
                 
                 if (!response.ok) {
-                    throw new Error(`API-svar: ${response.status}`);
+                    throw new Error(`API-svar: ${response.status} ${response.statusText}`);
                 }
                 
                 const data = await response.json();
+                debug(`Hämtade ${data.departures ? data.departures.length : 0} avgångar`);
                 
                 if (!data || !data.departures || data.departures.length === 0) {
                     displayNoDepartures();
@@ -407,7 +474,9 @@
                 }
                 
             } catch (error) {
-                showError('Kunde inte hämta avgångar: ' + error.message);
+                const errorMsg = 'Kunde inte hämta avgångar: ' + error.message;
+                showError(errorMsg);
+                debug('Error fetching departures: ' + error.message);
                 console.error('Error fetching departures:', error);
             } finally {
                 refreshBtn.disabled = false;
@@ -426,6 +495,7 @@
             
             // Show only the next 10 departures
             const nextDepartures = departures.slice(0, 10);
+            debug(`Visar ${nextDepartures.length} avgångar`);
             
             nextDepartures.forEach(departure => {
                 const departureItem = document.createElement('div');
@@ -475,6 +545,7 @@
                     <p>Inga avgångar inom överskådlig framtid</p>
                 </div>
             `;
+            debug('Inga avgångar att visa');
         }
         
         // Display error message
@@ -485,6 +556,7 @@
             
             errorMessage.style.display = 'block';
             errorMessage.innerHTML = `<p>${message}</p>`;
+            debug('Error visad: ' + message);
         }
     </script>
 </body>
