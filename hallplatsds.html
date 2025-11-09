@@ -1,0 +1,185 @@
+<!-- Lägg till detta i din befintliga kod -->
+
+<style>
+/* Ytterligare styling för bättre mobilanpassning */
+@media (max-width: 480px) {
+    .container, .departures {
+        padding: 20px;
+        margin: 10px;
+    }
+    
+    h1 {
+        font-size: 24px;
+    }
+}
+
+/* Loading animation för avgångar */
+.departure-loading {
+    text-align: center;
+    padding: 20px;
+    color: #667eea;
+}
+
+/* Error styling för avgångar */
+.departure-error {
+    text-align: center;
+    padding: 20px;
+    color: #e74c3c;
+    background: #fef5f5;
+    border-radius: 10px;
+}
+</style>
+
+<script>
+// Förbättrad felhantering i findNearestStop funktionen
+async function findNearestStop(userLat, userLon) {
+    try {
+        stopNameEl.textContent = 'Söker...';
+        distanceEl.textContent = '-';
+
+        const response = await fetch('https://transport.integration.sl.se/v1/sites?expand=true');
+        
+        if (!response.ok) {
+            throw new Error(`API-svar: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        const stops = data.sites || data; // Hantera båda formaten
+
+        if (!stops || stops.length === 0) {
+            throw new Error('Inga hållplatser hittades');
+        }
+
+        let nearestStop = null;
+        let minDistance = Infinity;
+
+        stops.forEach(stop => {
+            // Hantera olika koordinatformat
+            const stopLat = stop.lat || stop.location?.latitude;
+            const stopLon = stop.lon || stop.location?.longitude;
+            
+            if (stopLat && stopLon) {
+                const distance = calculateDistance(userLat, userLon, stopLat, stopLon);
+                if (distance < minDistance) {
+                    minDistance = distance;
+                    nearestStop = stop;
+                }
+            }
+        });
+
+        if (nearestStop) {
+            const stopText = nearestStop.note 
+                ? `${nearestStop.name} (${nearestStop.note})`
+                : nearestStop.name;
+            stopNameEl.textContent = stopText;
+            
+            if (minDistance < 1) {
+                distanceEl.textContent = `${Math.round(minDistance * 1000)} meter`;
+            } else {
+                distanceEl.textContent = `${minDistance.toFixed(2)} km`;
+            }
+
+            // Hämta avgångar för närmaste hållplats
+            getDepartures(nearestStop.id);
+        } else {
+            throw new Error('Ingen hållplats med koordinater hittades');
+        }
+    } catch (error) {
+        stopNameEl.textContent = 'Kunde inte hämta hållplatser';
+        distanceEl.textContent = '-';
+        console.error('Fel vid hämtning av hållplatser:', error);
+    }
+}
+
+// Auto-refresh funktionalitet
+let refreshInterval;
+
+function startAutoRefresh(siteId) {
+    // Stoppa tidigare interval
+    if (refreshInterval) {
+        clearInterval(refreshInterval);
+    }
+    
+    // Uppdatera var 30:e sekund
+    refreshInterval = setInterval(() => {
+        getDepartures(siteId);
+    }, 30000);
+}
+
+// Uppdatera getDepartures för att starta auto-refresh
+async function getDepartures(siteId) {
+    try {
+        departuresListEl.innerHTML = '<div class="departure-loading">Hämtar avgångar...</div>';
+        departuresDiv.classList.add('show');
+
+        const response = await fetch(`https://transport.integration.sl.se/v1/sites/${siteId}/departures`);
+        
+        if (!response.ok) {
+            throw new Error(`API-svar: ${response.status}`);
+        }
+        
+        const data = await response.json();
+
+        if (!data.departures || data.departures.length === 0) {
+            departuresListEl.innerHTML = '<div class="departure-error">Inga avgångar inom överskådlig framtid</div>';
+            return;
+        }
+
+        // Sortera efter avgångstid och ta de 8 första
+        const sortedDepartures = data.departures
+            .sort((a, b) => new Date(a.expected) - new Date(b.expected))
+            .slice(0, 8);
+
+        // Visa avgångar
+        departuresListEl.innerHTML = sortedDepartures.map(dep => {
+            const expectedTime = new Date(dep.expected);
+            const now = new Date();
+            const minutesUntil = Math.round((expectedTime - now) / 60000);
+            
+            let timeDisplay = '';
+            let timeClass = 'departure-time';
+            
+            if (minutesUntil < 1) {
+                timeDisplay = 'Nu';
+                timeClass += ' now';
+            } else if (minutesUntil === 1) {
+                timeDisplay = '1 min';
+            } else {
+                timeDisplay = `${minutesUntil} min`;
+            }
+
+            const clockTime = expectedTime.toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit' });
+
+            return `
+                <div class="departure-item">
+                    <div class="departure-info">
+                        <div class="departure-line">${dep.transport?.number || dep.line?.designation || '?'} ${dep.transport?.mode || dep.line?.transport_mode || ''}</div>
+                        <div class="departure-destination">${dep.destination}</div>
+                    </div>
+                    <div>
+                        <div class="${timeClass}">${timeDisplay}</div>
+                        <div class="departure-display">${clockTime}</div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        // Starta auto-refresh
+        startAutoRefresh(siteId);
+
+    } catch (error) {
+        departuresListEl.innerHTML = '<div class="departure-error">Kunde inte hämta avgångar</div>';
+        console.error('Fel vid hämtning av avgångar:', error);
+    }
+}
+
+// Lägg till CSS för "Nu" avgångar
+const style = document.createElement('style');
+style.textContent = `
+    .departure-time.now {
+        color: #e74c3c;
+        font-weight: bold;
+    }
+`;
+document.head.appendChild(style);
+</script>
