@@ -1,58 +1,4 @@
-        // Funktion för att hämta avgångar från en hållplats
-        async function getDepartures(siteId) {
-            try {
-                departuresListEl.innerHTML = '<p style="text-align: center; color: #667eea;">Hämtar avgångar...</p>';
-                departuresDiv.classList.add('show');
-
-                const response = await fetch(`https://transport.integration.sl.se/v1/sites/${siteId}/departures`);
-                const data = await response.json();
-
-                if (!data.departures || data.departures.length === 0) {
-                    departuresListEl.innerHTML = '<p style="text-align: center; color: #999;">Inga avgångar hittades</p>';
-                    return;
-                }
-
-                // Sortera efter avgångstid och ta de 5 första
-                const sortedDepartures = data.departures
-                    .sort((a, b) => new Date(a.expected) - new Date(b.expected))
-                    .slice(0, 5);
-
-                // Visa avgångar
-                departuresListEl.innerHTML = sortedDepartures.map(dep => {
-                    const expectedTime = new Date(dep.expected);
-                    const now = new Date();
-                    const minutesUntil = Math.round((expectedTime - now) / 60000);
-                    
-                    let timeDisplay = '';
-                    if (minutesUntil < 1) {
-                        timeDisplay = 'Nu';
-                    } else if (minutesUntil === 1) {
-                        timeDisplay = '1 min';
-                    } else {
-                        timeDisplay = `${minutesUntil} min`;
-                    }
-
-                    const clockTime = expectedTime.toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit' });
-
-                    return `
-                        <div class="departure-item">
-                            <div class="departure-info">
-                                <div class="departure-line">${dep.line.designation} ${dep.line.transport_mode}</div>
-                                <div class="departure-destination">${dep.destination}</div>
-                            </div>
-                            <div>
-                                <div class="departure-time">${timeDisplay}</div>
-                                <div class="departure-display">${clockTime}</div>
-                            </div>
-                        </div>
-                    `;
-                }).join('');
-
-            } catch (error) {
-                departuresListEl.innerHTML = '<p style="text-align: center; color: #e74c3c;">Kunde inte hämta avgångar</p>';
-                console.error('Fel vid hämtning av avgångar:', error);
-            }
-        }<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="sv">
 <head>
     <meta charset="UTF-8">
@@ -176,6 +122,31 @@
             display: block;
         }
 
+        .loading {
+            color: #667eea;
+            margin-top: 20px;
+            display: none;
+        }
+
+        .loading.show {
+            display: block;
+        }
+
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
         .departures {
             background: white;
             border-radius: 20px;
@@ -239,72 +210,49 @@
             text-align: right;
             margin-top: 2px;
         }
-
-        .loading {
-            color: #667eea;
-            margin-top: 20px;
-            display: none;
-        }
-
-        .loading.show {
-            display: block;
-        }
-
-        .spinner {
-            border: 3px solid #f3f3f3;
-            border-top: 3px solid #667eea;
-            border-radius: 50%;
-            width: 40px;
-            height: 40px;
-            animation: spin 1s linear infinite;
-            margin: 20px auto;
-        }
-
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>📍 Min Position</h1>
-        <button id="getLocation">Hämta Position</button>
-        
-        <div class="loading" id="loading">
-            <div class="spinner"></div>
-            <p>Hämtar position...</p>
-        </div>
+    <div style="display: flex; flex-direction: column; align-items: center;">
+        <div class="container">
+            <h1>📍 Min Position</h1>
+            <button id="getLocation">Hämta Position</button>
+            
+            <div class="loading" id="loading">
+                <div class="spinner"></div>
+                <p>Hämtar position...</p>
+            </div>
 
-        <div class="result" id="result">
-            <div class="coord-item">
-                <div class="coord-label">Latitude (Breddgrad)</div>
-                <div class="coord-value" id="latitude">-</div>
+            <div class="result" id="result">
+                <div class="coord-item">
+                    <div class="coord-label">Latitude (Breddgrad)</div>
+                    <div class="coord-value" id="latitude">-</div>
+                </div>
+                <div class="coord-item">
+                    <div class="coord-label">Longitude (Längdgrad)</div>
+                    <div class="coord-value" id="longitude">-</div>
+                </div>
+                <div class="coord-item">
+                    <div class="coord-label">Noggrannhet</div>
+                    <div class="coord-value" id="accuracy">-</div>
+                </div>
+                <div class="coord-item" style="border-top: 2px solid #667eea; margin-top: 15px; padding-top: 15px;">
+                    <div class="coord-label">Närmaste Hållplats</div>
+                    <div class="coord-value" style="font-size: 18px;" id="stopName">-</div>
+                </div>
+                <div class="coord-item">
+                    <div class="coord-label">Avstånd</div>
+                    <div class="coord-value" style="font-size: 16px; color: #667eea;" id="distance">-</div>
+                </div>
             </div>
-            <div class="coord-item">
-                <div class="coord-label">Longitude (Längdgrad)</div>
-                <div class="coord-value" id="longitude">-</div>
-            </div>
-            <div class="coord-item">
-                <div class="coord-label">Noggrannhet</div>
-                <div class="coord-value" id="accuracy">-</div>
-            </div>
-            <div class="coord-item" style="border-top: 2px solid #667eea; margin-top: 15px; padding-top: 15px;">
-                <div class="coord-label">Närmaste Hållplats</div>
-                <div class="coord-value" style="font-size: 18px;" id="stopName">-</div>
-            </div>
-            <div class="coord-item">
-                <div class="coord-label">Avstånd</div>
-                <div class="coord-value" style="font-size: 16px; color: #667eea;" id="distance">-</div>
-            </div>
+
+            <div class="error" id="error"></div>
         </div>
 
         <div class="departures" id="departures">
             <h2>Nästa avgångar</h2>
             <div id="departuresList"></div>
         </div>
-
-        <div class="error" id="error"></div>
     </div>
 
     <script>
@@ -330,6 +278,62 @@
                      Math.sin(dLon/2) * Math.sin(dLon/2);
             const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
             return R * c; // Avstånd i km
+        }
+
+        // Funktion för att hämta avgångar från en hållplats
+        async function getDepartures(siteId) {
+            try {
+                departuresListEl.innerHTML = '<p style="text-align: center; color: #667eea;">Hämtar avgångar...</p>';
+                departuresDiv.classList.add('show');
+
+                const response = await fetch(`https://transport.integration.sl.se/v1/sites/${siteId}/departures`);
+                const data = await response.json();
+
+                if (!data.departures || data.departures.length === 0) {
+                    departuresListEl.innerHTML = '<p style="text-align: center; color: #999;">Inga avgångar hittades</p>';
+                    return;
+                }
+
+                // Sortera efter avgångstid och ta de 5 första
+                const sortedDepartures = data.departures
+                    .sort((a, b) => new Date(a.expected) - new Date(b.expected))
+                    .slice(0, 5);
+
+                // Visa avgångar
+                departuresListEl.innerHTML = sortedDepartures.map(dep => {
+                    const expectedTime = new Date(dep.expected);
+                    const now = new Date();
+                    const minutesUntil = Math.round((expectedTime - now) / 60000);
+                    
+                    let timeDisplay = '';
+                    if (minutesUntil < 1) {
+                        timeDisplay = 'Nu';
+                    } else if (minutesUntil === 1) {
+                        timeDisplay = '1 min';
+                    } else {
+                        timeDisplay = `${minutesUntil} min`;
+                    }
+
+                    const clockTime = expectedTime.toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit' });
+
+                    return `
+                        <div class="departure-item">
+                            <div class="departure-info">
+                                <div class="departure-line">${dep.line.designation} ${dep.line.transport_mode}</div>
+                                <div class="departure-destination">${dep.destination}</div>
+                            </div>
+                            <div>
+                                <div class="departure-time">${timeDisplay}</div>
+                                <div class="departure-display">${clockTime}</div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+
+            } catch (error) {
+                departuresListEl.innerHTML = '<p style="text-align: center; color: #e74c3c;">Kunde inte hämta avgångar</p>';
+                console.error('Fel vid hämtning av avgångar:', error);
+            }
         }
 
         // Funktion för att hitta närmaste hållplats
@@ -384,6 +388,7 @@
             loadingDiv.classList.add('show');
             resultDiv.classList.remove('show');
             errorDiv.classList.remove('show');
+            departuresDiv.classList.remove('show');
             getLocationBtn.disabled = true;
 
             navigator.geolocation.getCurrentPosition(
