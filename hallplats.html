@@ -224,18 +224,7 @@
             </div>
 
             <div class="result" id="result">
-                <div class="coord-item">
-                    <div class="coord-label">Latitude (Breddgrad)</div>
-                    <div class="coord-value" id="latitude">-</div>
-                </div>
-                <div class="coord-item">
-                    <div class="coord-label">Longitude (Längdgrad)</div>
-                    <div class="coord-value" id="longitude">-</div>
-                </div>
-                <div class="coord-item">
-                    <div class="coord-label">Noggrannhet</div>
-                    <div class="coord-value" id="accuracy">-</div>
-                </div>
+               
                 <div class="coord-item" style="border-top: 2px solid #667eea; margin-top: 15px; padding-top: 15px;">
                     <div class="coord-label">Närmaste Hållplats</div>
                     <div class="coord-value" style="font-size: 18px;" id="stopName">-</div>
@@ -260,9 +249,7 @@
         const resultDiv = document.getElementById('result');
         const errorDiv = document.getElementById('error');
         const loadingDiv = document.getElementById('loading');
-        const latitudeEl = document.getElementById('latitude');
-        const longitudeEl = document.getElementById('longitude');
-        const accuracyEl = document.getElementById('accuracy');
+
         const stopNameEl = document.getElementById('stopName');
         const distanceEl = document.getElementById('distance');
         const departuresDiv = document.getElementById('departures');
@@ -402,10 +389,7 @@
                     const long = position.coords.longitude;
                     const acc = position.coords.accuracy;
 
-                    latitudeEl.textContent = lat.toFixed(6);
-                    longitudeEl.textContent = long.toFixed(6);
-                    accuracyEl.textContent = `±${acc.toFixed(0)} meter`;
-
+                    
                     resultDiv.classList.add('show');
 
                     // Hitta närmaste hållplats
