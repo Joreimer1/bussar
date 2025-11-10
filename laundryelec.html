@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tvättel</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+        }
+        .container {
+            text-align: center;
+        }
+        h1 {
+            margin-bottom: 20px;
+            font-size: 32px;
+        }
+        .price-box {
+            padding: 30px 50px;
+            border-radius: 20px;
+            font-size: 48px;
+            font-weight: bold;
+            color: #333;
+            box-shadow: 0 8px 16px rgba(0,0,0,0.15);
+            min-width: 250px;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 15px;
+        }
+        .lightning-icon {
+            font-size: 50px;
+            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));
+        }
+        .price-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .next-price {
+            font-size: 24px;
+            font-weight: normal;
+            margin-top: 5px;
+            opacity: 0.8;
+        }
+        .green {
+            background-color: #4CAF50;
+        }
+        .yellow {
+            background-color: #FFEB3B;
+        }
+        .red {
+            background-color: #F44336;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Tvättel:</h1>
+        <div class="price-box" id="priceBox">
+            <span class="lightning-icon">⚡</span>
+            <div class="price-container">
+                <span id="priceText">Laddar...</span>
+                <span class="next-price" id="nextPrice"></span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+
+        let cachedData = null;
+        let cachedTomorrowData = null;
+        
+        async function updateDisplay() {
+            if (!cachedData || cachedData.length === 0) {
+                console.log('Ingen cachad data finns än');
+                return;
+            }
+            
+            const now = new Date();
+            const currentHour = now.getHours();
+            
+            // Hitta de närmaste 2 timmarna
+            let nextTwoHours = cachedData.filter(item => {
+                const itemHour = new Date(item.time_start).getHours();
+                return itemHour >= currentHour && itemHour < currentHour + 2;
+            });
+            
+            console.log('Aktuell timme:', currentHour);
+            console.log('Närmaste 2 timmar från idag:', nextTwoHours);
+            console.log('Pris per timme:', nextTwoHours.map(h => h.SEK_per_kWh));
+            
+            // Om vi inte har 2 timmar kvar idag, ta från morgondagens cache (om den finns)
+            if (nextTwoHours.length < 2) {
+                if (cachedTomorrowData && cachedTomorrowData.length > 0) {
+                    const remainingHours = 2 - nextTwoHours.length;
+                    const tomorrowHours = cachedTomorrowData.slice(0, remainingHours);
+                    nextTwoHours = nextTwoHours.concat(tomorrowHours);
+                    console.log('Lade till från imorgon:', tomorrowHours);
+                } else {
+                    console.log('Morgondagens data finns inte, använder bara', nextTwoHours.length, 'timme(r)');
+                }
+            }
+            
+            if (nextTwoHours.length === 0) {
+                console.error('Inga timmar hittades!');
+                return;
+            }
+            
+            // Beräkna genomsnittet för de närmaste 2 timmarna
+            const average = nextTwoHours.reduce((total, item) => total + item.SEK_per_kWh, 0) / nextTwoHours.length;
+            
+            console.log('Genomsnittspris (närmaste 2h):', average);
+            
+            // Hitta de två efterföljande timmarna (timme 2-3 från nu)
+            let followingTwoHours = cachedData.filter(item => {
+                const itemHour = new Date(item.time_start).getHours();
+                return itemHour >= currentHour + 2 && itemHour < currentHour + 4;
+            });
+            
+            // Om vi inte har tillräckligt från idag, ta från imorgon
+            if (followingTwoHours.length < 2 && cachedTomorrowData && cachedTomorrowData.length > 0) {
+                const remainingHours = 2 - followingTwoHours.length;
+                const startIndex = followingTwoHours.length > 0 ? 0 : (2 - (24 - currentHour));
+                const tomorrowHours = cachedTomorrowData.slice(Math.max(0, startIndex), Math.max(0, startIndex) + remainingHours);
+                followingTwoHours = followingTwoHours.concat(tomorrowHours);
+            }
+            
+            const priceBox = document.getElementById('priceBox');
+            const priceText = document.getElementById('priceText');
+            const nextPrice = document.getElementById('nextPrice');
+            
+            priceText.textContent = average.toFixed(2) + ' kr';
+            
+            // Visa priset för de två efterföljande timmarna om det finns
+            if (followingTwoHours.length > 0) {
+                const followingAverage = followingTwoHours.reduce((total, item) => total + item.SEK_per_kWh, 0) / followingTwoHours.length;
+                nextPrice.textContent = '(' + followingAverage.toFixed(2) + ' kr)';
+                console.log('Genomsnittspris (timme 2-3):', followingAverage);
+            } else {
+                nextPrice.textContent = '';
+            }
+            
+            // Sätt färg baserat på genomsnittet
+            priceBox.classList.remove('green', 'yellow', 'red');
+            if (average < 0.75) {
+                priceBox.classList.add('green');
+            } else if (average <= 1.25) {
+                priceBox.classList.add('yellow');
+            } else {
+                priceBox.classList.add('red');
+            }
+        }
+        
+        async function fetchPrices() {
+            try {
+                const now = new Date();
+                const year = now.getFullYear();
+                const month = String(now.getMonth() + 1).padStart(2, '0');
+                const day = String(now.getDate()).padStart(2, '0');
+                
+                const url = `https://www.elprisetjustnu.se/api/v1/prices/${year}/${month}-${day}_SE3.json`;
+                
+                const response = await fetch(url);
+                cachedData = await response.json();
+                
+                // Försök hämta morgondagens priser (kan misslyckas om de inte finns än)
+                try {
+                    const tomorrow = new Date(now);
+                    tomorrow.setDate(tomorrow.getDate() + 1);
+                    const tomorrowYear = tomorrow.getFullYear();
+                    const tomorrowMonth = String(tomorrow.getMonth() + 1).padStart(2, '0');
+                    const tomorrowDay = String(tomorrow.getDate()).padStart(2, '0');
+                    
+                    const tomorrowUrl = `https://www.elprisetjustnu.se/api/v1/prices/${tomorrowYear}/${tomorrowMonth}-${tomorrowDay}_SE3.json`;
+                    const tomorrowResponse = await fetch(tomorrowUrl);
+                    if (tomorrowResponse.ok) {
+                        cachedTomorrowData = await tomorrowResponse.json();
+                    } else {
+                        console.log('Morgondagens priser finns inte tillgängliga än');
+                        cachedTomorrowData = null;
+                    }
+                } catch (tomorrowError) {
+                    console.log('Kunde inte hämta morgondagens priser:', tomorrowError);
+                    cachedTomorrowData = null;
+                }
+                
+                updateDisplay();
+                
+            } catch (error) {
+                console.error('Fel vid hämtning av elpris:', error);
+                document.getElementById('priceText').textContent = 'Fel';
+            }
+        }
+        
+        fetchPrices();
+        // Hämta nytt pris var 15:e minut
+        setInterval(fetchPrices, 900000);
+        // Uppdatera visningen varje minut
+        setInterval(updateDisplay, 60000);
+    </script>
+</body>
+</html>
