@@ -7,12 +7,7 @@
     <meta name="apple-mobile-web-app-title" content="Hållplatsavgångar">
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚌</text></svg>">
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
             background: #2d3748;
@@ -20,286 +15,59 @@
             padding: 10px;
             overflow-y: auto;
         }
-
-        .container {
-            max-width: 500px;
-            margin: 0 auto;
-        }
-
-        .card {
-            background: #1a202c;
-            border-radius: 0;
-            padding: 20px;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-            margin-bottom: 15px;
-        }
-
-        h1 {
-            color: #e2e8f0;
-            margin-bottom: 15px;
-            font-size: 22px;
-            text-align: center;
-            font-weight: 400;
-        }
-
-        .button-group {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 15px;
-        }
-
+        .container { max-width: 500px; margin: 0 auto; }
+        .card { background: #1a202c; border-radius: 0; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.3); margin-bottom: 15px; }
+        h1 { color: #e2e8f0; margin-bottom: 15px; font-size: 22px; text-align: center; font-weight: 400; }
+        .button-group { display:flex; gap:10px; margin-bottom:15px; }
         button {
-            flex: 1;
-            background: #4a5568;
-            color: #e2e8f0;
-            border: none;
-            padding: 12px 20px;
-            border-radius: 8px;
-            font-size: 14px;
-            font-weight: 400;
-            cursor: pointer;
-            transition: background 0.2s;
+            flex:1; background:#4a5568; color:#e2e8f0; border:none; padding:12px 20px; border-radius:8px;
+            font-size:14px; font-weight:400; cursor:pointer; transition:background .2s;
         }
-
-        button:hover {
-            background: #718096;
-        }
-
-        button:active {
-            background: #2d3748;
-        }
-
-        button:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-
-        button.secondary {
-            background: #4a5568;
-        }
-
-        .search-container {
-            display: none;
-            margin-bottom: 15px;
-        }
-
-        .search-container.show {
-            display: block;
-        }
-
+        button:hover { background:#718096; }
+        button:active { background:#2d3748; }
+        button.secondary { background:#4a5568; }
+        .search-container { display:none; margin-bottom:15px; }
+        .search-container.show { display:block; }
         input[type="text"] {
-            width: 100%;
-            padding: 12px 15px;
-            border: 1px solid #4a5568;
-            background: #2d3748;
-            color: #e2e8f0;
-            border-radius: 0;
-            font-size: 14px;
-            outline: none;
-            transition: border-color 0.3s;
+            width:100%; padding:12px 15px; border:1px solid #4a5568; background:#2d3748; color:#e2e8f0;
+            border-radius:0; font-size:14px; outline:none; transition:border-color .3s;
         }
-
-        input[type="text"]:focus {
-            border-color: #718096;
-        }
-
-        .suggestions {
-            margin-top: 10px;
-            max-height: 200px;
-            overflow-y: auto;
-            background: #2d3748;
-            border-radius: 0;
-            display: none;
-            border: 1px solid #4a5568;
-        }
-
-        .suggestions.show {
-            display: block;
-        }
-
-        .suggestion-item {
-            padding: 12px 15px;
-            cursor: pointer;
-            border-bottom: 1px solid #4a5568;
-            transition: background 0.2s;
-        }
-
-        .suggestion-item:last-child {
-            border-bottom: none;
-        }
-
-        .suggestion-item:hover {
-            background: #4a5568;
-        }
-
-        .suggestion-name {
-            font-weight: 600;
-            color: #e2e8f0;
-            font-size: 14px;
-        }
-
-        .suggestion-note {
-            font-size: 12px;
-            color: #a0aec0;
-            margin-top: 2px;
-        }
-
-        .stop-info {
-            background: #2d3748;
-            border-radius: 0;
-            padding: 12px;
-            margin-bottom: 15px;
-            display: none;
-            border: 1px solid #4a5568;
-        }
-
-        .stop-info.show {
-            display: block;
-        }
-
-        .stop-name {
-            font-size: 16px;
-            font-weight: 600;
-            color: #e2e8f0;
-            margin-bottom: 5px;
-        }
-
-        .stop-distance {
-            font-size: 13px;
-            color: #a0aec0;
-            font-weight: 400;
-        }
-
-        .loading {
-            text-align: center;
-            color: #a0aec0;
-            padding: 20px;
-            display: none;
-        }
-
-        .loading.show {
-            display: block;
-        }
-
-        .spinner {
-            border: 3px solid #4a5568;
-            border-top: 3px solid #a0aec0;
-            border-radius: 50%;
-            width: 30px;
-            height: 30px;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 10px;
-        }
-
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-
-        .error {
-            color: #fc8181;
-            background: #2d3748;
-            padding: 12px;
-            border-radius: 0;
-            border: 1px solid #fc8181;
-            font-size: 13px;
-            display: none;
-        }
-
-        .error.show {
-            display: block;
-        }
-
-        .departures-title {
-            font-size: 18px;
-            font-weight: 400;
-            color: #e2e8f0;
-            margin-bottom: 15px;
-            text-align: center;
-        }
-
-        .departure-item {
-            background: #2d3748;
-            border-radius: 0;
-            padding: 12px;
-            margin-bottom: 8px;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            border-left: 3px solid #4a5568;
-            transition: border-color 0.2s;
-        }
-
-        .departure-item:hover {
-            border-left-color: #718096;
-        }
-
-        .direction-arrow {
-            font-size: 20px;
-            min-width: 24px;
-            text-align: center;
-        }
-
-        .departure-info {
-            flex: 1;
-        }
-
-        .departure-line {
-            font-size: 18px;
-            font-weight: 700;
-            color: #ffffff;
-            margin-bottom: 3px;
-        }
-
-        .departure-destination {
-            font-size: 13px;
-            color: #a0aec0;
-        }
-
-        .departure-time-container {
-            text-align: right;
-        }
-
-        .departure-time {
-            font-size: 18px;
-            font-weight: 700;
-            color: #ffffff;
-        }
-
-        .departure-clock {
-            font-size: 11px;
-            color: #a0aec0;
-            margin-top: 2px;
-        }
-
-        .no-departures {
-            text-align: center;
-            color: #a0aec0;
-            padding: 20px;
-            font-size: 14px;
-        }
-
-        @keyframes fadeIn {
-            from {
-                opacity: 0;
-                transform: translateY(10px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        .card {
-            animation: fadeIn 0.3s ease-out;
-        }
+        input[type="text"]:focus { border-color:#718096; }
+        .suggestions { margin-top:10px; max-height:200px; overflow-y:auto; background:#2d3748; border-radius:0; display:none; border:1px solid #4a5568; }
+        .suggestions.show { display:block; }
+        .suggestion-item { padding:12px 15px; cursor:pointer; border-bottom:1px solid #4a5568; transition:background .2s; }
+        .suggestion-item:hover { background:#4a5568; }
+        .suggestion-name { font-weight:600; color:#e2e8f0; font-size:14px; }
+        .suggestion-note { font-size:12px; color:#a0aec0; margin-top:2px; }
+        .stop-info { background:#2d3748; border-radius:0; padding:12px; margin-bottom:15px; display:none; border:1px solid #4a5568; }
+        .stop-info.show { display:block; }
+        .stop-name { font-size:16px; font-weight:600; color:#e2e8f0; margin-bottom:5px; }
+        .stop-distance { font-size:13px; color:#a0aec0; font-weight:400; }
+        .loading { text-align:center; color:#a0aec0; padding:20px; display:none; }
+        .loading.show { display:block; }
+        .spinner { border:3px solid #4a5568; border-top:3px solid #a0aec0; border-radius:50%; width:30px; height:30px; animation:spin 1s linear infinite; margin:0 auto 10px; }
+        @keyframes spin { 0%{transform:rotate(0deg);} 100%{transform:rotate(360deg);} }
+        .error { color:#fc8181; background:#2d3748; padding:12px; border-radius:0; border:1px solid #fc8181; font-size:13px; display:none; }
+        .error.show { display:block; }
+        .departures-title { font-size:18px; font-weight:400; color:#e2e8f0; margin-bottom:15px; text-align:center; }
+        .departure-item { background:#2d3748; border-radius:0; padding:12px; margin-bottom:8px; display:flex; align-items:center; gap:12px; border-left:3px solid #4a5568; transition:border-color .2s; }
+        .departure-item:hover { border-left-color:#718096; }
+        .direction-arrow { font-size:20px; min-width:24px; text-align:center; }
+        .departure-info { flex:1; }
+        .departure-line { font-size:18px; font-weight:700; color:#ffffff; margin-bottom:3px; }
+        .departure-destination { font-size:13px; color:#a0aec0; }
+        .departure-time-container { text-align:right; }
+        .departure-time { font-size:18px; font-weight:700; color:#ffffff; }
+        .departure-clock { font-size:11px; color:#a0aec0; margin-top:2px; }
+        .no-departures { text-align:center; color:#a0aec0; padding:20px; font-size:14px; }
+        @keyframes fadeIn { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
+        .card { animation:fadeIn .3s ease-out; }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="card">
             <h1>🚌 Avgångar</h1>
-            
             <div class="button-group">
                 <button id="locationBtn">📍 Min Plats</button>
                 <button id="searchBtn" class="secondary">🔍 Sök</button>
@@ -406,7 +174,6 @@
 
                     const clockTime = expectedTime.toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit' });
                     
-                    // Visa pil baserat på direction_code
                     let arrow = '';
                     if (dep.direction_code === 1) {
                         arrow = '⬆️';
@@ -458,6 +225,8 @@
 
                 if (nearestStop) {
                     displayStop(nearestStop, minDistance);
+                } else {
+                    showError('Ingen hållplats hittades i listan');
                 }
             } catch (err) {
                 showError('Kunde inte hitta hållplats');
@@ -532,25 +301,21 @@
 
         // Knapp för att söka - visa alltid sökrutan och nollställ när knappen trycks
         searchBtn.addEventListener('click', () => {
-            // Visa sökrutan (inte toggle)
             searchContainer.classList.add('show');
-
-            // Nollställ sökfältet och dölja förslag varje gång knappen trycks
             searchInput.value = '';
             suggestions.classList.remove('show');
             suggestions.innerHTML = '';
-
-            // Sätt fokus i sökfältet
             searchInput.focus();
         });
 
-        // Knapp för min plats
-        locationBtn.addEventListener('click', () => {
+        // Gemensam funktion för att begära position och hitta närmaste hållplats
+        function requestLocationAndFindNearest() {
             if (!navigator.geolocation) {
                 showError('Geolocation stöds inte av din webbläsare');
                 return;
             }
 
+            // Visa loading och dölja andra element
             loading.classList.add('show');
             error.classList.remove('show');
             stopInfo.classList.remove('show');
@@ -586,6 +351,15 @@
                     maximumAge: 0
                 }
             );
+        }
+
+        // Använd samma funktion för knappen "Min Plats"
+        locationBtn.addEventListener('click', requestLocationAndFindNearest);
+
+        // Kör automatisk platsförfrågan när sidan laddas
+        window.addEventListener('DOMContentLoaded', () => {
+            // Försök hämta aktuell plats direkt vid sidladdning
+            requestLocationAndFindNearest();
         });
 
         function showError(message) {
