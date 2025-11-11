@@ -16,7 +16,7 @@
             overflow-y: auto;
         }
         .container { max-width: 500px; margin: 0 auto; }
-        .card { background: #1a202c; border-radius: 0; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.3); margin-bottom: 15px; }
+        .card { background: #1a202c; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.3); margin-bottom: 15px; }
         h1 { color: #e2e8f0; margin-bottom: 15px; font-size: 22px; text-align: center; font-weight: 400; }
         .button-group { display:flex; gap:10px; margin-bottom:15px; }
         button {
@@ -33,24 +33,24 @@
             border-radius:0; font-size:14px; outline:none; transition:border-color .3s;
         }
         input[type="text"]:focus { border-color:#718096; }
-        .suggestions { margin-top:10px; max-height:200px; overflow-y:auto; background:#2d3748; border-radius:0; display:none; border:1px solid #4a5568; }
+        .suggestions { margin-top:10px; max-height:200px; overflow-y:auto; background:#2d3748; display:none; border:1px solid #4a5568; }
         .suggestions.show { display:block; }
         .suggestion-item { padding:12px 15px; cursor:pointer; border-bottom:1px solid #4a5568; transition:background .2s; }
         .suggestion-item:hover { background:#4a5568; }
         .suggestion-name { font-weight:600; color:#e2e8f0; font-size:14px; }
         .suggestion-note { font-size:12px; color:#a0aec0; margin-top:2px; }
-        .stop-info { background:#2d3748; border-radius:0; padding:12px; margin-bottom:15px; display:none; border:1px solid #4a5568; }
+        .stop-info { background:#2d3748; padding:12px; margin-bottom:15px; display:none; border:1px solid #4a5568; }
         .stop-info.show { display:block; }
         .stop-name { font-size:16px; font-weight:600; color:#e2e8f0; margin-bottom:5px; }
         .stop-distance { font-size:13px; color:#a0aec0; font-weight:400; }
-        .loading { text-align:center; color:#a0aec0; padding:20px; display:none; }
+        .loading { text-align:center; color:#a0aec0; padding:20px; display:none; position:relative; z-index:10; }
         .loading.show { display:block; }
         .spinner { border:3px solid #4a5568; border-top:3px solid #a0aec0; border-radius:50%; width:30px; height:30px; animation:spin 1s linear infinite; margin:0 auto 10px; }
         @keyframes spin { 0%{transform:rotate(0deg);} 100%{transform:rotate(360deg);} }
-        .error { color:#fc8181; background:#2d3748; padding:12px; border-radius:0; border:1px solid #fc8181; font-size:13px; display:none; }
+        .error { color:#fc8181; background:#2d3748; padding:12px; border:1px solid #fc8181; font-size:13px; display:none; }
         .error.show { display:block; }
         .departures-title { font-size:18px; font-weight:400; color:#e2e8f0; margin-bottom:15px; text-align:center; }
-        .departure-item { background:#2d3748; border-radius:0; padding:12px; margin-bottom:8px; display:flex; align-items:center; gap:12px; border-left:3px solid #4a5568; transition:border-color .2s; }
+        .departure-item { background:#2d3748; padding:12px; margin-bottom:8px; display:flex; align-items:center; gap:12px; border-left:3px solid #4a5568; transition:border-color .2s; }
         .departure-item:hover { border-left-color:#718096; }
         .direction-arrow { font-size:20px; min-width:24px; text-align:center; }
         .departure-info { flex:1; }
@@ -226,9 +226,12 @@
                 if (nearestStop) {
                     displayStop(nearestStop, minDistance);
                 } else {
+                    // Ta bort spinner om ingen hållplats hittas
+                    loading.classList.remove('show');
                     showError('Ingen hållplats hittades i listan');
                 }
             } catch (err) {
+                loading.classList.remove('show');
                 showError('Kunde inte hitta hållplats');
                 console.error('Fel vid hämtning av hållplatser:', err);
             }
@@ -324,7 +327,7 @@
 
             navigator.geolocation.getCurrentPosition(
                 (position) => {
-                    loading.classList.remove('show');
+                    // Låt spinnern vara synlig här. getDepartures tar bort den när data är hämtat.
                     findNearestStop(position.coords.latitude, position.coords.longitude);
                 },
                 (err) => {
@@ -358,7 +361,6 @@
 
         // Kör automatisk platsförfrågan när sidan laddas
         window.addEventListener('DOMContentLoaded', () => {
-            // Försök hämta aktuell plats direkt vid sidladdning
             requestLocationAndFindNearest();
         });
 
