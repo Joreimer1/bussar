@@ -67,7 +67,7 @@
 <body>
     <div class="container">
         <div class="card">
-            <h1>🚌 Avgångar</h1>
+            <h1>SL Avgångar</h1>
             <div class="button-group">
                 <button id="locationBtn">📍 Min Plats</button>
                 <button id="searchBtn" class="secondary">🔍 Sök</button>
@@ -112,6 +112,21 @@
         const departuresList = document.getElementById('departuresList');
 
         let allStops = [];
+
+        // Översättning för transport_mode
+        function translateTransportMode(mode) {
+            if (!mode) return '';
+            const map = {
+                'BUS': 'BUSS',
+                'METRO': 'TUNNELB',
+                'TRAM': 'TVÄRB',
+                'TRAIN': 'TÅG',
+                'SHIP': 'BÅT',
+                'FERRY': 'FÄRJA',
+                'TAXI': 'TAXI'
+            };
+            return map[String(mode).toUpperCase()] || mode;
+        }
 
         // Hämta alla hållplatser vid start
         async function loadStops() {
@@ -174,6 +189,7 @@
 
                     const clockTime = expectedTime.toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit' });
                     
+                    // Visa pil baserat på direction_code
                     let arrow = '';
                     if (dep.direction_code === 1) {
                         arrow = '⬆️';
@@ -181,11 +197,14 @@
                         arrow = '⬇️';
                     }
 
+                    // Översätt transport_mode
+                    const transportModeText = translateTransportMode(dep.line && dep.line.transport_mode ? dep.line.transport_mode : dep.transport_mode);
+
                     return `
                         <div class="departure-item">
                             <div class="direction-arrow">${arrow}</div>
                             <div class="departure-info">
-                                <div class="departure-line">${dep.line.designation} ${dep.line.transport_mode}</div>
+                                <div class="departure-line">${dep.line && dep.line.designation ? dep.line.designation : ''} ${transportModeText}</div>
                                 <div class="departure-destination">${dep.destination}</div>
                             </div>
                             <div class="departure-time-container">
@@ -226,7 +245,6 @@
                 if (nearestStop) {
                     displayStop(nearestStop, minDistance);
                 } else {
-                    // Ta bort spinner om ingen hållplats hittas
                     loading.classList.remove('show');
                     showError('Ingen hållplats hittades i listan');
                 }
