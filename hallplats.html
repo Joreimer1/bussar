@@ -518,21 +518,30 @@
             if (item && item.dataset.id) {
                 const stop = allStops.find(s => s.id == item.dataset.id);
                 if (stop) {
-                    searchInput.value = stop.name;
-                    suggestions.classList.remove('show');
+                    // Visa vald hållplats
                     displayStop(stop);
+
+                    // Dölj och nollställ sökrutan efter val
+                    searchContainer.classList.remove('show');
+                    searchInput.value = '';
+                    suggestions.innerHTML = '';
+                    suggestions.classList.remove('show');
                 }
             }
         });
 
-        // Knapp för att söka
+        // Knapp för att söka - visa alltid sökrutan och nollställ när knappen trycks
         searchBtn.addEventListener('click', () => {
-            searchContainer.classList.toggle('show');
-            if (searchContainer.classList.contains('show')) {
-                searchInput.focus();
-            } else {
-                suggestions.classList.remove('show');
-            }
+            // Visa sökrutan (inte toggle)
+            searchContainer.classList.add('show');
+
+            // Nollställ sökfältet och dölja förslag varje gång knappen trycks
+            searchInput.value = '';
+            suggestions.classList.remove('show');
+            suggestions.innerHTML = '';
+
+            // Sätt fokus i sökfältet
+            searchInput.focus();
         });
 
         // Knapp för min plats
