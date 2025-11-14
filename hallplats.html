@@ -87,6 +87,37 @@
             background: #2d3748;
             border-radius: 4px;
         }
+        .favorites-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-top: 10px;
+        }
+        .favorite-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            background: #4a5568;
+            border-radius: 4px;
+        }
+        .favorite-name {
+            color: #e2e8f0;
+            font-size: 13px;
+        }
+        .remove-favorite {
+            background: #fc8181;
+            color: #1a202c;
+            border: none;
+            padding: 5px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+        .remove-favorite:hover {
+            background: #f56565;
+        }
     </style>
 </head>
 <body>
@@ -102,6 +133,7 @@
                 <input type="text" id="searchInput" placeholder="Sök hållplats...">
                 <div class="suggestions" id="suggestions"></div>
                 <div class="favorites-info" id="favoritesInfo"></div>
+                <div class="favorites-list" id="favoritesList"></div>
             </div>
 
             <div class="loading" id="loading">
@@ -137,6 +169,7 @@
         const departuresCard = document.getElementById('departuresCard');
         const departuresList = document.getElementById('departuresList');
         const favoritesInfo = document.getElementById('favoritesInfo');
+        const favoritesList = document.getElementById('favoritesList');
 
         let allStops = [];
         let favorites = JSON.parse(localStorage.getItem('sl_favorites') || '[]');
@@ -217,11 +250,29 @@
 
         function updateFavoritesInfo() {
             if (favorites.length > 0) {
-                favoritesInfo.textContent = `Favoriter (${favorites.length}/3): ${favorites.map(f => f.name).join(', ')}`;
+                favoritesInfo.textContent = `Favoriter (${favorites.length}/3)`;
+                favoritesList.innerHTML = favorites.map(f => `
+                    <div class="favorite-item">
+                        <div class="favorite-name">⭐ ${f.name}</div>
+                        <button class="remove-favorite" data-id="${f.id}">Ta bort</button>
+                    </div>
+                `).join('');
             } else {
                 favoritesInfo.textContent = 'Inga favoriter sparade. Klicka på stjärnan för att spara.';
+                favoritesList.innerHTML = '';
             }
         }
+
+        // Ta bort favorit
+        favoritesList.addEventListener('click', (e) => {
+            if (e.target.classList.contains('remove-favorite')) {
+                const stopId = parseInt(e.target.dataset.id);
+                const stop = favorites.find(f => f.id === stopId);
+                if (stop) {
+                    toggleFavorite(stop);
+                }
+            }
+        });
 
         // Hämta och visa avgångar från flera hållplatser
         async function getDeparturesFromStops(stops) {
@@ -442,6 +493,13 @@
                 const stop = allStops.find(s => s.id === stopId);
                 if (stop && toggleFavorite(stop)) {
                     star.textContent = isFavorite(stopId) ? '⭐' : '☆';
+                    
+                    // Stäng sökrutan efter att ha lagt till favorit
+                    searchContainer.classList.remove('show');
+                    searchInput.value = '';
+                    suggestions.innerHTML = '';
+                    suggestions.classList.remove('show');
+                    lastSearchResults = '';
                 }
                 return;
             }
