@@ -788,5 +788,54 @@
             if (countdownInterval) clearInterval(countdownInterval);
         });
     </script>
+    <script>
+if ('serviceWorker' in navigator) {
+  // Anpassa scope och sökväg till din service-worker-fil i mappen /bussar
+  const swPath = '/bussar/service-worker.js';
+  const swScope = '/bussar/';
+
+  navigator.serviceWorker.register(swPath, { scope: swScope })
+    .then(reg => {
+      console.log('Service worker registrerad med scope:', reg.scope);
+
+      // Ny SW hittad/installeras
+      reg.addEventListener('updatefound', () => {
+        const newWorker = reg.installing;
+        console.log('Ny service worker på väg:', newWorker);
+        newWorker.addEventListener('statechange', () => {
+          console.log('Ny SW state:', newWorker.state);
+          if (newWorker.state === 'installed') {
+            if (navigator.serviceWorker.controller) {
+              // En tidigare SW kontrollerar redan sidan — ny väntar på aktivering
+              console.log('Ny version installerad och väntar på aktivering.');
+              // Om du vill tvinga ny SW att aktivera direkt:
+              // newWorker.postMessage({ type: 'SKIP_WAITING' });
+            } else {
+              console.log('Service worker installerad för första gången (cache klar).');
+            }
+          }
+        });
+      });
+
+      // När en ny SW tar kontroll, ladda om för att få nya resurser
+      let refreshing = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (refreshing) return;
+        refreshing = true;
+        console.log('Service worker tog kontroll — laddar om sidan.');
+        window.location.reload();
+      });
+    })
+    .catch(err => {
+      console.error('Registrering av service worker misslyckades:', err);
+    });
+
+  // Lyssna på meddelanden från SW (valfritt)
+  navigator.serviceWorker.addEventListener('message', (e) => {
+    console.log('Meddelande från SW:', e.data);
+  });
+}
+</script>
+
 </body>
 </html>
