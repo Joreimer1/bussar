@@ -52,8 +52,27 @@
         .favorite-star:hover { transform: scale(1.2); }
         .stop-info { background:#2d3748; padding:12px; margin-bottom:15px; display:none; border:1px solid #4a5568; }
         .stop-info.show { display:block; }
+        .stop-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 10px;
+        }
+        .stop-details {
+            flex: 1;
+        }
         .stop-name { font-size:16px; font-weight:600; color:#e2e8f0; margin-bottom:5px; }
         .stop-distance { font-size:13px; color:#a0aec0; font-weight:400; }
+        .stop-favorite-star {
+            font-size: 24px;
+            cursor: pointer;
+            padding: 5px;
+            user-select: none;
+            transition: transform 0.2s;
+        }
+        .stop-favorite-star:hover {
+            transform: scale(1.2);
+        }
         .loading { text-align:center; color:#a0aec0; padding:20px; display:none; position:relative; z-index:10; }
         .loading.show { display:block; }
         .spinner { border:3px solid #4a5568; border-top:3px solid #a0aec0; border-radius:50%; width:30px; height:30px; animation:spin 1s linear infinite; margin:0 auto 10px; }
@@ -104,6 +123,8 @@
         .favorite-name {
             color: #e2e8f0;
             font-size: 13px;
+            flex: 1;
+            margin-right: 10px;
         }
         .remove-favorite {
             background: #fc8181;
@@ -114,6 +135,8 @@
             font-size: 12px;
             cursor: pointer;
             font-weight: 600;
+            min-width: 70px;
+            flex-shrink: 0;
         }
         .remove-favorite:hover {
             background: #f56565;
@@ -142,8 +165,13 @@
             </div>
 
             <div class="stop-info" id="stopInfo">
-                <div class="stop-name" id="stopName"></div>
-                <div class="stop-distance" id="stopDistance"></div>
+                <div class="stop-header">
+                    <div class="stop-details">
+                        <div class="stop-name" id="stopName"></div>
+                        <div class="stop-distance" id="stopDistance"></div>
+                    </div>
+                    <div class="stop-favorite-star" id="stopFavoriteStar"></div>
+                </div>
             </div>
 
             <div class="error" id="error"></div>
@@ -177,11 +205,13 @@
         const favoritesList = document.getElementById('favoritesList');
         const favoritesCard = document.getElementById('favoritesCard');
         const favoritesListBottom = document.getElementById('favoritesListBottom');
+        const stopFavoriteStar = document.getElementById('stopFavoriteStar');
 
         let allStops = [];
         let favorites = JSON.parse(localStorage.getItem('sl_favorites') || '[]');
         let countdownInterval = null;
         let lastSearchResults = '';
+        let currentStop = null;
 
         // Översättning för transport_mode
         function translateTransportMode(mode) {
@@ -460,6 +490,7 @@
 
         // Visa hållplats och hämta avgångar från favoriter + vald
         function displayStop(stop, distance = null) {
+            currentStop = stop;
             const stopText = stop.note ? `${stop.name} (${stop.note})` : stop.name;
             stopName.textContent = stopText;
             
@@ -473,12 +504,22 @@
                 stopDistance.textContent = '';
             }
 
+            // Uppdatera stjärnan för aktuell hållplats
+            stopFavoriteStar.textContent = isFavorite(stop.id) ? '⭐' : '☆';
+
             stopInfo.classList.add('show');
 
             // Hämta från vald hållplats + alla favoriter
             const stopsToFetch = [stop, ...favorites.filter(f => f.id !== stop.id)];
             getDeparturesFromStops(stopsToFetch);
         }
+
+        // Klick på stjärnan för aktuell hållplats
+        stopFavoriteStar.addEventListener('click', () => {
+            if (currentStop && toggleFavorite(currentStop)) {
+                stopFavoriteStar.textContent = isFavorite(currentStop.id) ? '⭐' : '☆';
+            }
+        });
 
         // Sökfunktion med optimering
         searchInput.addEventListener('input', (e) => {
@@ -526,12 +567,14 @@
                 if (stop && toggleFavorite(stop)) {
                     star.textContent = isFavorite(stopId) ? '⭐' : '☆';
                     
-                    // Stäng sökrutan efter att ha lagt till favorit
-                    searchContainer.classList.remove('show');
-                    searchInput.value = '';
-                    suggestions.innerHTML = '';
-                    suggestions.classList.remove('show');
-                    lastSearchResults = '';
+                    // Fördröjning så användaren ser den fyllda stjärnan
+                    setTimeout(() => {
+                        searchContainer.classList.remove('show');
+                        searchInput.value = '';
+                        suggestions.innerHTML = '';
+                        suggestions.classList.remove('show');
+                        lastSearchResults = '';
+                    }, 300);
                 }
                 return;
             }
