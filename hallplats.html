@@ -153,6 +153,11 @@
             <div class="departures-title">Nästa avgångar</div>
             <div id="departuresList"></div>
         </div>
+
+        <div class="card" id="favoritesCard" style="display: none;">
+            <div class="departures-title">Mina favorithållplatser</div>
+            <div id="favoritesListBottom"></div>
+        </div>
     </div>
 
     <script>
@@ -170,6 +175,8 @@
         const departuresList = document.getElementById('departuresList');
         const favoritesInfo = document.getElementById('favoritesInfo');
         const favoritesList = document.getElementById('favoritesList');
+        const favoritesCard = document.getElementById('favoritesCard');
+        const favoritesListBottom = document.getElementById('favoritesListBottom');
 
         let allStops = [];
         let favorites = JSON.parse(localStorage.getItem('sl_favorites') || '[]');
@@ -261,10 +268,35 @@
                 favoritesInfo.textContent = 'Inga favoriter sparade. Klicka på stjärnan för att spara.';
                 favoritesList.innerHTML = '';
             }
+            updateFavoritesBottom();
         }
 
-        // Ta bort favorit
+        function updateFavoritesBottom() {
+            if (favorites.length > 0) {
+                favoritesListBottom.innerHTML = favorites.map(f => `
+                    <div class="favorite-item">
+                        <div class="favorite-name">⭐ ${f.name}${f.note ? ` (${f.note})` : ''}</div>
+                        <button class="remove-favorite" data-id="${f.id}">Ta bort</button>
+                    </div>
+                `).join('');
+                favoritesCard.style.display = 'block';
+            } else {
+                favoritesCard.style.display = 'none';
+            }
+        }
+
+        // Ta bort favorit från båda listorna
         favoritesList.addEventListener('click', (e) => {
+            if (e.target.classList.contains('remove-favorite')) {
+                const stopId = parseInt(e.target.dataset.id);
+                const stop = favorites.find(f => f.id === stopId);
+                if (stop) {
+                    toggleFavorite(stop);
+                }
+            }
+        });
+
+        favoritesListBottom.addEventListener('click', (e) => {
             if (e.target.classList.contains('remove-favorite')) {
                 const stopId = parseInt(e.target.dataset.id);
                 const stop = favorites.find(f => f.id === stopId);
@@ -575,6 +607,7 @@
         locationBtn.addEventListener('click', requestLocationAndFindNearest);
 
         window.addEventListener('DOMContentLoaded', () => {
+            updateFavoritesBottom();
             requestLocationAndFindNearest();
         });
 
