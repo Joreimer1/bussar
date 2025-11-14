@@ -1,0 +1,796 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hållplatsavgångar</title>
+    <meta name="apple-mobile-web-app-title" content="Hållplatsavgångar">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚌</text></svg>">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #2d3748;
+            min-height: 100vh;
+            padding: 10px;
+            overflow-y: auto;
+        }
+        .container { max-width: 500px; margin: 0 auto; }
+        .card { background: #1a202c; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.3); margin-bottom: 15px; }
+        h1 { color: #e2e8f0; margin-bottom: 15px; font-size: 22px; text-align: center; font-weight: 400; }
+        .button-group { display:flex; gap:10px; margin-bottom:15px; }
+        button {
+            flex:1; background:#4a5568; color:#e2e8f0; border:none; padding:12px 20px; border-radius:8px;
+            font-size:14px; font-weight:400; cursor:pointer; transition:background .2s;
+        }
+        button:hover { background:#718096; }
+        button:active { background:#2d3748; }
+        button.secondary { background:#4a5568; }
+        .search-container { display:none; margin-bottom:15px; }
+        .search-container.show { display:block; }
+        input[type="text"] {
+            width:100%; padding:12px 15px; border:1px solid #4a5568; background:#2d3748; color:#e2e8f0;
+            border-radius:0; font-size:14px; outline:none; transition:border-color .3s;
+        }
+        input[type="text"]:focus { border-color:#718096; }
+        .suggestions { margin-top:10px; max-height:200px; overflow-y:auto; background:#2d3748; display:none; border:1px solid #4a5568; }
+        .suggestions.show { display:block; }
+        .suggestion-item { 
+            padding:12px 15px; cursor:pointer; border-bottom:1px solid #4a5568; transition:background .2s;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .suggestion-item:hover { background:#4a5568; }
+        .suggestion-content { flex: 1; }
+        .suggestion-name { font-weight:600; color:#e2e8f0; font-size:14px; }
+        .suggestion-note { font-size:12px; color:#a0aec0; margin-top:2px; }
+        .favorite-star {
+            font-size: 20px;
+            cursor: pointer;
+            padding: 5px;
+            user-select: none;
+        }
+        .favorite-star:hover { transform: scale(1.2); }
+        .stop-info { background:#2d3748; padding:12px; margin-bottom:15px; display:none; border:1px solid #4a5568; }
+        .stop-info.show { display:block; }
+        .stop-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 10px;
+        }
+        .stop-details {
+            flex: 1;
+        }
+        .stop-name { font-size:16px; font-weight:600; color:#e2e8f0; margin-bottom:5px; }
+        .stop-distance { font-size:13px; color:#a0aec0; font-weight:400; }
+        .stop-favorite-star {
+            font-size: 24px;
+            cursor: pointer;
+            padding: 5px;
+            user-select: none;
+            transition: transform 0.2s;
+        }
+        .stop-favorite-star:hover {
+            transform: scale(1.2);
+        }
+        .loading { text-align:center; color:#a0aec0; padding:20px; display:none; position:relative; z-index:10; }
+        .loading.show { display:block; }
+        .spinner { border:3px solid #4a5568; border-top:3px solid #a0aec0; border-radius:50%; width:30px; height:30px; animation:spin 1s linear infinite; margin:0 auto 10px; }
+        @keyframes spin { 0%{transform:rotate(0deg);} 100%{transform:rotate(360deg);} }
+        .error { color:#fc8181; background:#2d3748; padding:12px; border:1px solid #fc8181; font-size:13px; display:none; }
+        .error.show { display:block; }
+        .departures-title { font-size:18px; font-weight:400; color:#e2e8f0; margin-bottom:15px; text-align:center; }
+        .departure-item { 
+            background:#2d3748; padding:12px; margin-bottom:8px; display:flex; align-items:center; gap:12px; 
+            border-left:3px solid #4a5568; transition:all .2s;
+        }
+        .departure-item:hover { border-left-color:#718096; }
+        .departure-item.fading { opacity: 0; transform: translateX(-20px); }
+        .direction-arrow { font-size:20px; min-width:24px; text-align:center; }
+        .departure-info { flex:1; }
+        .departure-line { font-size:18px; font-weight:700; color:#ffffff; margin-bottom:3px; }
+        .departure-destination { font-size:13px; color:#a0aec0; }
+        .departure-from { font-size:11px; color:#718096; margin-top:2px; }
+        .departure-time-container { text-align:right; }
+        .departure-time { font-size:18px; font-weight:700; color:#ffffff; }
+        .departure-clock { font-size:11px; color:#a0aec0; margin-top:2px; }
+        .no-departures { text-align:center; color:#a0aec0; padding:20px; font-size:14px; }
+        @keyframes fadeIn { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
+        .card { animation:fadeIn .3s ease-out; }
+        .favorites-info {
+            font-size: 12px;
+            color: #a0aec0;
+            text-align: center;
+            margin-top: 10px;
+            padding: 8px;
+            background: #2d3748;
+            border-radius: 4px;
+        }
+        .favorites-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-top: 10px;
+        }
+        .favorite-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            background: #4a5568;
+            border-radius: 4px;
+            gap:8px;
+        }
+        .favorite-left { display:flex; align-items:center; gap:8px; flex:1; }
+        .favorite-name {
+            color: #e2e8f0;
+            font-size: 13px;
+            flex: 1;
+            margin-right: 10px;
+        }
+        .fav-direction-select {
+            background:#2d3748; color:#e2e8f0; border:1px solid #4a5568; padding:6px 8px; border-radius:4px; font-size:13px;
+        }
+        .remove-favorite {
+            background: #fc8181;
+            color: #1a202c;
+            border: none;
+            padding: 5px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            cursor: pointer;
+            font-weight: 600;
+            min-width: 70px;
+            flex-shrink: 0;
+        }
+        .remove-favorite:hover {
+            background: #f56565;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="card">
+            <h1>SL Avgångar</h1>
+            <div class="button-group">
+                <button id="locationBtn">📍 Min Plats</button>
+                <button id="searchBtn" class="secondary">🔍 Sök</button>
+            </div>
+
+            <div class="search-container" id="searchContainer">
+                <input type="text" id="searchInput" placeholder="Sök hållplats...">
+                <div class="suggestions" id="suggestions"></div>
+                <div class="favorites-info" id="favoritesInfo"></div>
+                <div class="favorites-list" id="favoritesList"></div>
+            </div>
+
+            <div class="loading" id="loading">
+                <div class="spinner"></div>
+                <p>Hämtar...</p>
+            </div>
+
+            <div class="stop-info" id="stopInfo">
+                <div class="stop-header">
+                    <div class="stop-details">
+                        <div class="stop-name" id="stopName"></div>
+                        <div class="stop-distance" id="stopDistance"></div>
+                    </div>
+                    <div class="stop-favorite-star" id="stopFavoriteStar"></div>
+                </div>
+            </div>
+
+            <div class="error" id="error"></div>
+        </div>
+
+        <div class="card" id="departuresCard" style="display: none;">
+            <div class="departures-title">Nästa avgångar</div>
+            <div id="departuresList"></div>
+        </div>
+
+        <div class="card" id="favoritesCard" style="display: none;">
+            <div class="departures-title">Mina favorithållplatser</div>
+            <div id="favoritesListBottom"></div>
+        </div>
+    </div>
+
+    <script>
+        const locationBtn = document.getElementById('locationBtn');
+        const searchBtn = document.getElementById('searchBtn');
+        const searchContainer = document.getElementById('searchContainer');
+        const searchInput = document.getElementById('searchInput');
+        const suggestions = document.getElementById('suggestions');
+        const loading = document.getElementById('loading');
+        const stopInfo = document.getElementById('stopInfo');
+        const stopName = document.getElementById('stopName');
+        const stopDistance = document.getElementById('stopDistance');
+        const error = document.getElementById('error');
+        const departuresCard = document.getElementById('departuresCard');
+        const departuresList = document.getElementById('departuresList');
+        const favoritesInfo = document.getElementById('favoritesInfo');
+        const favoritesList = document.getElementById('favoritesList');
+        const favoritesCard = document.getElementById('favoritesCard');
+        const favoritesListBottom = document.getElementById('favoritesListBottom');
+        const stopFavoriteStar = document.getElementById('stopFavoriteStar');
+
+        let allStops = [];
+        // favorites: array of { id, name, note?, direction } direction: 0=both(default),1,2
+        let favorites = JSON.parse(localStorage.getItem('sl_favorites') || '[]');
+        let countdownInterval = null;
+        let lastSearchResults = '';
+        let currentStop = null;
+
+        // Översättning för transport_mode
+        function translateTransportMode(mode) {
+            if (!mode) return '';
+            const map = {
+                'BUS': 'BUSS',
+                'METRO': 'TUNNELB',
+                'TRAM': 'TVÄRBANA',
+                'TRAIN': 'TÅG',
+                'SHIP': 'BÅT',
+                'FERRY': 'FÄRJA',
+                'TAXI': 'TAXI'
+            };
+            return map[String(mode).toUpperCase()] || mode;
+        }
+
+        // Hämta alla hållplatser vid start med cachning
+        async function loadStops() {
+            const cached = localStorage.getItem('sl_stops_cache');
+            const cacheTime = localStorage.getItem('sl_stops_cache_time');
+            const now = Date.now();
+            
+            // Cache i 24 timmar
+            if (cached && cacheTime && (now - parseInt(cacheTime)) < 24 * 60 * 60 * 1000) {
+                allStops = JSON.parse(cached);
+                return;
+            }
+
+            try {
+                const response = await fetch('https://transport.integration.sl.se/v1/sites?expand=true');
+                allStops = await response.json();
+                localStorage.setItem('sl_stops_cache', JSON.stringify(allStops));
+                localStorage.setItem('sl_stops_cache_time', now.toString());
+            } catch (err) {
+                console.error('Kunde inte hämta hållplatser:', err);
+            }
+        }
+
+        loadStops();
+
+        // Beräkna avstånd
+        function calculateDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371;
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                     Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                     Math.sin(dLon/2) * Math.sin(dLon/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            return R * c;
+        }
+
+        // Persistera favorites
+        function saveFavorites() {
+            localStorage.setItem('sl_favorites', JSON.stringify(favorites));
+        }
+
+        // När favoriter ändras, uppdatera avgångslistan om relevant
+        function notifyDeparturesUpdate() {
+            // Om vi har en aktuell hållplats, hämta avgångar igen för currentStop + favoriter
+            if (currentStop) {
+                const stopsToFetch = [currentStop, ...favorites.filter(f => f.id !== currentStop.id)];
+                getDeparturesFromStops(stopsToFetch);
+            } else {
+                // Om ingen aktuell hållplats visas men det finns favoriter, hämta från favoriter för att visa något
+                if (favorites.length > 0) {
+                    const stopsToFetch = favorites.map(f => ({ id: f.id, name: f.name, note: f.note }));
+                    getDeparturesFromStops(stopsToFetch);
+                } else {
+                    departuresList.innerHTML = '<div class="no-departures">Inga favoriter valda</div>';
+                    departuresCard.style.display = 'block';
+                    if (countdownInterval) clearInterval(countdownInterval);
+                }
+            }
+        }
+
+        // Favoritfunktioner
+        function toggleFavorite(stop) {
+            const index = favorites.findIndex(f => f.id === stop.id);
+            if (index > -1) {
+                // ta bort
+                favorites.splice(index, 1);
+                // Om den borttagna är den som visas som aktuell, gör stjärnan ofylld
+                if (currentStop && currentStop.id === stop.id) {
+                    stopFavoriteStar.textContent = '☆';
+                }
+            } else {
+                if (favorites.length >= 3) {
+                    showError('Du kan max ha 3 favoriter');
+                    return false;
+                }
+                // Lägg till med default direction 0 (båda)
+                favorites.push({
+                    id: stop.id,
+                    name: stop.name,
+                    note: stop.note,
+                    direction: 0
+                });
+            }
+            saveFavorites();
+            updateFavoritesInfo();
+            // Uppdatera avgångar när favoriter ändras
+            notifyDeparturesUpdate();
+            // Uppdatera synliga stjärnor i förslagslistan om den är synlig
+            updateVisibleSuggestionStars();
+            return true;
+        }
+
+        function isFavorite(stopId) {
+            return favorites.some(f => f.id === stopId);
+        }
+
+        function getFavorite(stopId) {
+            return favorites.find(f => f.id === stopId);
+        }
+
+        function updateFavoritesInfo() {
+            if (favorites.length > 0) {
+                favoritesInfo.textContent = `Favoriter (${favorites.length}/3)`;
+                favoritesList.innerHTML = favorites.map(f => `
+                    <div class="favorite-item" data-id="${f.id}">
+                        <div class="favorite-left">
+                            <div class="favorite-name">⭐ ${escapeHtml(f.name)}</div>
+                            <select class="fav-direction-select" data-id="${f.id}">
+                                <option value="0" ${f.direction === 0 ? 'selected' : ''}>Båda riktningar</option>
+                                <option value="1" ${f.direction === 1 ? 'selected' : ''}>Endast riktning 1</option>
+                                <option value="2" ${f.direction === 2 ? 'selected' : ''}>Endast riktning 2</option>
+                            </select>
+                        </div>
+                        <button class="remove-favorite" data-id="${f.id}">Ta bort</button>
+                    </div>
+                `).join('');
+            } else {
+                favoritesInfo.textContent = 'Inga favoriter sparade. Klicka på stjärnan för att spara.';
+                favoritesList.innerHTML = '';
+            }
+            updateFavoritesBottom();
+            attachFavoriteSelectListeners(); // säkerställ event på de nya selectarna
+        }
+
+        function updateFavoritesBottom() {
+            if (favorites.length > 0) {
+                favoritesListBottom.innerHTML = favorites.map(f => `
+                    <div class="favorite-item" data-id="${f.id}">
+                        <div class="favorite-left">
+                            <div class="favorite-name">⭐ ${escapeHtml(f.name)}${f.note ? ` (${escapeHtml(f.note)})` : ''}</div>
+                            <select class="fav-direction-select" data-id="${f.id}">
+                                <option value="0" ${f.direction === 0 ? 'selected' : ''}>Båda riktningar</option>
+                                <option value="1" ${f.direction === 1 ? 'selected' : ''}>Endast riktning 1</option>
+                                <option value="2" ${f.direction === 2 ? 'selected' : ''}>Endast riktning 2</option>
+                            </select>
+                        </div>
+                        <button class="remove-favorite" data-id="${f.id}">Ta bort</button>
+                    </div>
+                `).join('');
+                favoritesCard.style.display = 'block';
+                attachFavoriteSelectListeners();
+            } else {
+                favoritesCard.style.display = 'none';
+            }
+        }
+
+        // hjälpfunktion för att uppdatera stjärnor i suggestions (om synliga)
+        function updateVisibleSuggestionStars() {
+            // hitta alla element med class favorite-star och uppdatera baserat på favorites
+            const stars = document.querySelectorAll('.favorite-star');
+            stars.forEach(star => {
+                const id = parseInt(star.dataset.id);
+                if (!isNaN(id)) {
+                    star.textContent = isFavorite(id) ? '⭐' : '☆';
+                }
+            });
+            // om currentStop visas uppdatera dess stjärna
+            if (currentStop) {
+                stopFavoriteStar.textContent = isFavorite(currentStop.id) ? '⭐' : '☆';
+            }
+        }
+
+        // Escape HTML för säker visning i template-strängar
+        function escapeHtml(text) {
+            if (!text) return '';
+            return text
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
+        // Fästa change-listeners på direction select-elementen
+        function attachFavoriteSelectListeners() {
+            const selects = document.querySelectorAll('.fav-direction-select');
+            selects.forEach(sel => {
+                sel.onchange = (e) => {
+                    const id = parseInt(e.target.dataset.id);
+                    const val = parseInt(e.target.value);
+                    const fav = favorites.find(f => f.id === id);
+                    if (fav) {
+                        fav.direction = val;
+                        saveFavorites();
+                        // När favoritens riktning ändras måste avgångslistan uppdateras
+                        notifyDeparturesUpdate();
+                    }
+                };
+            });
+        }
+
+        // Ta bort favorit från båda listorna
+        favoritesList.addEventListener('click', (e) => {
+            if (e.target.classList.contains('remove-favorite')) {
+                const stopId = parseInt(e.target.dataset.id);
+                const stopIndex = favorites.findIndex(f => f.id === stopId);
+                if (stopIndex > -1) {
+                    // Hämta name för att skicka med toggleFavorite (som förväntar sig ett stop-objekt)
+                    const stopObj = { id: favorites[stopIndex].id, name: favorites[stopIndex].name, note: favorites[stopIndex].note };
+                    toggleFavorite(stopObj);
+                }
+            }
+        });
+
+        favoritesListBottom.addEventListener('click', (e) => {
+            if (e.target.classList.contains('remove-favorite')) {
+                const stopId = parseInt(e.target.dataset.id);
+                const stopIndex = favorites.findIndex(f => f.id === stopId);
+                if (stopIndex > -1) {
+                    const stopObj = { id: favorites[stopIndex].id, name: favorites[stopIndex].name, note: favorites[stopIndex].note };
+                    toggleFavorite(stopObj);
+                }
+            }
+        });
+
+        // Hämta och visa avgångar från flera hållplatser
+        async function getDeparturesFromStops(stops) {
+            try {
+                loading.classList.add('show');
+                departuresCard.style.display = 'none';
+
+                // Hämta från alla hållplatser parallellt
+                const promises = stops.map(async (stop) => {
+                    try {
+                        const response = await fetch(`https://transport.integration.sl.se/v1/sites/${stop.id}/departures`);
+                        const data = await response.json();
+                        return {
+                            stop: stop,
+                            departures: data.departures || []
+                        };
+                    } catch (err) {
+                        console.error(`Kunde inte hämta från ${stop.name}:`, err);
+                        return { stop: stop, departures: [] };
+                    }
+                });
+
+                const results = await Promise.all(promises);
+                loading.classList.remove('show');
+
+                // Slå ihop och sortera alla avgångar, men filtrera enligt favoritors riktningspreferenser
+                let allDepartures = [];
+                results.forEach(result => {
+                    // hitta eventuell favorit-inställning för denna hållplats
+                    const fav = favorites.find(f => f.id === result.stop.id);
+                    result.departures.forEach(dep => {
+                        // Lägg till från vilken hållplats (namn) avgången kommer
+                        dep.fromStop = result.stop.name;
+
+                        // Om det finns en favorit för denna hållplats med direction filter, tillämpa den
+                        if (fav && typeof fav.direction !== 'undefined' && fav.direction !== 0) {
+                            // behåll bara avgångar som matchar direction
+                            if (dep.direction_code === fav.direction) {
+                                allDepartures.push(dep);
+                            }
+                        } else {
+                            // inga begränsningar, eller favorit saknas: lägg till alla avgångar
+                            allDepartures.push(dep);
+                        }
+                    });
+                });
+
+                if (allDepartures.length === 0) {
+                    departuresList.innerHTML = '<div class="no-departures">Inga avgångar hittades</div>';
+                    departuresCard.style.display = 'block';
+                    if (countdownInterval) clearInterval(countdownInterval);
+                    return;
+                }
+
+                allDepartures.sort((a, b) => new Date(a.expected) - new Date(b.expected));
+                displayDepartures(allDepartures);
+
+            } catch (err) {
+                loading.classList.remove('show');
+                showError('Kunde inte hämta avgångar');
+                console.error('Fel vid hämtning av avgångar:', err);
+            }
+        }
+
+        // Visa avgångar med nedräkning
+        function displayDepartures(departures) {
+            function updateDisplay() {
+                const now = new Date();
+                
+                // Filtrera bort avgångar som redan gått
+                const validDepartures = departures.filter(dep => {
+                    const expectedTime = new Date(dep.expected);
+                    const secondsUntil = Math.floor((expectedTime - now) / 1000);
+                    return secondsUntil >= 0;
+                });
+
+                if (validDepartures.length === 0) {
+                    departuresList.innerHTML = '<div class="no-departures">Inga fler avgångar</div>';
+                    if (countdownInterval) clearInterval(countdownInterval);
+                    return;
+                }
+
+                const displayDepartures = validDepartures.slice(0, 12);
+
+                departuresList.innerHTML = displayDepartures.map(dep => {
+                    const expectedTime = new Date(dep.expected);
+                    const totalSeconds = Math.floor((expectedTime - now) / 1000);
+                    const minutesUntil = Math.floor(totalSeconds / 60);
+                    const secondsUntil = totalSeconds % 60;
+                    
+                    let timeDisplay = '';
+                    if (totalSeconds < 60) {
+                        timeDisplay = `${totalSeconds}s`;
+                    } else if (minutesUntil === 1) {
+                        timeDisplay = `1 min ${secondsUntil}s`;
+                    } else {
+                        timeDisplay = `${minutesUntil} min ${secondsUntil}s`;
+                    }
+
+                    const clockTime = expectedTime.toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit' });
+                    
+                    let arrow = '';
+                    if (dep.direction_code === 1) {
+                        arrow = '⬆️';
+                    } else if (dep.direction_code === 2) {
+                        arrow = '⬇️';
+                    }
+
+                    const transportModeText = translateTransportMode(dep.line && dep.line.transport_mode ? dep.line.transport_mode : dep.transport_mode);
+
+                    return `
+                        <div class="departure-item">
+                            <div class="direction-arrow">${arrow}</div>
+                            <div class="departure-info">
+                                <div class="departure-line">${dep.line && dep.line.designation ? dep.line.designation : ''} ${transportModeText}</div>
+                                <div class="departure-destination">${escapeHtml(dep.destination)}</div>
+                                <div class="departure-from">från ${escapeHtml(dep.fromStop)}</div>
+                            </div>
+                            <div class="departure-time-container">
+                                <div class="departure-time">${timeDisplay}</div>
+                                <div class="departure-clock">${clockTime}</div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }
+
+            updateDisplay();
+            departuresCard.style.display = 'block';
+
+            // Uppdatera varje sekund
+            if (countdownInterval) clearInterval(countdownInterval);
+            countdownInterval = setInterval(updateDisplay, 1000);
+        }
+
+        // Hitta närmaste hållplats
+        async function findNearestStop(userLat, userLon) {
+            try {
+                if (allStops.length === 0) {
+                    await loadStops();
+                }
+
+                let nearestStop = null;
+                let minDistance = Infinity;
+
+                allStops.forEach(stop => {
+                    const distance = calculateDistance(userLat, userLon, stop.lat, stop.lon);
+                    if (distance < minDistance) {
+                        minDistance = distance;
+                        nearestStop = stop;
+                    }
+                });
+
+                if (nearestStop) {
+                    displayStop(nearestStop, minDistance);
+                } else {
+                    loading.classList.remove('show');
+                    showError('Ingen hållplats hittades i listan');
+                }
+            } catch (err) {
+                loading.classList.remove('show');
+                showError('Kunde inte hitta hållplats');
+                console.error('Fel vid hämtning av hållplatser:', err);
+            }
+        }
+
+        // Visa hållplats och hämta avgångar från favoriter + vald
+        function displayStop(stop, distance = null) {
+            currentStop = stop;
+            const stopText = stop.note ? `${stop.name} (${stop.note})` : stop.name;
+            stopName.textContent = stopText;
+            
+            if (distance !== null) {
+                if (distance < 1) {
+                    stopDistance.textContent = `${Math.round(distance * 1000)} meter bort`;
+                } else {
+                    stopDistance.textContent = `${distance.toFixed(2)} km bort`;
+                }
+            } else {
+                stopDistance.textContent = '';
+            }
+
+            // Uppdatera stjärnan för aktuell hållplats
+            stopFavoriteStar.textContent = isFavorite(stop.id) ? '⭐' : '☆';
+
+            stopInfo.classList.add('show');
+
+            // Hämta från vald hållplats + alla favoriter
+            const stopsToFetch = [stop, ...favorites.filter(f => f.id !== stop.id)];
+            getDeparturesFromStops(stopsToFetch);
+        }
+
+        // Klick på stjärnan för aktuell hållplats
+        stopFavoriteStar.addEventListener('click', () => {
+            if (currentStop && toggleFavorite(currentStop)) {
+                stopFavoriteStar.textContent = isFavorite(currentStop.id) ? '⭐' : '☆';
+            }
+        });
+
+        // Sökfunktion med optimering
+        searchInput.addEventListener('input', (e) => {
+            const query = e.target.value.toLowerCase().trim();
+            
+            if (query.length < 2) {
+                suggestions.classList.remove('show');
+                updateFavoritesInfo();
+                return;
+            }
+
+            const matches = allStops.filter(stop => 
+                stop.name.toLowerCase().includes(query) ||
+                (stop.note && stop.note.toLowerCase().includes(query))
+            ).slice(0, 10);
+
+            const newResults = JSON.stringify(matches.map(s => s.id));
+            if (newResults === lastSearchResults) return;
+            lastSearchResults = newResults;
+
+            if (matches.length > 0) {
+                suggestions.innerHTML = matches.map(stop => `
+                    <div class="suggestion-item" data-id="${stop.id}">
+                        <div class="suggestion-content">
+                            <div class="suggestion-name">${escapeHtml(stop.name)}</div>
+                            ${stop.note ? `<div class="suggestion-note">${escapeHtml(stop.note)}</div>` : ''}
+                        </div>
+                        <div class="favorite-star" data-id="${stop.id}">${isFavorite(stop.id) ? '⭐' : '☆'}</div>
+                    </div>
+                `).join('');
+                suggestions.classList.add('show');
+            } else {
+                suggestions.innerHTML = '<div class="suggestion-item">Inga resultat</div>';
+                suggestions.classList.add('show');
+            }
+        });
+
+        // Klick på förslag eller stjärna
+        suggestions.addEventListener('click', (e) => {
+            const star = e.target.closest('.favorite-star');
+            if (star) {
+                e.stopPropagation();
+                const stopId = parseInt(star.dataset.id);
+                const stop = allStops.find(s => s.id === stopId);
+                if (stop && toggleFavorite(stop)) {
+                    star.textContent = isFavorite(stopId) ? '⭐' : '☆';
+                    
+                    // Fördröjning så användaren ser den fyllda stjärnan
+                    setTimeout(() => {
+                        searchContainer.classList.remove('show');
+                        searchInput.value = '';
+                        suggestions.innerHTML = '';
+                        suggestions.classList.remove('show');
+                        lastSearchResults = '';
+                    }, 300);
+                }
+                return;
+            }
+
+            const item = e.target.closest('.suggestion-item');
+            if (item && item.dataset.id) {
+                const stop = allStops.find(s => s.id == item.dataset.id);
+                if (stop) {
+                    displayStop(stop);
+                    searchContainer.classList.remove('show');
+                    searchInput.value = '';
+                    suggestions.innerHTML = '';
+                    suggestions.classList.remove('show');
+                    lastSearchResults = '';
+                }
+            }
+        });
+
+        // Knapp för att söka
+        searchBtn.addEventListener('click', () => {
+            searchContainer.classList.add('show');
+            searchInput.value = '';
+            suggestions.classList.remove('show');
+            suggestions.innerHTML = '';
+            lastSearchResults = '';
+            searchInput.focus();
+            updateFavoritesInfo();
+        });
+
+        // Gemensam funktion för att begära position och hitta närmaste hållplats
+        function requestLocationAndFindNearest() {
+            if (!navigator.geolocation) {
+                showError('Geolocation stöds inte av din webbläsare');
+                return;
+            }
+
+            loading.classList.add('show');
+            error.classList.remove('show');
+            stopInfo.classList.remove('show');
+            departuresCard.style.display = 'none';
+            searchContainer.classList.remove('show');
+
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    findNearestStop(position.coords.latitude, position.coords.longitude);
+                },
+                (err) => {
+                    loading.classList.remove('show');
+                    let message = '';
+                    switch(err.code) {
+                        case err.PERMISSION_DENIED:
+                            message = 'Du nekade tillgång till din position';
+                            break;
+                        case err.POSITION_UNAVAILABLE:
+                            message = 'Platsinformation är inte tillgänglig';
+                            break;
+                        case err.TIMEOUT:
+                            message = 'Begäran om position tog för lång tid';
+                            break;
+                        default:
+                            message = 'Ett okänt fel uppstod';
+                    }
+                    showError(message);
+                },
+                {
+                    enableHighAccuracy: true,
+                    timeout: 10000,
+                    maximumAge: 0
+                }
+            );
+        }
+
+        locationBtn.addEventListener('click', requestLocationAndFindNearest);
+
+        window.addEventListener('DOMContentLoaded', () => {
+            updateFavoritesBottom();
+            updateFavoritesInfo();
+            requestLocationAndFindNearest();
+        });
+
+        function showError(message) {
+            error.textContent = message;
+            error.classList.add('show');
+            setTimeout(() => error.classList.remove('show'), 5000);
+        }
+
+        // Rensa intervall när sidan stängs
+        window.addEventListener('beforeunload', () => {
+            if (countdownInterval) clearInterval(countdownInterval);
+        });
+    </script>
+</body>
+</html>
