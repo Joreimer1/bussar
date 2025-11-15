@@ -21,7 +21,7 @@
         .button-group { display:flex; gap:10px; margin-bottom:15px; }
         button {
             flex:1; background:#4a5568; color:#e2e8f0; border:none; padding:12px 20px; border-radius:8px;
-            font-size:14px; font-weight:400; cursor:pointer; transition:background .2s;
+            font-size:14px; font-weight:400; cursor:pointer; transition:background .2s; white-space:nowrap;
         }
         button:hover { background:#718096; }
         button:active { background:#2d3748; }
@@ -117,9 +117,11 @@
             justify-content: space-between;
             align-items: center;
             padding: 10px;
-            background: #4a5568;
-            border-radius: 4px;
+            background: #2b3240;
+            border-radius: 8px;
             gap:8px;
+            border: 1px solid rgba(113,128,150,0.2);
+            box-shadow: 0 1px 0 rgba(0,0,0,0.2) inset;
         }
         .favorite-left { display:flex; align-items:center; gap:8px; flex:1; }
         .favorite-name {
@@ -127,20 +129,21 @@
             font-size: 13px;
             flex: 1;
             margin-right: 10px;
+            word-break: break-word;
         }
         .fav-direction-select {
             background:#2d3748; color:#e2e8f0; border:1px solid #4a5568; padding:6px 8px; border-radius:4px; font-size:13px;
         }
         .fav-lines-input {
-            background:#2d3748; color:#e2e8f0; border:1px solid #4a5568; padding:6px 8px; border-radius:4px; font-size:13px;
+            background:#1f2937; color:#e2e8f0; border:1px solid #718096; padding:8px 10px; border-radius:6px; font-size:13px;
             min-width:120px; text-align:center;
         }
         .remove-favorite {
             background: #fc8181;
             color: #1a202c;
             border: none;
-            padding: 5px 12px;
-            border-radius: 4px;
+            padding: 8px 12px;
+            border-radius: 6px;
             font-size: 12px;
             cursor: pointer;
             font-weight: 600;
@@ -155,14 +158,34 @@
             color:#a0aec0;
             margin-bottom:6px;
         }
+
+        /* Mobile adjustments: make favorite fields stack and more visible */
+        @media (max-width: 420px) {
+            .button-group { gap:8px; }
+            button { padding:10px 12px; font-size:13px; }
+            .favorite-item {
+                flex-direction: column;
+                align-items: stretch;
+                padding: 12px;
+                border: 1px solid #42506a;
+                background: linear-gradient(180deg,#232936 0%, #2b3446 100%);
+            }
+            .favorite-left { flex-direction: column; align-items: stretch; gap:6px; }
+            .favorite-name { font-size:14px; margin-right:0; }
+            .favorite-field-label { margin-top:4px; color:#9fb0c8; }
+            .fav-lines-input { width: 100%; text-align:left; padding:10px; border:1px solid #5b7a9b; background:#0f1720; }
+            .fav-direction-select { width: 100%; margin-top:6px; }
+            .remove-favorite { width: 100%; margin-top:8px; }
+            .favorites-list { gap:10px; }
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="card">
-            <h1>SL Avgångar v 3.0 </h1>
+            <h1>SL Avgångar v 1.4 </h1>
             <div class="button-group">
-                <button id="locationBtn">📍 Min Plats</button>
+                <button id="locationBtn">📍 Plats</button>
                 <button id="favoritesBtn" class="secondary">⭐ Favoriter</button>
                 <button id="searchBtn" class="secondary">🔍 Sök</button>
             </div>
