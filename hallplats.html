@@ -149,7 +149,7 @@
 <body>
     <div class="container">
         <div class="card">
-            <h1>SL Avgångar v 1.6 </h1>
+            <h1>SL Avgångar v 1.7 </h1>
             <div class="button-group">
                 <button id="locationBtn">📍 Plats</button>
                 <button id="favoritesBtn" class="secondary">⭐ Favoriter</button>
@@ -719,7 +719,8 @@
 
             // When showing a stop via "Plats", we want to show all lines/directions from that stop
             // and optionally include favorites (but currentStop's departures are unfiltered)
-            const stopsToFetch = [stop, ...favorites.filter(f => f.id !== stop.id)];
+            const stopsToFetch = [stop];getDeparturesFromStops(stopsToFetch);
+
             getDeparturesFromStops(stopsToFetch);
         }
 
