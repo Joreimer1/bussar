@@ -26,6 +26,14 @@
         button:hover { background:#718096; }
         button:active { background:#2d3748; }
         button.secondary { background:#4a5568; }
+
+        /* Active / selected button style */
+        .button-group button.active {
+            background: linear-gradient(180deg, #3a4756 0%, #2f3743 100%);
+            box-shadow: 0 6px 18px rgba(0,0,0,0.45), 0 0 0 2px rgba(255,255,255,0.02) inset;
+            color: #e6eef8;
+        }
+
         .search-container { display:none; margin-bottom:15px; }
         .search-container.show { display:block; }
         input[type="text"] {
@@ -122,7 +130,9 @@
             gap:8px;
             border: 1px solid rgba(113,128,150,0.2);
             box-shadow: 0 1px 0 rgba(0,0,0,0.2) inset;
+            transition: transform .12s, box-shadow .12s, background .12s;
         }
+        .favorite-item:hover { transform: translateY(-2px); }
         .favorite-left { display:flex; align-items:center; gap:8px; flex:1; }
         .favorite-name {
             color: #e2e8f0;
@@ -159,6 +169,13 @@
             margin-bottom:6px;
         }
 
+        /* Highlight the UI area when a button's result is active */
+        .active-result {
+            box-shadow: 0 8px 24px rgba(0,0,0,0.45);
+            border-radius: 10px;
+            background: linear-gradient(180deg, rgba(255,255,255,0.02), transparent);
+        }
+
         /* Mobile adjustments: make favorite fields stack and more visible */
         @media (max-width: 420px) {
             .button-group { gap:8px; }
@@ -183,7 +200,7 @@
 <body>
     <div class="container">
         <div class="card">
-            <h1>SL Avgångar v 1.4 </h1>
+            <h1>SL Avgångar v 1.5 </h1>
             <div class="button-group">
                 <button id="locationBtn">📍 Plats</button>
                 <button id="favoritesBtn" class="secondary">⭐ Favoriter</button>
@@ -674,6 +691,35 @@
             countdownInterval = setInterval(updateDisplay, 1000);
         }
 
+        // Set or clear active button and apply result-area highlight
+        function setActiveButton(buttonEl) {
+            // remove active class from all buttons
+            [locationBtn, favoritesBtn, searchBtn].forEach(b => b.classList.remove('active'));
+            // clear previous result-area highlight
+            [departuresCard, favoritesCard, searchContainer, stopInfo].forEach(el => {
+                el.classList.remove('active-result');
+            });
+
+            if (!buttonEl) return;
+
+            // add active class to clicked button
+            buttonEl.classList.add('active');
+
+            // highlight associated result area
+            if (buttonEl === locationBtn) {
+                // location shows stopInfo + departuresCard (stopInfo if present)
+                if (stopInfo.classList.contains('show')) stopInfo.classList.add('active-result');
+                if (departuresCard.style.display !== 'none') departuresCard.classList.add('active-result');
+            } else if (buttonEl === favoritesBtn) {
+                // favorites highlights favoritesCard or departuresCard when showing favorites results
+                if (favoritesCard.style.display !== 'none') favoritesCard.classList.add('active-result');
+                if (departuresCard.style.display !== 'none') departuresCard.classList.add('active-result');
+            } else if (buttonEl === searchBtn) {
+                // search highlights search container
+                if (searchContainer.classList.contains('show')) searchContainer.classList.add('active-result');
+            }
+        }
+
         // Hitta närmaste hållplats
         async function findNearestStop(userLat, userLon) {
             try {
@@ -690,8 +736,11 @@
                     }
                 });
 
-                if (nearestStop) displayStop(nearestStop, minDistance);
-                else {
+                if (nearestStop) {
+                    displayStop(nearestStop, minDistance);
+                    // mark location button active
+                    setActiveButton(locationBtn);
+                } else {
                     loading.classList.remove('show');
                     showError('Ingen hållplats hittades i listan');
                 }
@@ -778,6 +827,8 @@
                         suggestions.innerHTML = '';
                         suggestions.classList.remove('show');
                         lastSearchResults = '';
+                        // clear active state because search closed
+                        setActiveButton(null);
                     }, 300);
                 }
                 return;
@@ -793,6 +844,8 @@
                     suggestions.innerHTML = '';
                     suggestions.classList.remove('show');
                     lastSearchResults = '';
+                    // mark location button active because we're showing a stop
+                    setActiveButton(locationBtn);
                 }
             }
         });
@@ -806,6 +859,8 @@
             lastSearchResults = '';
             searchInput.focus();
             updateFavoritesInfo();
+            // set active to search button
+            setActiveButton(searchBtn);
         });
 
         // Visa favoriter när knappen klickas
@@ -827,6 +882,9 @@
                 departuresList.innerHTML = '<div class="no-departures">Inga favoriter valda</div>';
                 departuresCard.style.display = 'block';
             }
+
+            // mark favorites button active
+            setActiveButton(favoritesBtn);
         });
 
         // Gemensam funktion för att begära position och hitta närmaste hållplats
@@ -845,6 +903,8 @@
             navigator.geolocation.getCurrentPosition(
                 (position) => {
                     findNearestStop(position.coords.latitude, position.coords.longitude);
+                    // set active to location button right away (will be confirmed in findNearestStop)
+                    setActiveButton(locationBtn);
                 },
                 (err) => {
                     loading.classList.remove('show');
@@ -863,6 +923,8 @@
                             message = 'Ett okänt fel uppstod';
                     }
                     showError(message);
+                    // clear active state if location failed
+                    setActiveButton(null);
                 },
                 {
                     enableHighAccuracy: true,
@@ -878,6 +940,8 @@
             updateFavoritesBottom();
             updateFavoritesInfo();
             // Ingen automatisk uppdatering vid öppning enligt din tidigare begäran
+            // initial state: no active button
+            setActiveButton(null);
         });
 
         function showError(message) {
