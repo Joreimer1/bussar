@@ -1,21 +1,15 @@
 <!DOCTYPE html>
 <html lang="sv">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>GPS Position - Bil</title>
 
-    <!-- Leaflet CSS -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-          integrity="sha256-sA+e2QJb+gkG0k0Nn8gkQm3Hh4b7gqkT0z6b0u5rj+M=" crossorigin=""/>
+    <!-- Leaflet CSS (utan integrity för att undvika blockering på vissa mobiler) -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -26,47 +20,43 @@
             align-items: center;
             justify-content: center;
         }
-
         .container {
             background: white;
             border-radius: 20px;
-            padding: 25px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-            max-width: 900px;
+            padding: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+            max-width: 980px;
             width: 100%;
         }
-
         h1 {
             color: #667eea;
             text-align: center;
-            margin-bottom: 20px;
-            font-size: 24px;
+            margin-bottom: 14px;
+            font-size: 22px;
         }
 
         .layout {
             display: grid;
             grid-template-columns: 1fr 360px;
-            gap: 20px;
+            gap: 16px;
         }
 
-        /* Kartbehållare */
+        /* Map container */
         #map {
             width: 100%;
-            height: 480px;
+            height: 420px;
             border-radius: 12px;
-            border: 2px solid #e6e9ff;
+            border: 1px solid rgba(0,0,0,0.06);
+            background: #f0f2f7;
         }
 
-        .info-panel {
-            display: flex;
-            flex-direction: column;
-        }
+        .info-panel { display: flex; flex-direction: column; }
 
         .info-card {
             background: #f7f9fc;
-            border-radius: 15px;
-            padding: 15px;
-            margin-bottom: 15px;
+            border-radius: 12px;
+            padding: 12px;
+            margin-bottom: 12px;
             border-left: 4px solid #667eea;
         }
 
@@ -79,139 +69,81 @@
             font-weight: 600;
         }
 
-        .value {
-            font-size: 18px;
-            color: #333;
-            font-weight: 500;
-            word-break: break-word;
-        }
-
-        .value.large {
-            font-size: 32px;
-            font-weight: 700;
-            color: #667eea;
-        }
+        .value { font-size: 16px; color: #333; font-weight: 500; word-break: break-word; }
+        .value.large { font-size: 28px; font-weight: 700; color: #667eea; }
 
         .coordinates {
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 10px;
-            margin-bottom: 15px;
+            margin-bottom: 10px;
         }
 
         .coord-box {
-            background: #f7f9fc;
-            border-radius: 15px;
-            padding: 15px;
+            background: #fff;
+            border-radius: 10px;
+            padding: 10px;
             text-align: center;
-            border: 2px solid #e0e7ff;
-        }
-
-        .speed-heading {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 10px;
-            margin-bottom: 15px;
+            border: 1px solid #e6e9ff;
         }
 
         .status {
             text-align: center;
-            padding: 12px;
-            border-radius: 10px;
-            margin-bottom: 15px;
+            padding: 10px;
+            border-radius: 8px;
+            margin-bottom: 12px;
             font-weight: 500;
             font-size: 14px;
         }
+        .status.loading { background: #fff3cd; color: #856404; }
+        .status.success { background: #d4edda; color: #155724; }
+        .status.error { background: #f8d7da; color: #721c24; }
 
-        .status.loading {
-            background: #fff3cd;
-            color: #856404;
-        }
-
-        .status.success {
-            background: #d4edda;
-            color: #155724;
-        }
-
-        .status.error {
-            background: #f8d7da;
-            color: #721c24;
-        }
-
-        .accuracy {
-            text-align: center;
-            color: #666;
-            font-size: 12px;
-            margin-top: 8px;
-        }
+        .accuracy { text-align:center; color:#666; font-size:12px; margin-top:6px; }
+        .note { font-size:11px; color:#999; margin-top:4px; }
+        .history { font-size:13px; color:#666; font-style:italic; }
 
         button {
             width: 100%;
-            padding: 15px;
+            padding: 12px;
             background: #667eea;
             color: white;
             border: none;
-            border-radius: 10px;
-            font-size: 16px;
+            border-radius: 8px;
+            font-size: 15px;
             font-weight: 600;
             cursor: pointer;
-            transition: background 0.3s;
         }
-
-        button:hover {
-            background: #5568d3;
-        }
-
-        button:active {
-            transform: scale(0.98);
-        }
-
-        .note {
-            font-size: 11px;
-            color: #999;
-            margin-top: 5px;
-        }
-
-        .history {
-            font-size: 13px;
-            color: #666;
-            font-style: italic;
-        }
+        button:active { transform: scale(0.99); }
 
         @media (max-width: 920px) {
-            .layout {
-                grid-template-columns: 1fr;
-            }
-            #map {
-                height: 360px;
-            }
+            .layout { grid-template-columns: 1fr; }
+            #map { height: 340px; }
         }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>🚗 GPS Position</h1>
-
         <div class="layout">
             <div>
-                <div id="status" class="status loading">
-                    Hämtar position...
-                </div>
-
-                <div id="map"></div>
+                <div id="status" class="status loading">Hämtar position...</div>
+                <div id="map" aria-label="Karta - din position"></div>
             </div>
 
             <div class="info-panel">
-                <div class="speed-heading">
-                    <div class="coord-box">
-                        <div class="label">Hastighet</div>
-                        <div class="value large" id="speed">-</div>
-                        <div class="note">km/h</div>
-                    </div>
-                    <div class="coord-box">
-                        <div class="label">Riktning</div>
-                        <div class="value large" id="heading">-</div>
-                        <div class="note" id="direction">-</div>
+                <div class="coord-box" style="margin-bottom:12px;">
+                    <div style="display:flex;gap:10px;">
+                        <div style="flex:1;text-align:center;">
+                            <div class="label">Hastighet</div>
+                            <div class="value large" id="speed">-</div>
+                            <div class="note">km/h</div>
+                        </div>
+                        <div style="flex:1;text-align:center;">
+                            <div class="label">Riktning</div>
+                            <div class="value large" id="heading">-</div>
+                            <div class="note" id="direction">-</div>
+                        </div>
                     </div>
                 </div>
 
@@ -243,53 +175,49 @@
                 </div>
 
                 <div class="accuracy" id="accuracy"></div>
-                <div class="accuracy" id="samples" style="margin-top: 5px; color: #667eea;"></div>
+                <div class="accuracy" id="samples" style="color:#667eea;"></div>
 
-                <button onclick="forceUpdate()" style="margin-top: 15px;">
-                    🔄 Tvinga uppdatering
-                </button>
+                <button onclick="forceUpdate()">🔄 Tvinga uppdatering</button>
             </div>
         </div>
     </div>
 
-    <!-- Leaflet JS -->
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-            integrity="sha256-Vu0w1q0QpWb5Jk7v9dT2Z0v3s2r5bqzYp+q2bZfZJr0=" crossorigin=""></script>
+    <!-- Leaflet JS (utan integrity) -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
     <script>
-        let watchId = null;
+        // --- Konfig ---
+        const MIN_DISTANCE_METERS = 25;
+        const MIN_TIME_MS = 2000;
+        const MAX_POSITION_AGE_MS = 3000;
+        const MAX_REASONABLE_JUMP_MS = 150;
+        const positionBuffer = [];
+        const MAX_BUFFER_SIZE = 5;
+
+        // --- State ---
         let lastAddressLat = null;
         let lastAddressLon = null;
         let lastAddressUpdate = 0;
         let previousStreet = null;
+        let firstFix = true;
 
-        // Inställningar för bil
-        const MIN_DISTANCE_METERS = 25; // Uppdatera adress efter 25 meter
-        const MIN_TIME_MS = 2000; // Minst 2 sekunder mellan uppdateringar
-        const MAX_POSITION_AGE_MS = 3000; // Använd bara positioner nyare än 3 sekunder
-        const MAX_REASONABLE_JUMP_MS = 150; // Max 150m hopp per sekund (540 km/h)
-
-        // Buffert för positionsdata
-        const positionBuffer = [];
-        const MAX_BUFFER_SIZE = 5;
-
-        // Leaflet-karta
+        // Leaflet-objekt
         let map = null;
         let marker = null;
         let accuracyCircle = null;
-        let firstFix = true;
 
         function initMap() {
-            map = L.map('map', { zoomControl: true }).setView([59.3293, 18.0686], 13); // default: Stockholm
+            map = L.map('map', { zoomControl: true }).setView([59.3293, 18.0686], 13);
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 maxZoom: 19,
                 attribution: '&copy; OpenStreetMap contributors'
             }).addTo(map);
+            // säkerställ att kartan renderas rätt när den visas i flex/grid
+            setTimeout(() => { if (map) map.invalidateSize(); }, 300);
         }
 
         function updateMap(lat, lon, accuracy) {
             const latLng = [lat, lon];
-
             if (!marker) {
                 marker = L.marker(latLng, { title: 'Din position' }).addTo(map);
             } else {
@@ -309,10 +237,15 @@
                 accuracyCircle.setRadius(accuracy || 20);
             }
 
-            // Zooma till position första gången eller om vi flyttat långt
             if (firstFix) {
                 map.setView(latLng, 16);
                 firstFix = false;
+            } else {
+                // om marker är utanför vy, peta kartan svagt mot den (smooth centering)
+                const bounds = map.getBounds();
+                if (!bounds.contains(latLng)) {
+                    map.panTo(latLng);
+                }
             }
         }
 
@@ -320,79 +253,54 @@
             const posData = {
                 lat: position.coords.latitude,
                 lon: position.coords.longitude,
-                accuracy: position.coords.accuracy,
+                accuracy: position.coords.accuracy || 20,
                 speed: position.coords.speed,
                 heading: position.coords.heading,
                 timestamp: position.timestamp
             };
 
-            // Outlier-filtrering: kolla om positionen är rimlig
             if (positionBuffer.length > 0) {
                 const lastPos = positionBuffer[positionBuffer.length - 1];
-                const timeDiff = (posData.timestamp - lastPos.timestamp) / 1000; // sekunder
+                const timeDiff = (posData.timestamp - lastPos.timestamp) / 1000;
                 const distance = calculateDistance(lastPos.lat, lastPos.lon, posData.lat, posData.lon);
-                const speed = timeDiff > 0 ? distance / timeDiff : 0; // m/s
-
-                // Om hastigheten är orealistisk hög (>150 m/s = 540 km/h), ignorera
+                const speed = timeDiff > 0 ? distance / timeDiff : 0;
                 if (speed > MAX_REASONABLE_JUMP_MS && timeDiff > 0.5) {
-                    console.log(`Outlier detected: ${Math.round(speed)} m/s - ignorerar`);
+                    console.log('Outlier detected, ignorerar position:', Math.round(speed), 'm/s');
                     return false;
                 }
             }
 
             positionBuffer.push(posData);
-
-            // Behåll bara de senaste positionerna
-            if (positionBuffer.length > MAX_BUFFER_SIZE) {
-                positionBuffer.shift();
-            }
-
+            if (positionBuffer.length > MAX_BUFFER_SIZE) positionBuffer.shift();
             return true;
         }
 
         function getFilteredPosition() {
             if (positionBuffer.length === 0) return null;
-
             const now = Date.now();
+            const recent = positionBuffer.filter(p => (now - p.timestamp) < MAX_POSITION_AGE_MS);
+            const used = recent.length ? recent : [positionBuffer[positionBuffer.length - 1]];
 
-            // Filtrera bort gamla positioner
-            const recentPositions = positionBuffer.filter(pos =>
-                (now - pos.timestamp) < MAX_POSITION_AGE_MS
-            );
+            let totalWeight = 0, wLat = 0, wLon = 0, bestAcc = Infinity;
+            let latestSpeed = null, latestHeading = null, samples = used.length;
 
-            if (recentPositions.length === 0) {
-                return positionBuffer[positionBuffer.length - 1];
-            }
-
-            // Viktat medelvärde baserat på accuracy (lägre accuracy = bättre = högre vikt)
-            let totalWeight = 0;
-            let weightedLat = 0;
-            let weightedLon = 0;
-            let bestAccuracy = Infinity;
-            let latestSpeed = null;
-            let latestHeading = null;
-
-            recentPositions.forEach(pos => {
-                const weight = 1 / (pos.accuracy + 1);
+            used.forEach(p => {
+                const weight = 1 / (p.accuracy + 1);
                 totalWeight += weight;
-                weightedLat += pos.lat * weight;
-                weightedLon += pos.lon * weight;
-
-                if (pos.accuracy < bestAccuracy) {
-                    bestAccuracy = pos.accuracy;
-                }
-
-                if (pos.speed !== null) latestSpeed = pos.speed;
-                if (pos.heading !== null) latestHeading = pos.heading;
+                wLat += p.lat * weight;
+                wLon += p.lon * weight;
+                if (p.accuracy < bestAcc) bestAcc = p.accuracy;
+                if (p.speed !== null) latestSpeed = p.speed;
+                if (p.heading !== null) latestHeading = p.heading;
             });
 
             return {
-                lat: weightedLat / totalWeight,
-                lon: weightedLon / totalWeight,
-                accuracy: bestAccuracy,
+                lat: wLat / totalWeight,
+                lon: wLon / totalWeight,
+                accuracy: bestAcc === Infinity ? (used[used.length-1].accuracy || 20) : bestAcc,
                 speed: latestSpeed,
                 heading: latestHeading,
-                samples: recentPositions.length
+                samples
             };
         }
 
@@ -402,68 +310,44 @@
             const φ2 = lat2 * Math.PI / 180;
             const Δφ = (lat2 - lat1) * Math.PI / 180;
             const Δλ = (lon2 - lon1) * Math.PI / 180;
-
             const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
                       Math.cos(φ1) * Math.cos(φ2) *
                       Math.sin(Δλ/2) * Math.sin(Δλ/2);
             const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-
             return R * c;
         }
 
         function shouldUpdateAddress(lat, lon) {
             const now = Date.now();
-
-            if (lastAddressLat === null || lastAddressLon === null) {
-                return true;
-            }
-
-            if (now - lastAddressUpdate < MIN_TIME_MS) {
-                return false;
-            }
-
+            if (lastAddressLat === null || lastAddressLon === null) return true;
+            if (now - lastAddressUpdate < MIN_TIME_MS) return false;
             const distance = calculateDistance(lastAddressLat, lastAddressLon, lat, lon);
             return distance >= MIN_DISTANCE_METERS;
         }
 
         function getDirectionText(heading) {
             if (heading === null || heading === undefined) return '-';
-
-            const directions = ['N', 'NÖ', 'Ö', 'SÖ', 'S', 'SV', 'V', 'NV'];
-            const index = Math.round(heading / 45) % 8;
-            return directions[index];
+            const dirs = ['N', 'NÖ', 'Ö', 'SÖ', 'S', 'SV', 'V', 'NV'];
+            const idx = Math.round(heading / 45) % 8;
+            return dirs[idx];
         }
 
-        function updateStatus(message, type) {
-            const statusEl = document.getElementById('status');
-            statusEl.textContent = message;
-            statusEl.className = `status ${type}`;
+        function updateStatus(msg, type) {
+            const el = document.getElementById('status');
+            el.textContent = msg;
+            el.className = `status ${type}`;
         }
 
         async function getAddress(lat, lon) {
             try {
-                const response = await fetch(
-                    `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&accept-language=sv&addressdetails=1&zoom=18`
-                );
-                const data = await response.json();
-
-                if (data.address) {
+                const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&accept-language=sv&addressdetails=1&zoom=18`);
+                const data = await res.json();
+                if (data && data.address) {
                     const addr = data.address;
-
                     let street = '';
-                    if (addr.road) {
-                        street = addr.road;
-                        if (addr.house_number) {
-                            street += ' ' + addr.house_number;
-                        }
-                    } else if (addr.pedestrian) {
-                        street = addr.pedestrian;
-                        if (addr.house_number) {
-                            street += ' ' + addr.house_number;
-                        }
-                    } else if (addr.footway) {
-                        street = addr.footway;
-                    }
+                    if (addr.road) { street = addr.road + (addr.house_number ? ' ' + addr.house_number : ''); }
+                    else if (addr.pedestrian) { street = addr.pedestrian + (addr.house_number ? ' ' + addr.house_number : ''); }
+                    else if (addr.footway) { street = addr.footway; }
 
                     if (street) {
                         const currentStreet = document.getElementById('street').textContent;
@@ -471,75 +355,53 @@
                             previousStreet = currentStreet;
                             document.getElementById('previous-street').textContent = previousStreet;
                         }
-
                         document.getElementById('street').textContent = street;
-                        if (!addr.house_number) {
-                            document.getElementById('street-note').textContent =
-                                '(Gatunummer saknas i databasen)';
-                        } else {
-                            document.getElementById('street-note').textContent = '';
-                        }
+                        document.getElementById('street-note').textContent = addr.house_number ? '' : '(Gatunummer saknas i databasen)';
                     } else {
                         document.getElementById('street').textContent = 'Ingen gatuadress';
                         document.getElementById('street-note').textContent = '';
                     }
 
                     let area = '';
-                    if (addr.suburb || addr.neighbourhood) {
-                        area = addr.suburb || addr.neighbourhood;
-                    }
-                    if (addr.city || addr.town || addr.village) {
-                        if (area) area += ', ';
-                        area += addr.city || addr.town || addr.village;
-                    }
-                    if (addr.postcode) {
-                        area += ' ' + addr.postcode;
-                    }
+                    if (addr.suburb || addr.neighbourhood) area = addr.suburb || addr.neighbourhood;
+                    if (addr.city || addr.town || addr.village) area = area ? area + ', ' + (addr.city || addr.town || addr.village) : (addr.city || addr.town || addr.village);
+                    if (addr.postcode) area += ' ' + addr.postcode;
                     document.getElementById('area').textContent = area || '-';
                 } else {
                     document.getElementById('street').textContent = 'Adress kunde inte hittas';
-                    document.getElementById('street-note').textContent = '';
                     document.getElementById('area').textContent = '-';
+                    document.getElementById('street-note').textContent = '';
                 }
-            } catch (error) {
-                console.error('Fel vid hämtning av adress:', error);
+            } catch (err) {
+                console.error('Fel vid hämtning av adress', err);
                 document.getElementById('street').textContent = 'Kunde inte hämta adress';
-                document.getElementById('street-note').textContent = '';
                 document.getElementById('area').textContent = '-';
+                document.getElementById('street-note').textContent = '';
             }
         }
 
         async function showPosition(position) {
-            // Lägg till position i buffert
             const added = addPositionToBuffer(position);
-            if (!added) {
-                console.log('Position ignorerad (outlier)');
-                return;
-            }
+            if (!added) return;
 
-            // Få filtrerad position
             const filtered = getFilteredPosition();
             if (!filtered) return;
 
             const lat = filtered.lat;
             const lon = filtered.lon;
-            const accuracy = filtered.accuracy || 20;
+            const accuracy = filtered.accuracy;
             const speed = filtered.speed;
             const heading = filtered.heading;
 
-            // Uppdatera koordinater
             document.getElementById('latitude').textContent = lat.toFixed(6);
             document.getElementById('longitude').textContent = lon.toFixed(6);
 
-            // Uppdatera hastighet
             if (speed !== null && speed >= 0) {
-                const speedKmh = speed * 3.6;
-                document.getElementById('speed').textContent = Math.round(speedKmh);
+                document.getElementById('speed').textContent = Math.round(speed * 3.6);
             } else {
                 document.getElementById('speed').textContent = '0';
             }
 
-            // Uppdatera riktning
             if (heading !== null && heading >= 0) {
                 document.getElementById('heading').textContent = Math.round(heading) + '°';
                 document.getElementById('direction').textContent = getDirectionText(heading);
@@ -548,90 +410,64 @@
                 document.getElementById('direction').textContent = '-';
             }
 
-            document.getElementById('accuracy').textContent =
-                `Noggrannhet: ±${Math.round(accuracy)} meter`;
-            document.getElementById('samples').textContent =
-                `Filtrerad från ${filtered.samples} mätning${filtered.samples !== 1 ? 'ar' : ''}`;
+            document.getElementById('accuracy').textContent = `Noggrannhet: ±${Math.round(accuracy)} meter`;
+            document.getElementById('samples').textContent = `Filtrerad från ${filtered.samples} mätning${filtered.samples !== 1 ? 'ar' : ''}`;
 
             updateStatus('Position aktiv', 'success');
 
-            // Uppdatera adress om nödvändigt
             if (shouldUpdateAddress(lat, lon)) {
-                const distance = lastAddressLat !== null ?
-                    calculateDistance(lastAddressLat, lastAddressLon, lat, lon) : 0;
-
-                if (distance > 0) {
-                    console.log(`Förflyttning: ${Math.round(distance)} meter - uppdaterar adress`);
-                }
-
                 await getAddress(lat, lon);
-
                 lastAddressLat = lat;
                 lastAddressLon = lon;
                 lastAddressUpdate = Date.now();
             }
 
-            // Uppdatera kartan
-            updateMap(lat, lon, accuracy);
+            // uppdatera kartan och säkerställ att layout är korrekt
+            if (map) {
+                updateMap(lat, lon, accuracy);
+                setTimeout(() => { try { map.invalidateSize(); } catch (e) {} }, 200);
+            }
         }
 
         function showError(error) {
-            let message = '';
-            switch(error.code) {
-                case error.PERMISSION_DENIED:
-                    message = 'Du måste ge tillåtelse för att dela din position';
-                    break;
-                case error.POSITION_UNAVAILABLE:
-                    message = 'Position är inte tillgänglig';
-                    break;
-                case error.TIMEOUT:
-                    message = 'Timeout - försök igen';
-                    break;
-                default:
-                    message = 'Ett okänt fel uppstod';
+            let msg = 'Ett okänt fel uppstod';
+            if (!error) { updateStatus(msg, 'error'); return; }
+            switch (error.code) {
+                case error.PERMISSION_DENIED: msg = 'Du måste ge tillåtelse för att dela din position'; break;
+                case error.POSITION_UNAVAILABLE: msg = 'Position är inte tillgänglig'; break;
+                case error.TIMEOUT: msg = 'Timeout - försök igen'; break;
             }
-            updateStatus(message, 'error');
+            updateStatus(msg, 'error');
         }
 
         function forceUpdate() {
             lastAddressLat = null;
             lastAddressLon = null;
             positionBuffer.length = 0;
-
             if (navigator.geolocation) {
                 updateStatus('Tvingar uppdatering...', 'loading');
-                navigator.geolocation.getCurrentPosition(
-                    showPosition,
-                    showError,
-                    {
-                        enableHighAccuracy: true,
-                        timeout: 10000,
-                        maximumAge: 0
-                    }
-                );
+                navigator.geolocation.getCurrentPosition(showPosition, showError, { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
+            } else {
+                updateStatus('Geolocation inte stödd', 'error');
             }
         }
 
         function startWatching() {
-            if (navigator.geolocation) {
-                watchId = navigator.geolocation.watchPosition(
-                    showPosition,
-                    showError,
-                    {
-                        enableHighAccuracy: true,
-                        timeout: 10000,
-                        maximumAge: 0
-                    }
-                );
-            } else {
+            if (!navigator.geolocation) {
                 updateStatus('Geolocation stöd saknas i denna webbläsare', 'error');
+                return;
             }
+            navigator.geolocation.watchPosition(showPosition, showError, { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
         }
 
-        window.onload = () => {
+        // Init
+        window.addEventListener('load', () => {
             initMap();
             startWatching();
-        };
+
+            // Om layout ändras (rotation), säkerställ att kartan ritas om
+            window.addEventListener('resize', () => { if (map) setTimeout(() => map.invalidateSize(), 200); });
+        });
     </script>
 </body>
 </html>
