@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Min Position</title>
+    <title>GPS Position - Bil</title>
     <style>
         * {
             margin: 0;
@@ -25,7 +25,7 @@
         .container {
             background: white;
             border-radius: 20px;
-            padding: 30px;
+            padding: 25px;
             box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
             max-width: 500px;
             width: 100%;
@@ -34,24 +34,24 @@
         h1 {
             color: #667eea;
             text-align: center;
-            margin-bottom: 30px;
-            font-size: 28px;
+            margin-bottom: 20px;
+            font-size: 24px;
         }
 
         .info-card {
             background: #f7f9fc;
             border-radius: 15px;
-            padding: 20px;
-            margin-bottom: 20px;
+            padding: 15px;
+            margin-bottom: 15px;
             border-left: 4px solid #667eea;
         }
 
         .label {
-            font-size: 12px;
+            font-size: 11px;
             color: #666;
             text-transform: uppercase;
             letter-spacing: 1px;
-            margin-bottom: 8px;
+            margin-bottom: 6px;
             font-weight: 600;
         }
 
@@ -62,27 +62,41 @@
             word-break: break-word;
         }
 
+        .value.large {
+            font-size: 32px;
+            font-weight: 700;
+            color: #667eea;
+        }
+
         .coordinates {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 15px;
-            margin-bottom: 20px;
+            gap: 10px;
+            margin-bottom: 15px;
         }
 
         .coord-box {
             background: #f7f9fc;
             border-radius: 15px;
-            padding: 20px;
+            padding: 15px;
             text-align: center;
             border: 2px solid #e0e7ff;
         }
 
+        .speed-heading {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
         .status {
             text-align: center;
-            padding: 15px;
+            padding: 12px;
             border-radius: 10px;
-            margin-bottom: 20px;
+            margin-bottom: 15px;
             font-weight: 500;
+            font-size: 14px;
         }
 
         .status.loading {
@@ -103,13 +117,8 @@
         .accuracy {
             text-align: center;
             color: #666;
-            font-size: 14px;
-            margin-top: 10px;
-        }
-
-        .icon {
-            font-size: 40px;
-            margin-bottom: 10px;
+            font-size: 12px;
+            margin-top: 8px;
         }
 
         button {
@@ -135,25 +144,50 @@
 
         .loading-spinner {
             display: inline-block;
-            width: 20px;
-            height: 20px;
-            border: 3px solid rgba(255,255,255,.3);
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(102,126,234,.3);
             border-radius: 50%;
-            border-top-color: white;
+            border-top-color: #667eea;
             animation: spin 1s ease-in-out infinite;
         }
 
         @keyframes spin {
             to { transform: rotate(360deg); }
         }
+
+        .note {
+            font-size: 11px;
+            color: #999;
+            margin-top: 5px;
+        }
+
+        .history {
+            font-size: 13px;
+            color: #666;
+            font-style: italic;
+        }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>📍 Min Position</h1>
+        <h1>🚗 GPS Position</h1>
         
         <div id="status" class="status loading">
             Hämtar position...
+        </div>
+
+        <div class="speed-heading">
+            <div class="coord-box">
+                <div class="label">Hastighet</div>
+                <div class="value large" id="speed">-</div>
+                <div class="note">km/h</div>
+            </div>
+            <div class="coord-box">
+                <div class="label">Riktning</div>
+                <div class="value large" id="heading">-</div>
+                <div class="note" id="direction">-</div>
+            </div>
         </div>
 
         <div class="coordinates">
@@ -168,9 +202,14 @@
         </div>
 
         <div class="info-card">
-            <div class="label">Gatuadress</div>
+            <div class="label">Nuvarande gatuadress</div>
             <div class="value" id="street">Väntar på position...</div>
-            <div style="font-size: 12px; color: #999; margin-top: 5px;" id="street-note"></div>
+            <div class="note" id="street-note"></div>
+        </div>
+
+        <div class="info-card">
+            <div class="label">Föregående gata</div>
+            <div class="value history" id="previous-street">-</div>
         </div>
 
         <div class="info-card">
@@ -178,34 +217,114 @@
             <div class="value" id="area">-</div>
         </div>
 
-        <div class="info-card">
-            <div class="label">Fullständig adress</div>
-            <div class="value" id="address">-</div>
-        </div>
-
-        <div class="info-card" style="background: #fff9e6; border-left-color: #ffc107;">
-            <div class="label">Debug info</div>
-            <div class="value" id="debug" style="font-size: 12px; color: #666;">-</div>
-        </div>
-
         <div class="accuracy" id="accuracy"></div>
+        <div class="accuracy" id="samples" style="margin-top: 5px; color: #667eea;"></div>
 
-        <button onclick="updateLocation()">
-            🔄 Uppdatera position
+        <button onclick="forceUpdate()" style="margin-top: 15px;">
+            🔄 Tvinga uppdatering
         </button>
     </div>
 
     <script>
         let watchId = null;
-        let lastLat = null;
-        let lastLon = null;
+        let lastAddressLat = null;
+        let lastAddressLon = null;
         let lastAddressUpdate = 0;
-        const MIN_DISTANCE_METERS = 10; // Uppdatera adress efter 10 meter förflyttning
-        const MIN_TIME_MS = 5000; // Vänta minst 5 sekunder mellan adressuppdateringar
+        let previousStreet = null;
+        
+        // Inställningar för bil
+        const MIN_DISTANCE_METERS = 25; // Uppdatera adress efter 25 meter
+        const MIN_TIME_MS = 2000; // Minst 2 sekunder mellan uppdateringar
+        const MAX_POSITION_AGE_MS = 3000; // Använd bara positioner nyare än 3 sekunder
+        const MAX_REASONABLE_JUMP_MS = 150; // Max 150m hopp per sekund (540 km/h)
+        
+        // Buffert för positionsdata
+        const positionBuffer = [];
+        const MAX_BUFFER_SIZE = 5;
+
+        function addPositionToBuffer(position) {
+            const posData = {
+                lat: position.coords.latitude,
+                lon: position.coords.longitude,
+                accuracy: position.coords.accuracy,
+                speed: position.coords.speed,
+                heading: position.coords.heading,
+                timestamp: position.timestamp
+            };
+            
+            // Outlier-filtrering: kolla om positionen är rimlig
+            if (positionBuffer.length > 0) {
+                const lastPos = positionBuffer[positionBuffer.length - 1];
+                const timeDiff = (posData.timestamp - lastPos.timestamp) / 1000; // sekunder
+                const distance = calculateDistance(lastPos.lat, lastPos.lon, posData.lat, posData.lon);
+                const speed = distance / timeDiff; // m/s
+                
+                // Om hastigheten är orealistisk hög (>150 m/s = 540 km/h), ignorera
+                if (speed > MAX_REASONABLE_JUMP_MS && timeDiff > 0.5) {
+                    console.log(`Outlier detected: ${Math.round(speed)} m/s - ignorerar`);
+                    return false;
+                }
+            }
+            
+            positionBuffer.push(posData);
+            
+            // Behåll bara de senaste positionerna
+            if (positionBuffer.length > MAX_BUFFER_SIZE) {
+                positionBuffer.shift();
+            }
+            
+            return true;
+        }
+
+        function getFilteredPosition() {
+            if (positionBuffer.length === 0) return null;
+            
+            const now = Date.now();
+            
+            // Filtrera bort gamla positioner
+            const recentPositions = positionBuffer.filter(pos => 
+                (now - pos.timestamp) < MAX_POSITION_AGE_MS
+            );
+            
+            if (recentPositions.length === 0) {
+                return positionBuffer[positionBuffer.length - 1];
+            }
+            
+            // Viktat medelvärde baserat på accuracy (lägre accuracy = bättre = högre vikt)
+            let totalWeight = 0;
+            let weightedLat = 0;
+            let weightedLon = 0;
+            let bestAccuracy = Infinity;
+            let latestSpeed = null;
+            let latestHeading = null;
+            
+            recentPositions.forEach(pos => {
+                const weight = 1 / (pos.accuracy + 1); // +1 för att undvika division med 0
+                totalWeight += weight;
+                weightedLat += pos.lat * weight;
+                weightedLon += pos.lon * weight;
+                
+                if (pos.accuracy < bestAccuracy) {
+                    bestAccuracy = pos.accuracy;
+                }
+                
+                // Använd senaste hastighet och riktning
+                if (pos.speed !== null) latestSpeed = pos.speed;
+                if (pos.heading !== null) latestHeading = pos.heading;
+            });
+            
+            return {
+                lat: weightedLat / totalWeight,
+                lon: weightedLon / totalWeight,
+                accuracy: bestAccuracy,
+                speed: latestSpeed,
+                heading: latestHeading,
+                samples: recentPositions.length
+            };
+        }
 
         function calculateDistance(lat1, lon1, lat2, lon2) {
-            // Haversine-formeln för att beräkna avstånd mellan två GPS-punkter
-            const R = 6371e3; // Jordens radie i meter
+            const R = 6371e3;
             const φ1 = lat1 * Math.PI / 180;
             const φ2 = lat2 * Math.PI / 180;
             const Δφ = (lat2 - lat1) * Math.PI / 180;
@@ -216,25 +335,30 @@
                       Math.sin(Δλ/2) * Math.sin(Δλ/2);
             const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 
-            return R * c; // Avstånd i meter
+            return R * c;
         }
 
         function shouldUpdateAddress(lat, lon) {
             const now = Date.now();
             
-            // Uppdatera alltid första gången
-            if (lastLat === null || lastLon === null) {
+            if (lastAddressLat === null || lastAddressLon === null) {
                 return true;
             }
             
-            // Kolla om tillräckligt med tid har gått
             if (now - lastAddressUpdate < MIN_TIME_MS) {
                 return false;
             }
             
-            // Kolla om vi har förflyttat oss tillräckligt långt
-            const distance = calculateDistance(lastLat, lastLon, lat, lon);
+            const distance = calculateDistance(lastAddressLat, lastAddressLon, lat, lon);
             return distance >= MIN_DISTANCE_METERS;
+        }
+
+        function getDirectionText(heading) {
+            if (heading === null || heading === undefined) return '-';
+            
+            const directions = ['N', 'NÖ', 'Ö', 'SÖ', 'S', 'SV', 'V', 'NV'];
+            const index = Math.round(heading / 45) % 8;
+            return directions[index];
         }
 
         function updateStatus(message, type) {
@@ -250,18 +374,9 @@
                 );
                 const data = await response.json();
                 
-                // Debug info
-                let debugInfo = [];
-                
                 if (data.address) {
                     const addr = data.address;
                     
-                    // Visa vad vi fick från API:et
-                    debugInfo.push(`Type: ${data.type || 'unknown'}`);
-                    if (addr.house_number) debugInfo.push(`Nummer finns: ${addr.house_number}`);
-                    else debugInfo.push('Inget gatunummer i databasen');
-                    
-                    // Gatuadress med nummer
                     let street = '';
                     if (addr.road) {
                         street = addr.road;
@@ -275,25 +390,28 @@
                         }
                     } else if (addr.footway) {
                         street = addr.footway;
-                    } else if (addr.path) {
-                        street = addr.path;
                     }
                     
                     if (street) {
+                        // Spara föregående gata om det är en ny gata
+                        const currentStreet = document.getElementById('street').textContent;
+                        if (currentStreet && currentStreet !== street && currentStreet !== 'Väntar på position...') {
+                            previousStreet = currentStreet;
+                            document.getElementById('previous-street').textContent = previousStreet;
+                        }
+                        
                         document.getElementById('street').textContent = street;
                         if (!addr.house_number) {
                             document.getElementById('street-note').textContent = 
-                                '(Gatunummer saknas i OpenStreetMap-databasen för denna plats)';
+                                '(Gatunummer saknas i databasen)';
                         } else {
                             document.getElementById('street-note').textContent = '';
                         }
                     } else {
-                        document.getElementById('street').textContent = 'Ingen gatuadress hittades';
-                        document.getElementById('street-note').textContent = 
-                            '(Du kanske är på en plats utan gatuadress)';
+                        document.getElementById('street').textContent = 'Ingen gatuadress';
+                        document.getElementById('street-note').textContent = '';
                     }
                     
-                    // Område (stad/förort)
                     let area = '';
                     if (addr.suburb || addr.neighbourhood) {
                         area = addr.suburb || addr.neighbourhood;
@@ -306,65 +424,79 @@
                         area += ' ' + addr.postcode;
                     }
                     document.getElementById('area').textContent = area || '-';
-                    
-                    // Fullständig adress
-                    document.getElementById('address').textContent = data.display_name;
-                    
-                    // Debug
-                    document.getElementById('debug').innerHTML = debugInfo.join('<br>');
                 } else {
                     document.getElementById('street').textContent = 'Adress kunde inte hittas';
                     document.getElementById('street-note').textContent = '';
                     document.getElementById('area').textContent = '-';
-                    document.getElementById('address').textContent = 'Adress kunde inte hittas';
-                    document.getElementById('debug').textContent = 'Inget svar från API';
                 }
             } catch (error) {
                 console.error('Fel vid hämtning av adress:', error);
                 document.getElementById('street').textContent = 'Kunde inte hämta adress';
                 document.getElementById('street-note').textContent = '';
                 document.getElementById('area').textContent = '-';
-                document.getElementById('address').textContent = 'Kunde inte hämta adress';
-                document.getElementById('debug').textContent = 'Error: ' + error.message;
             }
         }
 
         async function showPosition(position) {
-            const lat = position.coords.latitude;
-            const lon = position.coords.longitude;
-            const accuracy = position.coords.accuracy;
+            // Lägg till position i buffert
+            const added = addPositionToBuffer(position);
+            if (!added) {
+                console.log('Position ignorerad (outlier)');
+                return;
+            }
+            
+            // Få filtrerad position
+            const filtered = getFilteredPosition();
+            if (!filtered) return;
+            
+            const lat = filtered.lat;
+            const lon = filtered.lon;
+            const accuracy = filtered.accuracy;
+            const speed = filtered.speed;
+            const heading = filtered.heading;
 
-            // Uppdatera koordinater alltid
+            // Uppdatera koordinater
             document.getElementById('latitude').textContent = lat.toFixed(6);
             document.getElementById('longitude').textContent = lon.toFixed(6);
+            
+            // Uppdatera hastighet
+            if (speed !== null && speed >= 0) {
+                const speedKmh = speed * 3.6;
+                document.getElementById('speed').textContent = Math.round(speedKmh);
+            } else {
+                document.getElementById('speed').textContent = '0';
+            }
+            
+            // Uppdatera riktning
+            if (heading !== null && heading >= 0) {
+                document.getElementById('heading').textContent = Math.round(heading) + '°';
+                document.getElementById('direction').textContent = getDirectionText(heading);
+            } else {
+                document.getElementById('heading').textContent = '-';
+                document.getElementById('direction').textContent = '-';
+            }
+            
             document.getElementById('accuracy').textContent = 
                 `Noggrannhet: ±${Math.round(accuracy)} meter`;
+            document.getElementById('samples').textContent = 
+                `Filtrerad från ${filtered.samples} mätning${filtered.samples !== 1 ? 'ar' : ''}`;
 
-            updateStatus('Position hämtad!', 'success');
+            updateStatus('Position aktiv', 'success');
 
-            // Kolla om vi ska uppdatera adressen
+            // Uppdatera adress om nödvändigt
             if (shouldUpdateAddress(lat, lon)) {
-                const distance = lastLat !== null ? 
-                    calculateDistance(lastLat, lastLon, lat, lon) : 0;
+                const distance = lastAddressLat !== null ? 
+                    calculateDistance(lastAddressLat, lastAddressLon, lat, lon) : 0;
                 
                 if (distance > 0) {
                     console.log(`Förflyttning: ${Math.round(distance)} meter - uppdaterar adress`);
                 }
                 
-                document.getElementById('street').innerHTML = 
-                    '<div class="loading-spinner"></div> Hämtar adress...';
-                document.getElementById('area').textContent = '-';
-                document.getElementById('address').textContent = '-';
-
                 await getAddress(lat, lon);
                 
-                // Spara senaste positionen och tidpunkten
-                lastLat = lat;
-                lastLon = lon;
+                lastAddressLat = lat;
+                lastAddressLon = lon;
                 lastAddressUpdate = Date.now();
-            } else {
-                const distance = calculateDistance(lastLat, lastLon, lat, lon);
-                console.log(`Förflyttning: ${Math.round(distance)} meter - väntar med uppdatering`);
             }
         }
 
@@ -386,30 +518,25 @@
             updateStatus(message, 'error');
         }
 
-        function updateLocation() {
-            if (!navigator.geolocation) {
-                updateStatus('Geolocation stöds inte av din webbläsare', 'error');
-                return;
+        function forceUpdate() {
+            lastAddressLat = null;
+            lastAddressLon = null;
+            positionBuffer.length = 0;
+            
+            if (navigator.geolocation) {
+                updateStatus('Tvingar uppdatering...', 'loading');
+                navigator.geolocation.getCurrentPosition(
+                    showPosition,
+                    showError,
+                    {
+                        enableHighAccuracy: true,
+                        timeout: 10000,
+                        maximumAge: 0
+                    }
+                );
             }
-
-            updateStatus('Hämtar position...', 'loading');
-            
-            // Tvinga uppdatering av adress även om vi inte förflyttat oss
-            lastLat = null;
-            lastLon = null;
-            
-            navigator.geolocation.getCurrentPosition(
-                showPosition,
-                showError,
-                {
-                    enableHighAccuracy: true,
-                    timeout: 10000,
-                    maximumAge: 0
-                }
-            );
         }
 
-        // Starta kontinuerlig övervakning av position
         function startWatching() {
             if (navigator.geolocation) {
                 watchId = navigator.geolocation.watchPosition(
@@ -424,7 +551,6 @@
             }
         }
 
-        // Starta automatiskt när sidan laddas
         window.onload = () => {
             startWatching();
         };
