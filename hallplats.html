@@ -117,7 +117,7 @@
 <body>
   <div class="container">
     <div class="card" id="topCard">
-      <h1>SL Avgångar</h1>
+      <h1>SL Avgångar J</h1>
 
       <div class="button-group">
         <button id="locationBtn">📍 Plats</button>
@@ -673,6 +673,8 @@ favoritesBtn.addEventListener('click', ()=>{
 
 searchBtn.addEventListener('click', async ()=>{
   searchContainer.classList.add('show');
+    initMapIfNeeded();
+  setTimeout(()=>{ if(map) map.invalidateSize(); }, 50);
   suggestions.style.display='none';
   searchInput.value='';
   lastSearchResults='';
