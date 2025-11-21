@@ -72,56 +72,6 @@
   .stop-favorite-star { font-size: 24px; cursor: pointer; padding: 5px; user-select: none; transition: transform 0.2s; }
   .stop-favorite-star:hover { transform: scale(1.2); }
 
-  /* Compact direction selector with centered header "Riktning" */
-  .location-controls {
-    display: none;
-    margin: 8px 0 12px;
-    padding: 8px;
-    border-radius: 8px;
-    background: linear-gradient(180deg,#212833 0%, #29313f 100%);
-    border: 1px solid #3b4959;
-    align-items: center;
-  }
-  .location-controls.show { display: block; }
-  .location-header {
-    text-align: center;
-    color: #e2e8f0;
-    font-weight: 600;
-    font-size: 13px;
-    margin-bottom: 6px;
-  }
-  .dir-row {
-    display:flex;
-    gap:6px;
-    align-items:center;
-    justify-content:space-between;
-  }
-  .dir-btn {
-    flex: 1;
-    min-width: 0;
-    display:flex;
-    gap:6px;
-    align-items:center;
-    justify-content:center;
-    padding:6px 8px;
-    background: transparent;
-    border:1px solid #42506a;
-    color: #e2e8f0;
-    border-radius:6px;
-    cursor:pointer;
-    font-size:13px;
-    line-height:1;
-  }
-  .dir-btn .dir-icon { font-size:14px; width:18px; text-align:center; display:inline-block; }
-  .dir-btn .dir-label { display:inline-block; }
-  .dir-btn:hover { background: rgba(255,255,255,0.02); border-color:#5b7a9b; }
-  .dir-btn.active {
-    background: linear-gradient(180deg,#3a4756 0%, #2f3743 100%);
-    border-color:#9fb0c8;
-    color:#e6eef8;
-    box-shadow: 0 6px 18px rgba(0,0,0,0.35);
-  }
-
   .support {
     text-align:center;
     margin-top:6px;
@@ -131,7 +81,7 @@
     gap:6px;
     align-items:center;
   }
-  .support-text { color:#bcd6f2; } /* same light color as link */
+  .support-text { color:#bcd6f2; }
   .support a { color:#bcd6f2; text-decoration:none; font-weight:600; }
   .support a:hover { text-decoration:underline; }
 
@@ -199,18 +149,16 @@
     .remove-favorite { width: 100%; margin-top:8px; }
     .favorites-list { gap:10px; }
     .button-group button.active::after { left: 8px; right: 8px; bottom: -7px; height: 3px; }
-    .dir-row { gap:6px; }
   }
 
   @media (max-width: 360px) {
-    .dir-btn { padding:6px 6px; font-size:12px; }
     .location-controls { padding:6px; }
   }
 </style>
 </head>
 <body>
   <div class="container">
-    <div class="card">
+    <div class="card" id="topCard">
       <h1>SL Avgångar </h1>
 
       <div class="button-group">
@@ -242,18 +190,9 @@
         </div>
       </div>
 
-      <!-- Direction controls (visible only in Plats mode) -->
-      <div class="location-controls" id="locationControls" aria-hidden="true">
-        <div class="location-header">Riktning</div>
-        <div class="dir-row" id="dirButtonsRow" role="radiogroup" aria-label="Välj riktning">
-          <button class="dir-btn" id="dirBoth" data-dir="0" role="radio" aria-checked="true"><span class="dir-icon">↕️</span><span class="dir-label">Båda</span></button>
-          <button class="dir-btn" id="dir1" data-dir="1" role="radio" aria-checked="false"><span class="dir-icon">⬆️</span><span class="dir-label">1</span></button>
-          <button class="dir-btn" id="dir2" data-dir="2" role="radio" aria-checked="false"><span class="dir-icon">⬇️</span><span class="dir-label">2</span></button>
-        </div>
-        <div class="support">
-          <span class="support-text">Gillar du sidan?</span>
-          <a href="https://buymeacoffee.com/joreimer1" target="_blank" rel="noopener noreferrer">Buymeacoffee</a>
-        </div>
+      <div class="support" id="topSupport" style="display:none;">
+        <span class="support-text">Gillar du sidan?</span>
+        <a href="https://buymeacoffee.com/joreimer1" target="_blank" rel="noopener noreferrer">Buymeacoffee</a>
       </div>
 
       <div class="error" id="error"></div>
@@ -290,11 +229,7 @@
     const favoritesCard = document.getElementById('favoritesCard');
     const favoritesListBottom = document.getElementById('favoritesListBottom');
     const stopFavoriteStar = document.getElementById('stopFavoriteStar');
-
-    const locationControls = document.getElementById('locationControls');
-    const dirBoth = document.getElementById('dirBoth');
-    const dir1 = document.getElementById('dir1');
-    const dir2 = document.getElementById('dir2');
+    const topSupport = document.getElementById('topSupport');
 
     let allStops = [];            // sites (from /v1/sites?expand=true)
     let allStopPoints = [];       // stop-points (from /v1/stop-points)
@@ -303,9 +238,9 @@
     let lastSearchResults = '';
     let currentStop = null;
     let currentMode = 'none'; // 'none' | 'location' | 'favorites' | 'search'
-    let locationDirection = 0; // 0 = both, 1 = dir1, 2 = dir2
+    let locationDirection = 0; // kept for compatibility but no UI for it
 
-    // Nytt: aktuell stop area och stop point id när vi använder stop-points
+    // aktuell stop area och stop point id när vi använder stop-points
     let currentStopAreaId = null;
     let currentStopAreaName = null;
     let currentStopPointId = null;
@@ -385,7 +320,6 @@
 
     function notifyDeparturesUpdate() {
       if (currentMode === 'location' && currentStop) {
-        // När vi är i plats-läge och har en currentStopArea så hämtar vi från alla sites som tillhör area
         if (currentStopAreaId) {
           const sitesForArea = allStops.filter(s => {
             const candidates = [s.stop_area_id, s.stopAreaId, s.stop_area, s.parentId, s.site_id];
@@ -563,15 +497,12 @@
       } catch (err) { console.error(`Kunde inte hämta från ${site.name}:`, err); return { stop: site, departures: [] }; }
     }
 
-    // Ny hjälpfunktion: kontrollera om en departure innehåller vald stop-point
     function departureMatchesStopPoint(dep, stopPointId) {
       if (!stopPointId) return true;
       if (!dep) return false;
-      // Vanliga fält som kan peka på stop-point
       if (dep.stop_point && String(dep.stop_point) === String(stopPointId)) return true;
       if (dep.stopPointId && String(dep.stopPointId) === String(stopPointId)) return true;
       if (dep.stop_point_id && String(dep.stop_point_id) === String(stopPointId)) return true;
-      // ibland ligger stop-point som objekt
       const sp = dep.stop_point || dep.stopPoint || dep.stopPointObj || dep.stop_point_obj;
       if (sp) {
         if (typeof sp === 'object') {
@@ -582,11 +513,9 @@
           if (String(sp) === String(stopPointId)) return true;
         }
       }
-      // ibland finns det fält i departure som refererar till site/stop-area; vi returnerar false här (vi vill matcha stop-point)
       return false;
     }
 
-    // Hjälpfunktion: kontrollera om en departure pekar på stop-area (behåll för fallback)
     function departureMatchesStopArea(dep, stopAreaId) {
       if (!stopAreaId) return true;
       if (dep.stop_area && String(dep.stop_area) === String(stopAreaId)) return true;
@@ -622,11 +551,9 @@
           result.departures.forEach(dep => {
             dep.fromStop = result.stop.name;
 
-            // Om currentStopPointId är satt: filtrera bort avgångar som inte pekar på just den stop-point
             if (currentMode === 'location' && currentStopPointId) {
               if (!departureMatchesStopPoint(dep, currentStopPointId)) return;
             } else if (currentMode === 'location' && currentStopAreaId) {
-              // Om vi inte har stop-point men har stop-area: filtrera mot area (fallback)
               if (!departureMatchesStopArea(dep, currentStopAreaId)) return;
             }
 
@@ -734,14 +661,13 @@
       countdownInterval = setInterval(updateDisplay, 1000);
     }
 
-    // Ny: hitta närmaste stop-point via /v1/stop-points och använd stop-point id för filtrering
+    // Hitta närmaste stop-point via /v1/stop-points och använd stop-point id för filtrering
     async function findNearestStop(userLat, userLon) {
       try {
         loading.classList.add('show');
         if (allStopPoints.length === 0) await loadStopPoints();
         if (allStops.length === 0) await loadStops();
 
-        // Hitta närmaste stop-point i listan
         let nearestPoint = null;
         let minDistancePoint = Infinity;
         allStopPoints.forEach(pt => {
@@ -756,17 +682,16 @@
           return;
         }
 
-        // Bestäm stop-area id/name från stop-point: stöd flera vanliga fältnamn
         const stopAreaId = nearestPoint.stop_area_id || nearestPoint.stopAreaId || nearestPoint.stop_area || nearestPoint.parentId || nearestPoint.site_id || nearestPoint.areaId || null;
         const stopAreaName = nearestPoint.stop_area_name || nearestPoint.stopAreaName || nearestPoint.name || null;
 
         currentStopAreaId = stopAreaId ? String(stopAreaId) : null;
         currentStopAreaName = stopAreaName || null;
 
-        // Spara stop-point id (nytt)
+        // Spara stop-point id
         currentStopPointId = nearestPoint.id || nearestPoint.stop_point_id || nearestPoint.stopPointId || null;
 
-        // Hitta alla sites som har denna stop-area (stöd flera fältnamn på site-objekt)
+        // Hitta alla sites som har denna stop-area
         let matchedSites = [];
         if (currentStopAreaId) {
           matchedSites = allStops.filter(s => {
@@ -775,13 +700,12 @@
           });
         }
 
-        // Fallback: om inga sites hittades via area, försök matcha via namn (efterträdelsevis)
+        // Fallback: om inga sites hittades via area, försök matcha via namn
         if (matchedSites.length === 0 && nearestPoint.name) {
           const spName = (nearestPoint.name || '').trim().toLowerCase();
           matchedSites = allStops.filter(s => s.name && s.name.trim().toLowerCase().startsWith(spName));
         }
 
-        // Om vi hittade sites för området: visa area och hämta avgångar från alla dessa sites men filtrera avgångar till stop-point
         if (matchedSites.length > 0) {
           const displayName = currentStopAreaName ? currentStopAreaName : nearestPoint.name;
           stopName.textContent = displayName;
@@ -789,20 +713,18 @@
             if (minDistancePoint < 1) stopDistance.textContent = `${Math.round(minDistancePoint * 1000)} meter bort`;
             else stopDistance.textContent = `${minDistancePoint.toFixed(2)} km bort`;
           } else stopDistance.textContent = '';
-          stopAreaEl.textContent = currentStopAreaId ? `Stop area: ${currentStopAreaId}` : '';
+          stopAreaEl.textContent = currentStopPointId ? `StopPoint: ${currentStopPointId}` : '';
           stopFavoriteStar.textContent = isFavorite(matchedSites[0].id) ? '⭐' : '☆';
           stopInfo.classList.add('show');
-          showLocationControls(true);
-          currentStop = matchedSites[0]; // behåll en representativ site som currentStop för UI/favoriter
+          topSupport.style.display = 'flex';
+          currentStop = matchedSites[0];
           currentMode = 'location';
           setActiveButton(locationBtn);
           loading.classList.remove('show');
-          // getDeparturesFromStops kommer nu filtrera avgångarna mot currentStopPointId (om satt)
           getDeparturesFromStops(matchedSites, true);
           return;
         }
 
-        // Om inga sites hittades: skapa en temporär site-lik struktur baserad på stop-point
         const tempSite = {
           id: nearestPoint.site_id || nearestPoint.id || nearestPoint.stop_id || ('sp-' + (nearestPoint.id || Math.random())),
           name: nearestPoint.name || 'Okänd hållplats',
@@ -817,10 +739,10 @@
           if (minDistancePoint < 1) stopDistance.textContent = `${Math.round(minDistancePoint * 1000)} meter bort`;
           else stopDistance.textContent = `${minDistancePoint.toFixed(2)} km bort`;
         } else stopDistance.textContent = '';
-        stopAreaEl.textContent = currentStopAreaId ? `Stop area: ${currentStopAreaId}` : '';
+        stopAreaEl.textContent = currentStopPointId ? `StopPoint: ${currentStopPointId}` : '';
         stopFavoriteStar.textContent = isFavorite(tempSite.id) ? '⭐' : '☆';
         stopInfo.classList.add('show');
-        showLocationControls(true);
+        topSupport.style.display = 'flex';
         loading.classList.remove('show');
         getDeparturesFromStops([tempSite], true);
       } catch (err) { loading.classList.remove('show'); showError('Kunde inte hitta hållplats'); console.error('Fel vid hämtning av stop-points eller sites:', err); }
@@ -836,7 +758,7 @@
       } else stopDistance.textContent = '';
       stopFavoriteStar.textContent = isFavorite(stop.id) ? '⭐' : '☆';
       stopInfo.classList.add('show');
-      showLocationControls(true);
+      topSupport.style.display = 'flex';
       const stopsToFetch = [stop];
       // När användaren explicit visar en site, nollställ stop area och stop-point (vi använder sites-direkt)
       currentStopAreaId = null;
@@ -879,7 +801,7 @@
         const stop = allStops.find(s => s.id === stopId);
         if (stop && toggleFavorite(stop)) {
           star.textContent = isFavorite(stopId) ? '⭐' : '☆';
-          setTimeout(() => { searchContainer.classList.remove('show'); searchInput.value = ''; suggestions.innerHTML = ''; suggestions.classList.remove('show'); lastSearchResults = ''; setActiveButton(null); currentMode = 'none'; showLocationControls(false); }, 300);
+          setTimeout(() => { searchContainer.classList.remove('show'); searchInput.value = ''; suggestions.innerHTML = ''; suggestions.classList.remove('show'); lastSearchResults = ''; setActiveButton(null); currentMode = 'none'; }, 300);
         }
         return;
       }
@@ -887,7 +809,6 @@
       if (item && item.dataset.id) {
         const stop = allStops.find(s => s.id == item.dataset.id);
         if (stop) {
-          // När användaren väljer en site direkt så rensas stop area och stop-point
           currentStopAreaId = null;
           currentStopPointId = null;
           stopAreaEl.textContent = '';
@@ -913,7 +834,6 @@
       updateFavoritesInfo();
       currentMode = 'search';
       setActiveButton(searchBtn);
-      showLocationControls(false);
     });
 
     function setActiveButton(buttonEl) {
@@ -949,7 +869,6 @@
         currentMode = 'favorites';
         setActiveButton(favoritesBtn);
       }
-      showLocationControls(false);
     });
 
     function requestLocationAndFindNearest() {
@@ -973,7 +892,6 @@
           showError(message);
           setActiveButton(null);
           currentMode = 'none';
-          showLocationControls(false);
         },
         { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
       );
@@ -981,35 +899,12 @@
 
     locationBtn.addEventListener('click', requestLocationAndFindNearest);
 
-    function showLocationControls(show) {
-      if (show) { locationControls.classList.add('show'); locationControls.setAttribute('aria-hidden', 'false'); updateDirButtons(); }
-      else { locationControls.classList.remove('show'); locationControls.setAttribute('aria-hidden', 'true'); }
-    }
-
-    function updateDirButtons() {
-      [dirBoth, dir1, dir2].forEach(b => { b.classList.remove('active'); b.setAttribute('aria-checked', 'false'); });
-      if (locationDirection === 0) { dirBoth.classList.add('active'); dirBoth.setAttribute('aria-checked', 'true'); }
-      else if (locationDirection === 1) { dir1.classList.add('active'); dir1.setAttribute('aria-checked', 'true'); }
-      else if (locationDirection === 2) { dir2.classList.add('active'); dir2.setAttribute('aria-checked', 'true'); }
-    }
-
-    [dirBoth, dir1, dir2].forEach(btn => {
-      btn.addEventListener('click', () => {
-        const dir = parseInt(btn.dataset.dir, 10);
-        if (Number.isNaN(dir)) return;
-        if (locationDirection === dir) return;
-        locationDirection = dir;
-        updateDirButtons();
-        if (currentMode === 'location' && currentStop) getDeparturesFromStops([currentStop], true);
-      });
-    });
-
     window.addEventListener('DOMContentLoaded', () => {
       updateFavoritesBottom();
       updateFavoritesInfo();
       setActiveButton(null);
       currentMode = 'none';
-      showLocationControls(false);
+      topSupport.style.display = 'none';
     });
 
     function showError(message) { error.textContent = message; error.classList.add('show'); setTimeout(() => error.classList.remove('show'), 5000); }
