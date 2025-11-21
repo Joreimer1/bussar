@@ -26,6 +26,9 @@
   .button-group{display:flex;gap:10px;margin-bottom:12px}
   button{flex:1;background:var(--accent);border:0;color:#e2e8f0;padding:10px;border-radius:10px;cursor:pointer;font-weight:600}
   button.secondary{background:var(--accent)}
+  /* Active button: white frame */
+  button.active{outline:3px solid #ffffff;outline-offset:2px;border-radius:10px}
+
   /* Search row */
   .search-container{display:none;margin-bottom:12px}
   .search-container.show{display:block}
@@ -188,11 +191,26 @@ const departuresCache = {};
 const DEPARTURES_TTL = 20_000;
 let countdownInterval = null;
 
-function saveFavorites(){ localStorage.setItem('sl_favorites_sp', JSON.stringify(favorites)); }
+function saveFavorites(){ localStorage.setItem('sl_favorites_sp', JSON.stringify(favorites)); refreshAllStars(); }
 function showLoading(v){ loading.style.display = v ? 'block' : 'none'; }
 function showError(msg){ error.textContent = msg; error.style.display = 'block'; setTimeout(()=>error.style.display='none',5000); }
 function escapeHtml(s){ if(!s) return ''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;'); }
 function debounce(fn, wait=250){ let t=null; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a),wait); }; }
+
+/* Sync stars in suggestions and top star */
+function refreshAllStars(){
+  // suggestions stars
+  document.querySelectorAll('.suggestion-item .favorite-star').forEach(el=>{
+    const id = el.dataset.id;
+    const found = favorites.some(f=>String(f.stopPointId)===String(id));
+    el.textContent = found ? '⭐' : '☆';
+  });
+  // top star
+  if(stopFavoriteStar){
+    const idx = currentStopPointId ? favorites.findIndex(f=>String(f.stopPointId)===String(currentStopPointId)) : -1;
+    stopFavoriteStar.textContent = (idx>-1) ? '⭐' : '☆';
+  }
+}
 
 /* Load caches */
 async function loadSites(){
@@ -338,7 +356,12 @@ async function findNearestStop(userLat,userLon){
     currentStop = matchedSites.length>0 ? matchedSites[0] : { id: nearest.site_id || ('sp-'+(nearest.id||Math.random())), name: displayName };
     currentMode = 'location';
     setActiveButton(locationBtn);
+    // Hide favoritesCard when Plats is active
+    favoritesCard.style.display = 'none';
     showLoading(false);
+
+    // ensure star state matches
+    refreshAllStars();
 
     if(matchedSites.length>0) getDeparturesFromSitesWithFiltering(matchedSites, { stopPointId: currentStopPointId }, true);
     else getDeparturesFromSitesWithFiltering([currentStop], { stopPointId: currentStopPointId }, true);
@@ -400,10 +423,10 @@ suggestions.addEventListener('click', async (ev)=>{
     const spId = star.dataset.id; await loadStopPoints();
     const sp = allStopPoints.find(p=>String(p.id)===String(spId)); if(!sp) return;
     const idx = favorites.findIndex(f=>String(f.stopPointId)===String(spId));
-    if(idx>-1){ favorites.splice(idx,1); saveFavorites(); star.textContent='☆'; updateFavoritesUI(); return; }
+    if(idx>-1){ favorites.splice(idx,1); saveFavorites(); refreshAllStars(); updateFavoritesUI(); return; }
     const stopAreaId = sp.stop_area_id || sp.stopAreaId || sp.parentId || sp.site_id || null;
     favorites.push({ stopPointId: sp.id, name: sp.name || '', stopAreaId: stopAreaId?String(stopAreaId):null, lines: '' });
-    saveFavorites(); star.textContent='⭐'; updateFavoritesUI(); return;
+    saveFavorites(); refreshAllStars(); updateFavoritesUI(); return;
   }
   const item = ev.target.closest('.suggestion-item');
   if(item){
@@ -421,6 +444,10 @@ suggestions.addEventListener('click', async (ev)=>{
     stopInfo.style.display='block'; topSupport.style.display='flex';
     currentStop = matchedSites.length>0 ? matchedSites[0] : { id: sp.site_id || ('sp-'+sp.id), name: sp.name };
     currentMode='location'; setActiveButton(locationBtn);
+    // hide favoritesCard when selecting a stop via search
+    favoritesCard.style.display = 'none';
+    // ensure top star sync
+    refreshAllStars();
     if(matchedSites.length>0) getDeparturesFromSitesWithFiltering(matchedSites, { stopPointId: currentStopPointId }, true);
     else getDeparturesFromSitesWithFiltering([currentStop], { stopPointId: currentStopPointId }, true);
     searchContainer.classList.remove('show'); suggestions.style.display='none'; searchInput.value='';
@@ -441,6 +468,8 @@ function updateFavoritesUI(){
     favoritesCard.style.display='block';
   } else { favoritesListBottom.innerHTML=''; favoritesCard.style.display='none'; }
   attachFavListeners();
+  // sync stars after updating favorites UI
+  refreshAllStars();
 }
 
 function attachFavListeners(){
@@ -537,14 +566,38 @@ favoritesBtn.addEventListener('click', ()=>{
 });
 
 
-searchBtn.addEventListener('click', async ()=>{ searchContainer.classList.add('show'); suggestions.style.display='none'; searchInput.value=''; lastSearchResults=''; await loadStopPoints(); searchInput.focus(); currentMode='search'; setActiveButton(searchBtn); });
+searchBtn.addEventListener('click', async ()=>{
+  // show search; hide favorites section inside search
+  searchContainer.classList.add('show');
+  suggestions.style.display='none';
+  searchInput.value='';
+  lastSearchResults='';
+  await loadStopPoints();
+  searchInput.focus();
+  currentMode='search';
+  setActiveButton(searchBtn);
+  // When search is active, remove favorites sections
+  favoritesInfo.textContent = '';
+  favoritesList.innerHTML = '';
+  // Also hide global favoritesCard while search is active
+  favoritesCard.style.display = 'none';
+});
 
-stopFavoriteStar && stopFavoriteStar.addEventListener('click', async ()=>{ if(!currentStopPointId){ showError('Ingen stop-point vald'); return; } const idx = favorites.findIndex(f=>String(f.stopPointId)===String(currentStopPointId)); if(idx>-1){ favorites.splice(idx,1); saveFavorites(); stopFavoriteStar.textContent='☆'; updateFavoritesUI(); return; } await loadStopPoints(); const sp = allStopPoints.find(p=>String(p.id)===String(currentStopPointId)); const stopAreaId = sp && (sp.stop_area_id||sp.stopAreaId||sp.parentId||sp.site_id) ? String(sp.stop_area_id||sp.stopAreaId||sp.parentId||sp.site_id) : (currentStopAreaId||null); favorites.push({ stopPointId: currentStopPointId, name: sp?sp.name:(currentStop && currentStop.name?currentStop.name:''), stopAreaId: stopAreaId, lines: '' }); saveFavorites(); stopFavoriteStar.textContent='⭐'; updateFavoritesUI(); });
+stopFavoriteStar && stopFavoriteStar.addEventListener('click', async ()=>{
+  if(!currentStopPointId){ showError('Ingen stop-point vald'); return; }
+  const idx = favorites.findIndex(f=>String(f.stopPointId)===String(currentStopPointId));
+  if(idx>-1){ favorites.splice(idx,1); saveFavorites(); stopFavoriteStar.textContent='☆'; updateFavoritesUI(); return; }
+  await loadStopPoints();
+  const sp = allStopPoints.find(p=>String(p.id)===String(currentStopPointId));
+  const stopAreaId = sp && (sp.stop_area_id||sp.stopAreaId||sp.parentId||sp.site_id) ? String(sp.stop_area_id||sp.stopAreaId||sp.parentId||sp.site_id) : (currentStopAreaId||null);
+  favorites.push({ stopPointId: currentStopPointId, name: sp?sp.name:(currentStop && currentStop.name?currentStop.name:''), stopAreaId: stopAreaId, lines: '' });
+  saveFavorites(); stopFavoriteStar.textContent='⭐'; updateFavoritesUI();
+});
 
 clearSearchBtn.addEventListener('click', ()=>{ searchInput.value=''; suggestions.style.display='none'; searchInput.focus(); lastSearchResults=''; });
 
 /* Init */
-(async function init(){ await loadSites(); await loadStopPoints(); updateFavoritesUI(); setActiveButton(null); topSupport.style.display = 'none'; })();
+(async function init(){ await loadSites(); await loadStopPoints(); updateFavoritesUI(); setActiveButton(null); topSupport.style.display = 'none'; refreshAllStars(); })();
 </script>
 </body>
 </html>
