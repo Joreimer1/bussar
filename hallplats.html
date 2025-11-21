@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+<title>Hållplatsavgångar</title>
+
+<!-- Leaflet CSS -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
+
+<style>
+  /* Bas */
+  *{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    --bg:#2d3748;
+    --card:#1a202c;
+    --muted:#9fb0c8;
+    --muted-2:#a8b9c8;
+    --accent:#4a5568;
+    --input-bg:#162029;
+    --input-border:#355269;
+    --remove-1:#ff6b6b;
+    --remove-2:#e94b4b;
+    --white:#ffffff;
+  }
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;background:var(--bg);color:#e2e8f0;padding:12px;min-height:100vh}
+  .container{max-width:520px;margin:0 auto}
+  .card{background:var(--card);padding:18px;border-radius:12px;margin-bottom:14px;box-shadow:0 8px 24px rgba(0,0,0,.38)}
+  h1{font-size:20px;text-align:center;font-weight:500;margin-bottom:12px;color:#e6eef8}
+  .button-group{display:flex;gap:10px;margin-bottom:12px}
+  button{flex:1;background:var(--accent);border:0;color:#e2e8f0;padding:10px;border-radius:10px;cursor:pointer;font-weight:600}
+  button.secondary{background:var(--accent)}
+  /* Active button: white frame */
+  button.active{outline:3px solid #ffffff;outline-offset:2px;border-radius:10px}
+
+  /* Search row */
+  .search-container{display:none;margin-bottom:12px}
+  .search-container.show{display:block}
+  .search-row{display:flex;gap:10px;align-items:center;padding:6px 0}
+  .search-input{
+    flex:1 1 68%;
+    margin-left:12px;
+    padding:12px 14px;border-radius:10px;border:1px solid #324957;background:#1f2b33;color:var(--white);
+    box-shadow:0 6px 18px rgba(0,0,0,0.32);font-size:15px;outline:none;
+  }
+  .search-input::placeholder{color:var(--muted);opacity:.95}
+  .action-col{flex:0 0 28%;display:flex;align-items:center;justify-content:center}
+  .remove-btn{
+    min-width:110px;background:linear-gradient(180deg,var(--remove-1),var(--remove-2));color:var(--white);
+    border:0;padding:10px 12px;border-radius:10px;font-weight:800;box-shadow:0 8px 18px rgba(233,75,75,0.22);
+  }
+
+  /* Suggestions / favorites layout */
+  .suggestions{margin-top:10px;max-height:160px;overflow:auto;border:1px solid #2f3b46;background:#142026;border-radius:10px;display:none}
+  .suggestion-item{padding:12px;border-bottom:1px solid #22313a;display:flex;gap:12px;align-items:flex-start;cursor:pointer}
+  .suggestion-left{flex:1;display:flex;flex-direction:column;gap:6px}
+  .suggestion-name{font-weight:700;color:#eaf4ff}
+  .suggestion-id{font-size:13px;color:var(--muted-2)}
+  .suggestion-note{font-size:13px;color:var(--muted)}
+  .favorite-star{font-size:20px;cursor:pointer;padding:6px;color:#ffd76a}
+
+  /* Favorite list */
+  .favorites-list{display:flex;flex-direction:column;gap:10px;margin-top:10px}
+  .favorite-item{display:flex;padding:12px;border-radius:10px;background:#101820;border:1px solid #24333d;align-items:flex-start;gap:12px}
+  .favorite-left{flex:1;display:flex;flex-direction:column;gap:6px}
+  .favorite-name{font-weight:700;color:#ffffff}
+  .favorite-id{font-size:13px;color:var(--muted-2)}
+  .favorite-lines{font-size:13px;color:var(--muted)}
+  .fav-actions{display:flex;flex-direction:column;gap:8px;align-items:center;justify-content:center;flex:0 0 30%}
+  .fav-lines-input{width:120px;padding:8px;border-radius:8px;border:1px solid var(--input-border);background:var(--input-bg);color:#e6f0f8;text-align:center}
+  .remove-small{background:linear-gradient(180deg,var(--remove-1),var(--remove-2));color:var(--white);border:0;padding:8px 10px;border-radius:8px;font-weight:700}
+
+  /* Map container inside search */
+  .map-container{margin-top:10px;border-radius:10px;overflow:hidden;border:1px solid #23343d;display:none}
+  #resultsMap{width
