@@ -581,6 +581,8 @@ searchBtn.addEventListener('click', async ()=>{
   favoritesList.innerHTML = '';
   // Also hide global favoritesCard while search is active
   favoritesCard.style.display = 'none';
+  // Hide departures card while search is active
+  departuresCard.style.display = 'none';
 });
 
 stopFavoriteStar && stopFavoriteStar.addEventListener('click', async ()=>{
