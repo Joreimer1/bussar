@@ -96,7 +96,7 @@
 <body>
   <div class="container">
     <div class="card" id="topCard">
-      <h1>SL Avgångar v2</h1>
+      <h1>SL Avgångar</h1>
 
       <div class="button-group">
         <button id="locationBtn">📍 Plats</button>
@@ -154,9 +154,7 @@
   </div>
 
 <script>
-/* FULL funktionalitet bibehållen (Plats, Sök på stop-points, Favoriter som stop-points, filter på linjer)
-   Jag har bevarat och integrerat tidigare logik. */
-
+/* Fullständig, fungerande klientlogik */
 const locationBtn = document.getElementById('locationBtn');
 const favoritesBtn = document.getElementById('favoritesBtn');
 const searchBtn = document.getElementById('searchBtn');
@@ -434,12 +432,12 @@ function updateFavoritesUI(){
   if(favorites.length>0){
     favoritesInfo.textContent = `Favoriter (${favorites.length})`;
     favoritesList.innerHTML = favorites.map(f=>{
-      const linesText = f.lines && f.lines.trim()!=='' ? escapeHtml(f.lines) : 'Ingen';
+      const linesText = f.lines && f.lines.trim()!=='' ? escapeHtml(f.lines) : 'Alla';
       return `<div class="favorite-item" data-id="${escapeHtml(f.stopPointId)}"><div class="favorite-left"><div class="favorite-name">⭐ ${escapeHtml(f.name||'')}</div><div class="favorite-id">Hållplats nr: ${escapeHtml(f.stopPointId)}</div><div class="favorite-lines">Valda linjer: ${linesText}</div></div><div class="fav-actions"><input class="fav-lines-input" data-id="${escapeHtml(f.stopPointId)}" placeholder="T.ex 2,57" value="${escapeHtml(f.lines||'')}" /><button class="remove-small" data-id="${escapeHtml(f.stopPointId)}">Ta bort</button></div></div>`;
     }).join('');
   } else { favoritesInfo.textContent = 'Inga favoriter sparade. Klicka på stjärnan i sökresultat för att spara.'; favoritesList.innerHTML = ''; }
   if(favorites.length>0){
-    favoritesListBottom.innerHTML = favorites.map(f=>{ const linesText = f.lines && f.lines.trim()!=='' ? escapeHtml(f.lines) : 'Ingen'; return `<div class="favorite-item" data-id="${escapeHtml(f.stopPointId)}"><div class="favorite-left"><div class="favorite-name">⭐ ${escapeHtml(f.name||'')}</div><div class="favorite-id">Hållplats nr: ${escapeHtml(f.stopPointId)}</div><div class="favorite-lines">Valda linjer: ${linesText}</div></div><div class="fav-actions"><input class="fav-lines-input" data-id="${escapeHtml(f.stopPointId)}" placeholder="T.ex 2,57" value="${escapeHtml(f.lines||'')}" /><button class="remove-small" data-id="${escapeHtml(f.stopPointId)}">Ta bort</button></div></div>` }).join('');
+    favoritesListBottom.innerHTML = favorites.map(f=>{ const linesText = f.lines && f.lines.trim()!=='' ? escapeHtml(f.lines) : 'Alla'; return `<div class="favorite-item" data-id="${escapeHtml(f.stopPointId)}"><div class="favorite-left"><div class="favorite-name">⭐ ${escapeHtml(f.name||'')}</div><div class="favorite-id">Hållplats nr: ${escapeHtml(f.stopPointId)}</div><div class="favorite-lines">Valda linjer: ${linesText}</div></div><div class="fav-actions"><input class="fav-lines-input" data-id="${escapeHtml(f.stopPointId)}" placeholder="T.ex 2,57" value="${escapeHtml(f.lines||'')}" /><button class="remove-small" data-id="${escapeHtml(f.stopPointId)}">Ta bort</button></div></div>` }).join('');
     favoritesCard.style.display='block';
   } else { favoritesListBottom.innerHTML=''; favoritesCard.style.display='none'; }
   attachFavListeners();
