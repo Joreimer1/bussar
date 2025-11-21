@@ -20,6 +20,7 @@
   .suggestion-name{font-weight:600}
   .favorite-star{font-size:20px;cursor:pointer;padding:6px}
   .stop-info{display:none;padding:12px;border:1px solid #4a5568;border-radius:8px;background:#2d3748;margin-bottom:12px}
+  .stop-row{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
   .stop-name{font-weight:600;font-size:16px}
   .stop-distance{color:#a0aec0;font-size:13px}
   .stop-area{color:#9fb0c8;font-size:13px;margin-top:6px}
@@ -64,9 +65,16 @@
       <div class="loading" id="loading"><div class="spinner"></div><div>Hämtar...</div></div>
 
       <div class="stop-info" id="stopInfo">
-        <div class="stop-name" id="stopName"></div>
-        <div class="stop-distance" id="stopDistance"></div>
-        <div class="stop-area" id="stopArea"></div>
+        <div class="stop-row">
+          <div>
+            <div class="stop-name" id="stopName"></div>
+            <div class="stop-distance" id="stopDistance"></div>
+            <div class="stop-area" id="stopArea"></div>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
+            <div id="stopFavoriteStar" class="favorite-star" title="Spara som favorit">☆</div>
+          </div>
+        </div>
       </div>
 
       <div class="support" id="topSupport">
@@ -89,9 +97,7 @@
   </div>
 
 <script>
-/* ------------------------
-   Konfiguration / state
-   ------------------------ */
+/* State and elements */
 const locationBtn = document.getElementById('locationBtn');
 const favoritesBtn = document.getElementById('favoritesBtn');
 const searchBtn = document.getElementById('searchBtn');
@@ -110,71 +116,51 @@ const favoritesInfo = document.getElementById('favoritesInfo');
 const favoritesList = document.getElementById('favoritesList');
 const favoritesCard = document.getElementById('favoritesCard');
 const favoritesListBottom = document.getElementById('favoritesListBottom');
-const stopFavoriteStar = document.getElementById('stopFavoriteStar'); // may be null in this layout
+const stopFavoriteStar = document.getElementById('stopFavoriteStar');
 const topSupport = document.getElementById('topSupport');
 
-let allSites = [];         // sites from /v1/sites?expand=true
-let allStopPoints = [];    // stop-points from /v1/stop-points
-// favorites stored as stop-point objects: { stopPointId, name, stopAreaId, lines }
-let favorites = JSON.parse(localStorage.getItem('sl_favorites_sp') || '[]');
-
-let currentMode = 'none'; // 'none'|'location'|'favorites'|'search'
-let currentStop = null;   // representative site or temp site used in UI
+let allSites = [];
+let allStopPoints = [];
+let favorites = JSON.parse(localStorage.getItem('sl_favorites_sp') || '[]'); // stop-point favorites
+let currentMode = 'none';
+let currentStop = null;
 let currentStopPointId = null;
 let currentStopAreaId = null;
 
 const departuresCache = {};
-const DEPARTURES_TTL = 20_000;
+const DEPARTURES_TTL = 20000;
+let countdownInterval = null;
 
-/* ---------- helpers ---------- */
-function dbg(...args){ /* console.log(...args) */ }
+/* Helpers */
 function saveFavorites(){ localStorage.setItem('sl_favorites_sp', JSON.stringify(favorites)); }
-function showLoading(show){ loading.style.display = show ? 'block' : 'none'; }
+function showLoading(v){ loading.style.display = v ? 'block' : 'none'; }
 function showError(msg){ errorEl.textContent = msg; errorEl.style.display = 'block'; setTimeout(()=>errorEl.style.display='none',5000); }
 function escapeHtml(s){ if(!s) return ''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;'); }
+function debounce(fn, wait=250){ let t=null; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a),wait); }; }
 
-function debounce(fn, wait=300){
-  let t=null; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a),wait); };
-}
-
-/* ---------- load caches ---------- */
+/* Load caches */
 async function loadSites(){
   const cached = localStorage.getItem('sl_sites_cache');
   const cacheTime = localStorage.getItem('sl_sites_cache_time');
   const now = Date.now();
   if(cached && cacheTime && (now - parseInt(cacheTime)) < 24*60*60*1000){ allSites = JSON.parse(cached); return; }
-  try{
-    const r = await fetch('https://transport.integration.sl.se/v1/sites?expand=true');
-    allSites = await r.json();
-    localStorage.setItem('sl_sites_cache', JSON.stringify(allSites));
-    localStorage.setItem('sl_sites_cache_time', String(Date.now()));
-  }catch(e){ console.error('loadSites',e); }
+  try{ const r = await fetch('https://transport.integration.sl.se/v1/sites?expand=true'); allSites = await r.json(); localStorage.setItem('sl_sites_cache', JSON.stringify(allSites)); localStorage.setItem('sl_sites_cache_time', String(Date.now())); }catch(e){ console.error('loadSites',e); }
 }
-
 async function loadStopPoints(){
   const cached = localStorage.getItem('sl_stoppoints_cache');
   const cacheTime = localStorage.getItem('sl_stoppoints_cache_time');
   const now = Date.now();
   if(cached && cacheTime && (now - parseInt(cacheTime)) < 24*60*60*1000){ allStopPoints = JSON.parse(cached); return; }
-  try{
-    const r = await fetch('https://transport.integration.sl.se/v1/stop-points');
-    allStopPoints = await r.json();
-    localStorage.setItem('sl_stoppoints_cache', JSON.stringify(allStopPoints));
-    localStorage.setItem('sl_stoppoints_cache_time', String(Date.now()));
-  }catch(e){ console.error('loadStopPoints',e); }
+  try{ const r = await fetch('https://transport.integration.sl.se/v1/stop-points'); allStopPoints = await r.json(); localStorage.setItem('sl_stoppoints_cache', JSON.stringify(allStopPoints)); localStorage.setItem('sl_stoppoints_cache_time', String(Date.now())); }catch(e){ console.error('loadStopPoints',e); }
 }
 
-/* ---------- distance ---------- */
 function calculateDistance(lat1,lon1,lat2,lon2){
-  const R=6371;
-  const dLat=(lat2-lat1)*Math.PI/180;
-  const dLon=(lon2-lon1)*Math.PI/180;
+  const R=6371; const dLat=(lat2-lat1)*Math.PI/180; const dLon=(lon2-lon1)*Math.PI/180;
   const a=Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
-  const c=2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
-  return R*c;
+  const c=2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a)); return R*c;
 }
 
-/* ---------- departures fetch ---------- */
+/* Departures */
 async function fetchDeparturesForSite(site, force=false){
   const siteId = site.id;
   const cached = departuresCache[siteId];
@@ -187,19 +173,17 @@ async function fetchDeparturesForSite(site, force=false){
     const deps = json.departures || [];
     departuresCache[siteId] = { ts: now, data: deps };
     return { stop: site, departures: deps };
-  }catch(e){ console.error('fetchDeparturesForSite', e); return { stop: site, departures: [] }; }
+  }catch(e){ console.error('fetchDeparturesForSite',e); return { stop: site, departures: [] }; }
 }
 
-/* helper: match departure -> stop point id */
 function departureMatchesStopPoint(dep, stopPointId){
-  if(!stopPointId) return true;
-  if(!dep) return false;
+  if(!stopPointId) return true; if(!dep) return false;
   if(dep.stop_point && String(dep.stop_point)===String(stopPointId)) return true;
   if(dep.stopPointId && String(dep.stopPointId)===String(stopPointId)) return true;
   if(dep.stop_point_id && String(dep.stop_point_id)===String(stopPointId)) return true;
   const sp = dep.stop_point || dep.stopPoint || dep.stopPointObj || dep.stop_point_obj;
   if(sp){
-    if(typeof sp === 'object'){
+    if(typeof sp==='object'){
       if(sp.id && String(sp.id)===String(stopPointId)) return true;
       if(sp.stop_point_id && String(sp.stop_point_id)===String(stopPointId)) return true;
       if(sp.parentId && String(sp.parentId)===String(stopPointId)) return true;
@@ -210,14 +194,13 @@ function departureMatchesStopPoint(dep, stopPointId){
   return false;
 }
 
-/* helper: match departure -> stop area id (fallback) */
 function departureMatchesStopArea(dep, stopAreaId){
   if(!stopAreaId) return true;
   if(dep.stop_area && String(dep.stop_area)===String(stopAreaId)) return true;
   if(dep.stopAreaId && String(dep.stopAreaId)===String(stopAreaId)) return true;
   if(dep.stop_area_id && String(dep.stop_area_id)===String(stopAreaId)) return true;
   const sp = dep.stop_point || dep.stopPoint || dep.stopPointId;
-  if(sp && typeof sp === 'object'){
+  if(sp && typeof sp==='object'){
     if(sp.stop_area_id && String(sp.stop_area_id)===String(stopAreaId)) return true;
     if(sp.parentId && String(sp.parentId)===String(stopAreaId)) return true;
     if(sp.site_id && String(sp.site_id)===String(stopAreaId)) return true;
@@ -229,141 +212,89 @@ function departureMatchesStopArea(dep, stopAreaId){
   return false;
 }
 
-/* ---------- display departures ---------- */
-let countdownInterval = null;
+/* Display */
 function displayDepartures(departures){
   function update(){
     const now = new Date();
-    const valid = departures.filter(dep=>{
-      const expected = new Date(dep.expected);
-      return Math.floor((expected - now)/1000) >= 0;
-    });
-    if(valid.length===0){
-      departuresList.innerHTML = '<div class="no-departures">Inga fler avgångar</div>';
-      if(countdownInterval) clearInterval(countdownInterval);
-      return;
-    }
-    const out = valid.slice(0,12).map(dep=>{
+    const valid = departures.filter(dep => Math.floor((new Date(dep.expected) - now)/1000) >= 0);
+    if(valid.length===0){ departuresList.innerHTML = '<div class="no-departures">Inga fler avgångar</div>'; if(countdownInterval) clearInterval(countdownInterval); return; }
+    departuresList.innerHTML = valid.slice(0,12).map(dep=>{
       const expected = new Date(dep.expected);
       const totalSeconds = Math.max(0, Math.floor((expected - new Date())/1000));
-      const min = Math.floor(totalSeconds/60);
-      const sec = totalSeconds%60;
-      const timeDisplay = totalSeconds < 60 ? `${totalSeconds}s` : (min===1? `1 min ${sec}s`:`${min} min ${sec}s`);
+      const min = Math.floor(totalSeconds/60); const sec = totalSeconds%60;
+      const timeDisplay = totalSeconds<60?`${totalSeconds}s`:(min===1?`1 min ${sec}s`:`${min} min ${sec}s`);
       const clock = expected.toLocaleTimeString('sv-SE',{hour:'2-digit',minute:'2-digit'});
-      let arrow = '';
-      if(dep.direction_code===1) arrow='⬆️'; else if(dep.direction_code===2) arrow='⬇️';
-      const transport = (dep.line && dep.line.transport_mode) ? dep.line.transport_mode : dep.transport_mode;
-      return `<div class="departure-item">
-                <div style="min-width:28px;text-align:center">${arrow}</div>
-                <div style="flex:1">
-                  <div class="departure-line">${dep.line && dep.line.designation?dep.line.designation:''} ${transport?transport:''}</div>
-                  <div class="departure-destination">${escapeHtml(dep.destination||'')}</div>
-                  <div class="departure-from">från ${escapeHtml(dep.fromStop||'')}</div>
-                </div>
-                <div style="text-align:right">
-                  <div class="departure-time">${timeDisplay}</div>
-                  <div style="font-size:11px;color:#a0aec0">${clock}</div>
-                </div>
-              </div>`;
+      let arrow=''; if(dep.direction_code===1) arrow='⬆️'; else if(dep.direction_code===2) arrow='⬇️';
+      const transport = (dep.line && dep.line.transport_mode)?dep.line.transport_mode:dep.transport_mode||'';
+      return `<div class="departure-item"><div style="min-width:28px;text-align:center">${arrow}</div><div style="flex:1"><div class="departure-line">${dep.line && dep.line.designation?dep.line.designation:''} ${transport}</div><div class="departure-destination">${escapeHtml(dep.destination||'')}</div><div class="departure-from">från ${escapeHtml(dep.fromStop||'')}</div></div><div style="text-align:right"><div class="departure-time">${timeDisplay}</div><div style="font-size:11px;color:#a0aec0">${clock}</div></div></div>`;
     }).join('');
-    departuresList.innerHTML = out;
   }
   update();
-  departuresCard.style.display = 'block';
+  departuresCard.style.display='block';
   if(countdownInterval) clearInterval(countdownInterval);
   countdownInterval = setInterval(update,1000);
 }
 
-/* ---------- find nearest stop-point flow ---------- */
+/* Find nearest stop-point */
 async function findNearestStop(userLat,userLon){
   try{
     showLoading(true);
     await loadStopPoints();
     await loadSites();
-    // find nearest stop-point
     let nearest=null; let minD=Infinity;
-    allStopPoints.forEach(pt=>{
-      if(!(pt.lat && pt.lon)) return;
-      const d = calculateDistance(userLat,userLon,pt.lat,pt.lon);
-      if(d < minD){ minD=d; nearest=pt; }
-    });
+    allStopPoints.forEach(pt=>{ if(!(pt.lat && pt.lon)) return; const d=calculateDistance(userLat,userLon,pt.lat,pt.lon); if(d<minD){ minD=d; nearest=pt; } });
     if(!nearest){ showLoading(false); showError('Ingen stop-point hittades'); return; }
-    // determine stop area and stop-point id
     const stopAreaId = nearest.stop_area_id || nearest.stopAreaId || nearest.parentId || nearest.site_id || null;
-    currentStopAreaId = stopAreaId ? String(stopAreaId) : null;
+    currentStopAreaId = stopAreaId?String(stopAreaId):null;
     currentStopPointId = nearest.id || nearest.stop_point_id || nearest.stopPointId || null;
 
-    // find all sites for that stop area
     let matchedSites = [];
     if(currentStopAreaId){
-      matchedSites = allSites.filter(s=>{
-        const candidates = [s.stop_area_id, s.stopAreaId, s.parentId, s.site_id];
-        return candidates.some(c=>c && String(c)===String(currentStopAreaId));
-      });
+      matchedSites = allSites.filter(s=>{ const cand=[s.stop_area_id,s.stopAreaId,s.parentId,s.site_id]; return cand.some(c=>c && String(c)===String(currentStopAreaId)); });
     }
-    // fallback name match
     if(matchedSites.length===0 && nearest.name){
-      const nm = String(nearest.name).trim().toLowerCase();
-      matchedSites = allSites.filter(s => s.name && s.name.trim().toLowerCase().startsWith(nm));
+      const nm = (nearest.name||'').trim().toLowerCase();
+      matchedSites = allSites.filter(s=> s.name && s.name.trim().toLowerCase().startsWith(nm));
     }
 
-    // update UI
     const displayName = nearest.name || (matchedSites[0] && matchedSites[0].name) || 'Okänd hållplats';
     stopName.textContent = displayName;
-    if(minD !== null){
-      if(minD < 1) stopDistance.textContent = `${Math.round(minD*1000)} meter bort`;
-      else stopDistance.textContent = `${minD.toFixed(2)} km bort`;
-    } else stopDistance.textContent = '';
+    if(minD!==null){ if(minD<1) stopDistance.textContent = `${Math.round(minD*1000)} meter bort`; else stopDistance.textContent = `${minD.toFixed(2)} km bort`; } else stopDistance.textContent='';
     stopAreaEl.textContent = currentStopPointId ? `StopPoint: ${currentStopPointId}` : '';
-    stopInfo.style.display = 'block';
-    topSupport.style.display = 'flex';
-    // set representative currentStop (for UI/favorites compatibility)
+    stopInfo.style.display='block';
+    topSupport.style.display='flex';
     currentStop = matchedSites.length>0 ? matchedSites[0] : { id: nearest.site_id || ('sp-'+(nearest.id||Math.random())), name: displayName };
-    currentMode = 'location';
+    currentMode='location';
     setActiveButton(locationBtn);
     showLoading(false);
 
-    // fetch departures from matchedSites (or temp site)
     if(matchedSites.length>0) getDeparturesFromSitesWithFiltering(matchedSites, { stopPointId: currentStopPointId }, true);
     else getDeparturesFromSitesWithFiltering([currentStop], { stopPointId: currentStopPointId }, true);
   }catch(e){ showLoading(false); showError('Kunde inte hitta hållplats'); console.error(e); }
 }
 
-/* ---------- get departures and apply filters ---------- */
-/*
-  stops: array of site objects to query
-  opts: { stopPointId, stopAreaId, favoriteLines, favoriteStopPointId } - used for filtering
-*/
+/* Get departures with filters */
 async function getDeparturesFromSitesWithFiltering(stops, opts={}, force=false){
   try{
-    showLoading(true);
-    departuresCard.style.display = 'none';
-    // fetch concurrently
-    const worker = async (s)=> await fetchDeparturesForSite(s, force);
-    const concurrency = 3;
-    const results = [];
-    let i=0;
-    const runners = new Array(concurrency).fill(0).map(async ()=>{
-      while(i<stops.length){
-        const idx = i++;
-        try{ results[idx] = await worker(stops[idx]); }catch(e){ results[idx]=undefined; }
-      }
+    showLoading(true); departuresCard.style.display='none';
+    const worker=async s=>await fetchDeparturesForSite(s, force);
+    const concurrency=3; const results=[]; let i=0;
+    const runners=new Array(concurrency).fill(0).map(async ()=>{
+      while(i<stops.length){ const idx=i++; try{ results[idx]=await worker(stops[idx]); }catch(e){ results[idx]=undefined; } }
     });
     await Promise.all(runners);
     showLoading(false);
 
-    let allDeps = [];
+    let aggregated=[];
     results.forEach(res=>{
       if(!res) return;
       res.departures.forEach(dep=>{
         dep.fromStop = res.stop.name;
-        // 1) If explicit stopPoint filtering requested, require departure to reference that stop point
         if(opts && opts.stopPointId){
           if(!departureMatchesStopPoint(dep, opts.stopPointId)) return;
         } else if(opts && opts.stopAreaId){
           if(!departureMatchesStopArea(dep, opts.stopAreaId)) return;
         }
-        // 2) If favorite-specific lines filter is present, apply it
         if(opts && opts.favoriteLines){
           const allowed = String(opts.favoriteLines).split(',').map(s=>s.trim()).filter(Boolean);
           if(allowed.length>0){
@@ -371,71 +302,51 @@ async function getDeparturesFromSitesWithFiltering(stops, opts={}, force=false){
             if(!allowed.includes(designation)) return;
           }
         }
-        allDeps.push(dep);
+        aggregated.push(dep);
       });
     });
 
-    if(allDeps.length===0){
-      departuresList.innerHTML = '<div class="no-departures">Inga avgångar hittades</div>';
-      departuresCard.style.display = 'block';
-      if(countdownInterval) clearInterval(countdownInterval);
-      return;
-    }
-    allDeps.sort((a,b)=> new Date(a.expected) - new Date(b.expected));
-    displayDepartures(allDeps);
+    if(aggregated.length===0){ departuresList.innerHTML='<div class="no-departures">Inga avgångar hittades</div>'; departuresCard.style.display='block'; if(countdownInterval) clearInterval(countdownInterval); return; }
+    aggregated.sort((a,b)=> new Date(a.expected) - new Date(b.expected));
+    displayDepartures(aggregated);
   }catch(e){ showLoading(false); showError('Kunde inte hämta avgångar'); console.error(e); }
 }
 
-/* ---------- search (now on stop-points) ---------- */
+/* Search on stop-points */
 let lastSearchResults = '';
 searchInput.addEventListener('input', debounce(async (e)=>{
   const q = (e.target.value||'').trim().toLowerCase();
-  if(q.length < 2){ suggestions.style.display='none'; favoritesInfo.textContent=''; favoritesList.innerHTML=''; return; }
-  await loadStopPoints(); // ensure loaded
-  // match by name or place
+  if(q.length<2){ suggestions.style.display='none'; favoritesInfo.textContent=''; favoritesList.innerHTML=''; return; }
+  await loadStopPoints();
   const matches = allStopPoints.filter(pt=>{
-    const n = (pt.name||'').toLowerCase();
-    const note = (pt.place||pt.town||'').toLowerCase();
+    const n=(pt.name||'').toLowerCase();
+    const note=(pt.place||pt.town||'').toLowerCase();
     return n.includes(q) || note.includes(q);
   }).slice(0,12);
   const newHash = JSON.stringify(matches.map(m=>m.id));
-  if(newHash === lastSearchResults) return;
+  if(newHash===lastSearchResults) return;
   lastSearchResults = newHash;
-  if(matches.length===0){
-    suggestions.innerHTML = '<div class="suggestion-item">Inga resultat</div>';
-    suggestions.style.display = 'block';
-    return;
-  }
+  if(matches.length===0){ suggestions.innerHTML = '<div class="suggestion-item">Inga resultat</div>'; suggestions.style.display='block'; return; }
   suggestions.innerHTML = matches.map(m=>{
     const name = escapeHtml(m.name || '');
     const note = m.place? `<div style="font-size:12px;color:#a0aec0">${escapeHtml(m.place)}</div>` : '';
     const favStar = favorites.some(f=>String(f.stopPointId)===String(m.id)) ? '⭐' : '☆';
-    return `<div class="suggestion-item" data-id="${m.id}" data-lat="${m.lat||''}" data-lon="${m.lon||''}">
-              <div>
-                <div class="suggestion-name">${name}</div>
-                ${note}
-              </div>
-              <div class="favorite-star" data-id="${m.id}">${favStar}</div>
-            </div>`;
+    return `<div class="suggestion-item" data-id="${m.id}" data-lat="${m.lat||''}" data-lon="${m.lon||''}"><div><div class="suggestion-name">${name}</div>${note}</div><div class="favorite-star" data-id="${m.id}">${favStar}</div></div>`;
   }).join('');
-  suggestions.style.display = 'block';
-},250));
+  suggestions.style.display='block';
+},200));
 
-/* clicking suggestions: either add favorite (star) or open stop-point */
+/* Suggestions click: star or open */
 suggestions.addEventListener('click', async (ev)=>{
   const star = ev.target.closest('.favorite-star');
   if(star){
     ev.stopPropagation();
     const spId = star.dataset.id;
+    await loadStopPoints();
     const sp = allStopPoints.find(p=>String(p.id)===String(spId));
     if(!sp) return;
-    // toggle favorite for stop-point
     const idx = favorites.findIndex(f=>String(f.stopPointId)===String(spId));
     if(idx>-1){ favorites.splice(idx,1); saveFavorites(); star.textContent='☆'; updateFavoritesUI(); return; }
-    if(favorites.length>=6){ // allow more favorites if you want, keep a reasonable limit
-      showError('Max antal favoriter uppnått');
-      return;
-    }
     const stopAreaId = sp.stop_area_id || sp.stopAreaId || sp.parentId || sp.site_id || null;
     favorites.push({ stopPointId: sp.id, name: sp.name || '', stopAreaId: stopAreaId?String(stopAreaId):null, lines: '' });
     saveFavorites();
@@ -446,268 +357,140 @@ suggestions.addEventListener('click', async (ev)=>{
   const item = ev.target.closest('.suggestion-item');
   if(item){
     const id = item.dataset.id;
+    await loadStopPoints(); await loadSites();
     const sp = allStopPoints.find(p=>String(p.id)===String(id));
     if(!sp) return;
-    // simulate same flow as findNearestStop but for chosen stop-point
     currentStopPointId = sp.id;
     currentStopAreaId = sp.stop_area_id || sp.stopAreaId || sp.parentId || sp.site_id || null;
-    // try to find sites for area
-    await loadSites();
     let matchedSites = [];
     if(currentStopAreaId){
-      matchedSites = allSites.filter(s=>{
-        const cand = [s.stop_area_id,s.stopAreaId,s.parentId,s.site_id];
-        return cand.some(c=>c && String(c)===String(currentStopAreaId));
-      });
+      matchedSites = allSites.filter(s=>{ const cand=[s.stop_area_id,s.stopAreaId,s.parentId,s.site_id]; return cand.some(c=>c && String(c)===String(currentStopAreaId)); });
     }
-    if(matchedSites.length===0){
-      const nm = (sp.name||'').trim().toLowerCase();
-      matchedSites = allSites.filter(s=> s.name && s.name.trim().toLowerCase().startsWith(nm));
-    }
+    if(matchedSites.length===0 && sp.name){ const nm = (sp.name||'').trim().toLowerCase(); matchedSites = allSites.filter(s=> s.name && s.name.trim().toLowerCase().startsWith(nm)); }
     stopName.textContent = sp.name || (matchedSites[0] && matchedSites[0].name) || 'Okänd';
     stopDistance.textContent = '';
     stopAreaEl.textContent = currentStopPointId ? `StopPoint: ${currentStopPointId}` : '';
-    stopInfo.style.display='block';
-    topSupport.style.display='flex';
+    stopInfo.style.display='block'; topSupport.style.display='flex';
     currentStop = matchedSites.length>0 ? matchedSites[0] : { id: sp.site_id || ('sp-'+sp.id), name: sp.name };
-    currentMode='location';
-    setActiveButton(locationBtn);
-    // fetch departures (sites for area)
+    currentMode='location'; setActiveButton(locationBtn);
     if(matchedSites.length>0) getDeparturesFromSitesWithFiltering(matchedSites, { stopPointId: currentStopPointId }, true);
     else getDeparturesFromSitesWithFiltering([currentStop], { stopPointId: currentStopPointId }, true);
-
-    // hide search
-    searchContainer.classList.remove('show');
-    suggestions.style.display='none';
-    searchInput.value='';
+    searchContainer.classList.remove('show'); suggestions.style.display='none'; searchInput.value='';
   }
 });
 
-/* ---------- favorites UI and behaviour (now stop-points) ---------- */
+/* Favorites UI (stop-point based) */
 function updateFavoritesUI(){
   if(favorites.length>0){
     favoritesInfo.textContent = `Favoriter (${favorites.length})`;
-    favoritesList.innerHTML = favorites.map(f=>{
-      return `<div class="favorite-item" data-id="${escapeHtml(f.stopPointId)}">
-                <div class="favorite-left">
-                  <div class="favorite-name">⭐ ${escapeHtml(f.name||'')}</div>
-                  <input class="fav-lines-input" data-id="${escapeHtml(f.stopPointId)}" placeholder="T.ex 2,57" value="${escapeHtml(f.lines||'')}" style="margin-left:8px" />
-                </div>
-                <button class="remove-favorite" data-id="${escapeHtml(f.stopPointId)}">Ta bort</button>
-              </div>`;
-    }).join('');
-  } else {
-    favoritesInfo.textContent = 'Inga favoriter sparade. Klicka på stjärnan i sökresultat för att spara.';
-    favoritesList.innerHTML = '';
-  }
-  // bottom list
+    favoritesList.innerHTML = favorites.map(f=>`<div class="favorite-item" data-id="${escapeHtml(f.stopPointId)}"><div class="favorite-left"><div class="favorite-name">⭐ ${escapeHtml(f.name||'')}</div><input class="fav-lines-input" data-id="${escapeHtml(f.stopPointId)}" placeholder="T.ex 2,57" value="${escapeHtml(f.lines||'')}" style="margin-left:8px" /></div><button class="remove-favorite" data-id="${escapeHtml(f.stopPointId)}">Ta bort</button></div>`).join('');
+  } else { favoritesInfo.textContent = 'Inga favoriter sparade. Klicka på stjärnan i sökresultat för att spara.'; favoritesList.innerHTML = ''; }
   if(favorites.length>0){
-    favoritesListBottom.innerHTML = favorites.map(f=>{
-      return `<div class="favorite-item" data-id="${escapeHtml(f.stopPointId)}">
-                <div class="favorite-left">
-                  <div class="favorite-name">⭐ ${escapeHtml(f.name||'')}</div>
-                  <input class="fav-lines-input" data-id="${escapeHtml(f.stopPointId)}" placeholder="T.ex 2,57" value="${escapeHtml(f.lines||'')}" />
-                </div>
-                <button class="remove-favorite" data-id="${escapeHtml(f.stopPointId)}">Ta bort</button>
-              </div>`;
-    }).join('');
+    favoritesListBottom.innerHTML = favorites.map(f=>`<div class="favorite-item" data-id="${escapeHtml(f.stopPointId)}"><div class="favorite-left"><div class="favorite-name">⭐ ${escapeHtml(f.name||'')}</div><input class="fav-lines-input" data-id="${escapeHtml(f.stopPointId)}" placeholder="T.ex 2,57" value="${escapeHtml(f.lines||'')}" /></div><button class="remove-favorite" data-id="${escapeHtml(f.stopPointId)}">Ta bort</button></div>`).join('');
     favoritesCard.style.display='block';
-  } else {
-    favoritesListBottom.innerHTML='';
-    favoritesCard.style.display='none';
-  }
+  } else { favoritesListBottom.innerHTML=''; favoritesCard.style.display='none'; }
   attachFavListeners();
 }
 
 function attachFavListeners(){
-  // remove
-  document.querySelectorAll('.remove-favorite').forEach(btn=>{
-    btn.onclick = (ev)=>{
-      const id = btn.dataset.id;
-      const idx = favorites.findIndex(f=>String(f.stopPointId)===String(id));
-      if(idx>-1){ favorites.splice(idx,1); saveFavorites(); updateFavoritesUI(); }
-    };
+  document.querySelectorAll('.remove-favorite').forEach(btn=>btn.onclick=()=>{
+    const id = btn.dataset.id; const idx = favorites.findIndex(f=>String(f.stopPointId)===String(id));
+    if(idx>-1){ favorites.splice(idx,1); saveFavorites(); updateFavoritesUI(); }
   });
-  // lines inputs
   document.querySelectorAll('.fav-lines-input').forEach(inp=>{
-    inp.onblur = (e)=>{
-      const id = inp.dataset.id;
-      const val = inp.value.trim();
-      const fav = favorites.find(f=>String(f.stopPointId)===String(id));
-      if(!fav) return;
-      if(val===''){ fav.lines=''; saveFavorites(); return; }
-      const normalized = val.replace(/\s+/g,'');
-      const ok = /^(\d+(,\d+)*)$/.test(normalized);
-      if(!ok){ inp.value = fav.lines || ''; showError('Endast siffror och kommatecken tillåtna i Valda linjer'); return; }
+    inp.onblur = ()=>{
+      const id = inp.dataset.id; const val = inp.value.trim(); const fav = favorites.find(f=>String(f.stopPointId)===String(id));
+      if(!fav) return; if(val===''){ fav.lines=''; saveFavorites(); return; }
+      const normalized = val.replace(/\s+/g,''); if(!/^(\d+(,\d+)*)$/.test(normalized)){ inp.value = fav.lines||''; showError('Endast siffror och kommatecken tillåtna'); return; }
       fav.lines = normalized; saveFavorites();
     };
-    inp.addEventListener('keydown',(ev)=>{ if(ev.key==='Enter'){ ev.preventDefault(); inp.blur(); }});
+    inp.addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); inp.blur(); } });
   });
 }
 
-/* ---------- favorites behaviour when viewing favorites ---------- */
-/*
- For each favorite:
-  - find stop-point in allStopPoints
-  - determine stopAreaId
-  - find sites for that area
-  - call getDeparturesFromSitesWithFiltering(sites, { stopPointId: fav.stopPointId, favoriteLines: fav.lines })
-  - combine results across favorites into one departures list (we call the function per-favorite and collect; for simplicity we'll fetch all sites for all favorites and aggregate filtering by fav)
-*/
+/* Show departures for favorites (aggregate) */
 async function showFavoritesDepartures(){
   try{
-    await loadStopPoints();
-    await loadSites();
-    if(favorites.length===0){
-      departuresList.innerHTML = '<div class="no-departures">Inga favoriter valda</div>';
-      departuresCard.style.display='block';
-      return;
-    }
+    await loadStopPoints(); await loadSites();
+    if(favorites.length===0){ departuresList.innerHTML='<div class="no-departures">Inga favoriter valda</div>'; departuresCard.style.display='block'; return; }
     showLoading(true);
-    // For efficiency: group fetch sites per unique area, but each favorite needs its own filtering on stopPointId & lines.
-    // We'll fetch departures for all involved sites, then for each favorite filter them and append to aggregated list.
-    // 1) collect all required sites (unique)
-    const allSitesToQuery = new Map(); // siteId -> siteObj
-    const favMeta = []; // {fav, sitesForArea}
+    const allSitesToQuery = new Map();
+    const favMeta = [];
     for(const fav of favorites){
       const sp = allStopPoints.find(p=>String(p.id)===String(fav.stopPointId));
       let stopAreaId = fav.stopAreaId || (sp && (sp.stop_area_id||sp.stopAreaId||sp.parentId||sp.site_id)) || null;
       let sitesForArea = [];
       if(stopAreaId){
-        sitesForArea = allSites.filter(s=>{
-          const cand = [s.stop_area_id,s.stopAreaId,s.parentId,s.site_id];
-          return cand.some(c=>c && String(c)===String(stopAreaId));
-        });
+        sitesForArea = allSites.filter(s=>{ const cand=[s.stop_area_id,s.stopAreaId,s.parentId,s.site_id]; return cand.some(c=>c && String(c)===String(stopAreaId)); });
       }
-      // fallback by name if no sites found
-      if(sitesForArea.length===0 && sp && sp.name){
-        const nm = sp.name.trim().toLowerCase();
-        sitesForArea = allSites.filter(s=> s.name && s.name.trim().toLowerCase().startsWith(nm));
-      }
-      // collect sites
+      if(sitesForArea.length===0 && sp && sp.name){ const nm = sp.name.trim().toLowerCase(); sitesForArea = allSites.filter(s=> s.name && s.name.trim().toLowerCase().startsWith(nm)); }
+      if(sitesForArea.length===0){ const rep = { id: (sp && sp.site_id) || (`sp-${fav.stopPointId}`), name: sp?sp.name:'Okänd' }; allSitesToQuery.set(rep.id, rep); sitesForArea = [rep]; }
       sitesForArea.forEach(s=> allSitesToQuery.set(s.id, s));
-      // if no sites found, try a representative temp site based on site_id in stop-point
-      if(sitesForArea.length===0){
-        const rep = { id: (sp && sp.site_id) || (`sp-${fav.stopPointId}`), name: sp?sp.name:'Okänd' };
-        allSitesToQuery.set(rep.id, rep);
-        sitesForArea = [rep];
-      }
       favMeta.push({ fav, sitesForArea, stopAreaId });
     }
-
-    // fetch departures for allSitesToQuery
     const sitesArray = Array.from(allSitesToQuery.values());
-    const worker = async (s)=> await fetchDeparturesForSite(s, true);
-    const concurrency = 3;
-    const results = [];
-    let i=0;
-    const runners = new Array(concurrency).fill(0).map(async ()=>{
-      while(i<sitesArray.length){
-        const idx = i++;
-        try{ results[idx] = await worker(sitesArray[idx]); }catch(e){ results[idx]=undefined; }
-      }
+    const worker = async s=>await fetchDeparturesForSite(s, true);
+    const concurrency = 3; const results=[]; let i=0;
+    const runners=new Array(concurrency).fill(0).map(async ()=>{
+      while(i<sitesArray.length){ const idx=i++; try{ results[idx]=await worker(sitesArray[idx]); }catch(e){ results[idx]=undefined; } }
     });
     await Promise.all(runners);
     showLoading(false);
-
-    // Build a map siteId -> departures
-    const siteDeps = new Map();
-    results.forEach(r=>{ if(r) siteDeps.set(String(r.stop.id), r.departures || []); });
-
-    // For each favorite, collect departures from its sites and filter by stopPointId and lines
-    let aggregated = [];
+    const siteDeps = new Map(); results.forEach(r=>{ if(r) siteDeps.set(String(r.stop.id), r.departures || []); });
+    let aggregated=[];
     for(const meta of favMeta){
-      const fav = meta.fav;
-      const lines = fav.lines && fav.lines.trim() !== '' ? fav.lines.split(',').map(s=>s.trim()).filter(Boolean) : [];
+      const fav = meta.fav; const lines = fav.lines && fav.lines.trim()!=='' ? fav.lines.split(',').map(s=>s.trim()).filter(Boolean) : [];
       for(const site of meta.sitesForArea){
         const deps = siteDeps.get(String(site.id)) || [];
         deps.forEach(dep=>{
-          // require that dep references the stop-point
           if(!departureMatchesStopPoint(dep, fav.stopPointId)) return;
-          // line filter
-          if(lines.length>0){
-            const designation = dep.line && dep.line.designation ? String(dep.line.designation) : String(dep.designation || '');
-            if(!lines.includes(designation)) return;
-          }
+          if(lines.length>0){ const designation = dep.line && dep.line.designation ? String(dep.line.designation) : String(dep.designation || ''); if(!lines.includes(designation)) return; }
           dep.fromStop = site.name || dep.fromStop || '';
           aggregated.push(dep);
         });
       }
     }
-
-    if(aggregated.length===0){
-      departuresList.innerHTML = '<div class="no-departures">Inga avgångar för dina favoriter</div>';
-      departuresCard.style.display='block';
-      return;
-    }
+    if(aggregated.length===0){ departuresList.innerHTML='<div class="no-departures">Inga avgångar för dina favoriter</div>'; departuresCard.style.display='block'; return; }
     aggregated.sort((a,b)=> new Date(a.expected) - new Date(b.expected));
     displayDepartures(aggregated);
   }catch(e){ showLoading(false); showError('Kunde inte hämta favoritsavgångar'); console.error(e); }
 }
 
-/* ---------- setActiveButton ---------- */
+/* UI helpers */
 function setActiveButton(el){
   [locationBtn,favoritesBtn,searchBtn].forEach(b=>b.classList.remove('active'));
-  [departuresCard,favoritesCard,searchContainer,stopInfo].forEach(x=>x.classList.remove('active-result'));
-  if(!el) return;
-  el.classList.add('active');
-  if(el===locationBtn){ if(stopInfo.style.display==='block') stopInfo.classList.add('active-result'); if(departuresCard.style.display!=='none') departuresCard.classList.add('active-result'); }
-  if(el===favoritesBtn){ if(favoritesCard.style.display!=='none') favoritesCard.classList.add('active-result'); if(departuresCard.style.display!=='none') departuresCard.classList.add('active-result'); }
-  if(el===searchBtn){ if(searchContainer.classList.contains('show')) searchContainer.classList.add('active-result'); }
+  if(!el) return; el.classList.add('active');
 }
 
-/* ---------- UI event handlers ---------- */
+/* Events */
 locationBtn.addEventListener('click', ()=>{
   if(!navigator.geolocation){ showError('Geolocation stöds inte av din webbläsare'); return; }
-  showLoading(true);
-  stopInfo.style.display='none';
-  departuresCard.style.display='none';
-  searchContainer.classList.remove('show');
-  navigator.geolocation.getCurrentPosition(pos=>{
-    findNearestStop(pos.coords.latitude, pos.coords.longitude);
-  },err=>{
+  showLoading(true); stopInfo.style.display='none'; departuresCard.style.display='none'; searchContainer.classList.remove('show');
+  navigator.geolocation.getCurrentPosition(pos=>{ findNearestStop(pos.coords.latitude, pos.coords.longitude); }, err=>{
     showLoading(false);
-    let m='';
-    switch(err.code){
-      case err.PERMISSION_DENIED: m='Du nekade tillgång till din position'; break;
-      case err.POSITION_UNAVAILABLE: m='Platsinformation är inte tillgänglig'; break;
-      case err.TIMEOUT: m='Begäran om position tog för lång tid'; break;
-      default: m='Ett okänt fel uppstod';
-    }
+    let m=''; switch(err.code){ case err.PERMISSION_DENIED: m='Du nekade tillgång till din position'; break; case err.POSITION_UNAVAILABLE: m='Platsinformation är inte tillgänglig'; break; case err.TIMEOUT: m='Begäran om position tog för lång tid'; break; default: m='Ett okänt fel uppstod'; }
     showError(m);
   }, { enableHighAccuracy:true, timeout:10000, maximumAge:0 });
 });
 
-favoritesBtn.addEventListener('click', ()=>{
-  searchContainer.classList.remove('show');
-  stopInfo.style.display='none';
-  departuresCard.style.display='none';
-  updateFavoritesUI();
-  currentMode='favorites';
-  setActiveButton(favoritesBtn);
-  // show departures aggregated for favorites
-  showFavoritesDepartures();
-});
+favoritesBtn.addEventListener('click', ()=>{ searchContainer.classList.remove('show'); stopInfo.style.display='none'; departuresCard.style.display='none'; updateFavoritesUI(); currentMode='favorites'; setActiveButton(favoritesBtn); showFavoritesDepartures(); });
 
-searchBtn.addEventListener('click', ()=>{
-  searchContainer.classList.add('show');
-  searchInput.value='';
-  suggestions.style.display='none';
-  lastSearchResults='';
-  searchInput.focus();
-  currentMode='search';
-  setActiveButton(searchBtn);
-});
+searchBtn.addEventListener('click', ()=>{ searchContainer.classList.add('show'); searchInput.value=''; suggestions.style.display='none'; lastSearchResults=''; searchInput.focus(); currentMode='search'; setActiveButton(searchBtn); });
 
-/* init */
-(async function init(){
-  await loadSites();
+stopFavoriteStar && stopFavoriteStar.addEventListener('click', async ()=>{
+  // toggle favorite for currentStopPointId
+  if(!currentStopPointId){ showError('Ingen stop-point vald'); return; }
+  const idx = favorites.findIndex(f=>String(f.stopPointId)===String(currentStopPointId));
+  if(idx>-1){ favorites.splice(idx,1); saveFavorites(); stopFavoriteStar.textContent='☆'; updateFavoritesUI(); return; }
   await loadStopPoints();
-  updateFavoritesUI();
-  setActiveButton(null);
-  topSupport.style.display = 'none';
-})();
+  const sp = allStopPoints.find(p=>String(p.id)===String(currentStopPointId));
+  const stopAreaId = sp && (sp.stop_area_id||sp.stopAreaId||sp.parentId||sp.site_id) ? String(sp.stop_area_id||sp.stopAreaId||sp.parentId||sp.site_id) : (currentStopAreaId||null);
+  favorites.push({ stopPointId: currentStopPointId, name: sp?sp.name:(currentStop && currentStop.name?currentStop.name:''), stopAreaId: stopAreaId, lines: '' });
+  saveFavorites(); stopFavoriteStar.textContent='⭐'; updateFavoritesUI();
+});
 
+/* Init */
+(async function init(){ await loadSites(); await loadStopPoints(); updateFavoritesUI(); setActiveButton(null); topSupport.style.display='none'; })();
 </script>
 </body>
 </html>
