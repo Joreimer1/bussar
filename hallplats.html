@@ -25,8 +25,7 @@
   .stop-name{font-weight:600;font-size:16px}
   .stop-distance{color:#a0aec0;font-size:13px}
   .stop-area{color:#9fb0c8;font-size:13px;margin-top:6px}
-  .support{display:none;justify-content:center;gap:8px;margin-top:8px;color:#bcd6f2}
-  /* Make buymeacoffee text always white */
+  .support{display:none;justify-content:center;gap:8px;margin-top:8px}
   .support a, .support .support-text { color: #ffffff !important; text-decoration:none; font-weight:600; }
   .loading{display:none;text-align:center;padding:18px;color:#a0aec0}
   .spinner{width:30px;height:30px;border-radius:50%;border:3px solid #4a5568;border-top-color:#a0aec0;margin:0 auto 8px;animation:spin 1s linear infinite}
@@ -100,23 +99,60 @@
   </div>
 
 <script>
-/* Minimal necessary parts from previous implementation, with two fixes:
-   - searchBtn now always opens searchContainer, ensures stop-points are loaded and focuses input
-   - Buymeacoffee text color forced to white via CSS above
-*/
-
+/* State */
+const locationBtn = document.getElementById('locationBtn');
+const favoritesBtn = document.getElementById('favoritesBtn');
 const searchBtn = document.getElementById('searchBtn');
 const searchContainer = document.getElementById('searchContainer');
 const searchInput = document.getElementById('searchInput');
 const suggestions = document.getElementById('suggestions');
 const loading = document.getElementById('loading');
-const topSupport = document.getElementById('topSupport');
+const stopInfo = document.getElementById('stopInfo');
+const stopName = document.getElementById('stopName');
+const stopDistance = document.getElementById('stopDistance');
+const stopAreaEl = document.getElementById('stopArea');
+const errorEl = document.getElementById('error');
+const departuresCard = document.getElementById('departuresCard');
+const departuresList = document.getElementById('departuresList');
+const favoritesInfo = document.getElementById('favoritesInfo');
+const favoritesList = document.getElementById('favoritesList');
+const favoritesCard = document.getElementById('favoritesCard');
+const favoritesListBottom = document.getElementById('favoritesListBottom');
 const stopFavoriteStar = document.getElementById('stopFavoriteStar');
+const topSupport = document.getElementById('topSupport');
 
+let allSites = [];
 let allStopPoints = [];
-let favorites = JSON.parse(localStorage.getItem('sl_favorites_sp') || '[]');
+let favorites = JSON.parse(localStorage.getItem('sl_favorites_sp') || '[]'); // stop-point favorites
+let currentMode = 'none';
+let currentStop = null;
+let currentStopPointId = null;
+let currentStopAreaId = null;
 
-// Ensure stop-points are loaded (cache with localStorage like before)
+const departuresCache = {};
+const DEPARTURES_TTL = 20_000;
+let countdownInterval = null;
+
+/* Helpers */
+function saveFavorites(){ localStorage.setItem('sl_favorites_sp', JSON.stringify(favorites)); }
+function showLoading(v){ loading.style.display = v ? 'block' : 'none'; }
+function showError(msg){ errorEl.textContent = msg; errorEl.style.display = 'block'; setTimeout(()=>errorEl.style.display='none',5000); }
+function escapeHtml(s){ if(!s) return ''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;'); }
+function debounce(fn, wait=250){ let t=null; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a),wait); }; }
+
+/* Load caches */
+async function loadSites(){
+  const cached = localStorage.getItem('sl_sites_cache');
+  const cacheTime = localStorage.getItem('sl_sites_cache_time');
+  const now = Date.now();
+  if(cached && cacheTime && (now - parseInt(cacheTime)) < 24*60*60*1000){ allSites = JSON.parse(cached); return; }
+  try{
+    const r = await fetch('https://transport.integration.sl.se/v1/sites?expand=true');
+    allSites = await r.json();
+    localStorage.setItem('sl_sites_cache', JSON.stringify(allSites));
+    localStorage.setItem('sl_sites_cache_time', String(Date.now()));
+  }catch(e){ console.error('loadSites',e); }
+}
 async function loadStopPoints(){
   const cached = localStorage.getItem('sl_stoppoints_cache');
   const cacheTime = localStorage.getItem('sl_stoppoints_cache_time');
@@ -130,14 +166,213 @@ async function loadStopPoints(){
   }catch(e){ console.error('loadStopPoints',e); }
 }
 
-// Debounced search handler (basic)
-let lastSearchResults = '';
-function escapeHtml(s){ if(!s) return ''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-function debounce(fn, wait=200){ let t=null; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a),wait); }; }
+/* Distance */
+function calculateDistance(lat1,lon1,lat2,lon2){
+  const R=6371;
+  const dLat=(lat2-lat1)*Math.PI/180;
+  const dLon=(lon2-lon1)*Math.PI/180;
+  const a=Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
+  const c=2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+  return R*c;
+}
 
+/* Departures fetch */
+async function fetchDeparturesForSite(site, force=false){
+  const siteId = site.id;
+  const cached = departuresCache[siteId];
+  const now = Date.now();
+  if(!force && cached && (now - cached.ts) < DEPARTURES_TTL) return { stop: site, departures: cached.data };
+  try{
+    const url = `https://transport.integration.sl.se/v1/sites/${siteId}/departures${force?('?_='+Date.now()):''}`;
+    const res = await fetch(url);
+    const json = await res.json();
+    const deps = json.departures || [];
+    departuresCache[siteId] = { ts: now, data: deps };
+    return { stop: site, departures: deps };
+  }catch(e){ console.error('fetchDeparturesForSite', e); return { stop: site, departures: [] }; }
+}
+
+/* Matching helpers */
+function departureMatchesStopPoint(dep, stopPointId){
+  if(!stopPointId) return true;
+  if(!dep) return false;
+  if(dep.stop_point && String(dep.stop_point)===String(stopPointId)) return true;
+  if(dep.stopPointId && String(dep.stopPointId)===String(stopPointId)) return true;
+  if(dep.stop_point_id && String(dep.stop_point_id)===String(stopPointId)) return true;
+  const sp = dep.stop_point || dep.stopPoint || dep.stopPointObj || dep.stop_point_obj;
+  if(sp){
+    if(typeof sp === 'object'){
+      if(sp.id && String(sp.id)===String(stopPointId)) return true;
+      if(sp.stop_point_id && String(sp.stop_point_id)===String(stopPointId)) return true;
+      if(sp.parentId && String(sp.parentId)===String(stopPointId)) return true;
+    } else {
+      if(String(sp)===String(stopPointId)) return true;
+    }
+  }
+  return false;
+}
+function departureMatchesStopArea(dep, stopAreaId){
+  if(!stopAreaId) return true;
+  if(dep.stop_area && String(dep.stop_area)===String(stopAreaId)) return true;
+  if(dep.stopAreaId && String(dep.stopAreaId)===String(stopAreaId)) return true;
+  if(dep.stop_area_id && String(dep.stop_area_id)===String(stopAreaId)) return true;
+  const sp = dep.stop_point || dep.stopPoint || dep.stopPointId;
+  if(sp && typeof sp === 'object'){
+    if(sp.stop_area_id && String(sp.stop_area_id)===String(stopAreaId)) return true;
+    if(sp.parentId && String(sp.parentId)===String(stopAreaId)) return true;
+    if(sp.site_id && String(sp.site_id)===String(stopAreaId)) return true;
+  } else {
+    if(sp && String(sp)===String(stopAreaId)) return true;
+  }
+  if(dep.site && dep.site.stop_area_id && String(dep.site.stop_area_id)===String(stopAreaId)) return true;
+  if(dep.site_id && String(dep.site_id)===String(stopAreaId)) return true;
+  return false;
+}
+
+/* Display departures */
+function displayDepartures(departures){
+  function update(){
+    const now = new Date();
+    const valid = departures.filter(dep=>{
+      const expected = new Date(dep.expected);
+      return Math.floor((expected - now)/1000) >= 0;
+    });
+    if(valid.length===0){
+      departuresList.innerHTML = '<div class="no-departures">Inga fler avgångar</div>';
+      if(countdownInterval) clearInterval(countdownInterval);
+      return;
+    }
+    const out = valid.slice(0,12).map(dep=>{
+      const expected = new Date(dep.expected);
+      const totalSeconds = Math.max(0, Math.floor((expected - new Date())/1000));
+      const min = Math.floor(totalSeconds/60);
+      const sec = totalSeconds%60;
+      const timeDisplay = totalSeconds<60?`${totalSeconds}s`:(min===1?`1 min ${sec}s`:`${min} min ${sec}s`);
+      const clock = expected.toLocaleTimeString('sv-SE',{hour:'2-digit',minute:'2-digit'});
+      let arrow = '';
+      if(dep.direction_code===1) arrow='⬆️'; else if(dep.direction_code===2) arrow='⬇️';
+      const transport = (dep.line && dep.line.transport_mode)?dep.line.transport_mode:dep.transport_mode||'';
+      return `<div class="departure-item"><div style="min-width:28px;text-align:center">${arrow}</div><div style="flex:1"><div class="departure-line">${dep.line && dep.line.designation?dep.line.designation:''} ${transport}</div><div class="departure-destination">${escapeHtml(dep.destination||'')}</div><div class="departure-from">från ${escapeHtml(dep.fromStop||'')}</div></div><div style="text-align:right"><div class="departure-time">${timeDisplay}</div><div style="font-size:11px;color:#a0aec0">${clock}</div></div></div>`;
+    }).join('');
+    departuresList.innerHTML = out;
+  }
+  update();
+  departuresCard.style.display = 'block';
+  if(countdownInterval) clearInterval(countdownInterval);
+  countdownInterval = setInterval(update,1000);
+}
+
+/* Find nearest stop-point (preferred) then map to sites and fetch departures */
+async function findNearestStop(userLat,userLon){
+  try{
+    showLoading(true);
+    await loadStopPoints();
+    await loadSites();
+    // find nearest stop-point
+    let nearest=null; let minD=Infinity;
+    allStopPoints.forEach(pt=>{
+      if(!(pt.lat && pt.lon)) return;
+      const d = calculateDistance(userLat,userLon,pt.lat,pt.lon);
+      if(d < minD){ minD=d; nearest=pt; }
+    });
+    if(!nearest){
+      showLoading(false);
+      showError('Ingen stop-point hittades');
+      return;
+    }
+    const stopAreaId = nearest.stop_area_id || nearest.stopAreaId || nearest.parentId || nearest.site_id || null;
+    currentStopAreaId = stopAreaId ? String(stopAreaId) : null;
+    currentStopPointId = nearest.id || nearest.stop_point_id || nearest.stopPointId || null;
+
+    // find sites for area
+    let matchedSites = [];
+    if(currentStopAreaId){
+      matchedSites = allSites.filter(s=>{
+        const candidates = [s.stop_area_id, s.stopAreaId, s.parentId, s.site_id];
+        return candidates.some(c=>c && String(c)===String(currentStopAreaId));
+      });
+    }
+    // fallback by name
+    if(matchedSites.length===0 && nearest.name){
+      const nm = (nearest.name||'').trim().toLowerCase();
+      matchedSites = allSites.filter(s=> s.name && s.name.trim().toLowerCase().startsWith(nm));
+    }
+
+    const displayName = nearest.name || (matchedSites[0] && matchedSites[0].name) || 'Okänd hållplats';
+    stopName.textContent = displayName;
+    if(minD !== null){
+      if(minD < 1) stopDistance.textContent = `${Math.round(minD*1000)} meter bort`;
+      else stopDistance.textContent = `${minD.toFixed(2)} km bort`;
+    } else stopDistance.textContent = '';
+    stopAreaEl.textContent = currentStopPointId ? `StopPoint: ${currentStopPointId}` : '';
+    stopInfo.style.display = 'block';
+    topSupport.style.display = 'flex';
+    currentStop = matchedSites.length>0 ? matchedSites[0] : { id: nearest.site_id || ('sp-'+(nearest.id||Math.random())), name: displayName };
+    currentMode = 'location';
+    setActiveButton(locationBtn);
+    showLoading(false);
+
+    // fetch departures for sites in area (or representative)
+    if(matchedSites.length>0) getDeparturesFromSitesWithFiltering(matchedSites, { stopPointId: currentStopPointId }, true);
+    else getDeparturesFromSitesWithFiltering([currentStop], { stopPointId: currentStopPointId }, true);
+  }catch(e){ showLoading(false); showError('Kunde inte hitta hållplats'); console.error(e); }
+}
+
+/* Generic fetch+filter pipeline for sites */
+async function getDeparturesFromSitesWithFiltering(stops, opts={}, force=false){
+  try{
+    showLoading(true);
+    departuresCard.style.display = 'none';
+    const worker = async (s)=> await fetchDeparturesForSite(s, force);
+    const concurrency = 3;
+    const results = [];
+    let i=0;
+    const runners = new Array(concurrency).fill(0).map(async ()=>{
+      while(i<stops.length){
+        const idx = i++;
+        try{ results[idx] = await worker(stops[idx]); }catch(e){ results[idx]=undefined; }
+      }
+    });
+    await Promise.all(runners);
+    showLoading(false);
+
+    let allDeps = [];
+    results.forEach(res=>{
+      if(!res) return;
+      res.departures.forEach(dep=>{
+        dep.fromStop = res.stop.name;
+        if(opts && opts.stopPointId){
+          if(!departureMatchesStopPoint(dep, opts.stopPointId)) return;
+        } else if(opts && opts.stopAreaId){
+          if(!departureMatchesStopArea(dep, opts.stopAreaId)) return;
+        }
+        if(opts && opts.favoriteLines){
+          const allowed = String(opts.favoriteLines).split(',').map(s=>s.trim()).filter(Boolean);
+          if(allowed.length>0){
+            const designation = dep.line && dep.line.designation ? String(dep.line.designation) : String(dep.designation || '');
+            if(!allowed.includes(designation)) return;
+          }
+        }
+        allDeps.push(dep);
+      });
+    });
+
+    if(allDeps.length===0){
+      departuresList.innerHTML = '<div class="no-departures">Inga avgångar hittades</div>';
+      departuresCard.style.display = 'block';
+      if(countdownInterval) clearInterval(countdownInterval);
+      return;
+    }
+    allDeps.sort((a,b)=> new Date(a.expected) - new Date(b.expected));
+    displayDepartures(allDeps);
+  }catch(e){ showLoading(false); showError('Kunde inte hämta avgångar'); console.error(e); }
+}
+
+/* Search (stop-points) */
+let lastSearchResults = '';
 const doSearch = debounce(async (qRaw) => {
   const q = (qRaw||'').trim().toLowerCase();
-  if(q.length < 2){ suggestions.style.display='none'; return; }
+  if(q.length < 2){ suggestions.style.display='none'; favoritesInfo.textContent=''; favoritesList.innerHTML=''; return; }
   await loadStopPoints();
   const matches = allStopPoints.filter(pt=>{
     const n = (pt.name||'').toLowerCase();
@@ -153,7 +388,7 @@ const doSearch = debounce(async (qRaw) => {
     return;
   }
   suggestions.innerHTML = matches.map(m=>{
-    const name = escapeHtml(m.name||'');
+    const name = escapeHtml(m.name || '');
     const note = m.place? `<div style="font-size:12px;color:#a0aec0">${escapeHtml(m.place)}</div>` : '';
     const favStar = favorites.some(f=>String(f.stopPointId)===String(m.id)) ? '⭐' : '☆';
     return `<div class="suggestion-item" data-id="${m.id}" data-lat="${m.lat||''}" data-lon="${m.lon||''}"><div><div class="suggestion-name">${name}</div>${note}</div><div class="favorite-star" data-id="${m.id}">${favStar}</div></div>`;
@@ -161,62 +396,231 @@ const doSearch = debounce(async (qRaw) => {
   suggestions.style.display = 'block';
 }, 200);
 
-searchInput.addEventListener('input', (e) => doSearch(e.target.value));
+searchInput.addEventListener('input', (e)=> doSearch(e.target.value));
 
-// Fix: make searchBtn reliably show search UI, preload stop-points, focus input
-searchBtn.addEventListener('click', async () => {
-  searchContainer.classList.add('show');
-  suggestions.style.display = 'none';
-  searchInput.value = '';
-  lastSearchResults = '';
-  // preload stop-points so typing feels instant
-  await loadStopPoints();
-  searchInput.focus();
-});
-
-// clicking a suggestion star toggles favorite (minimal)
-suggestions.addEventListener('click', async (ev) => {
+/* Suggestion clicks */
+suggestions.addEventListener('click', async (ev)=>{
   const star = ev.target.closest('.favorite-star');
   if(star){
     ev.stopPropagation();
     const spId = star.dataset.id;
     await loadStopPoints();
-    const sp = allStopPoints.find(p => String(p.id) === String(spId));
+    const sp = allStopPoints.find(p=>String(p.id)===String(spId));
     if(!sp) return;
-    const idx = favorites.findIndex(f => String(f.stopPointId) === String(spId));
-    if(idx > -1){ favorites.splice(idx,1); localStorage.setItem('sl_favorites_sp', JSON.stringify(favorites)); star.textContent='☆'; return; }
-    favorites.push({ stopPointId: sp.id, name: sp.name||'', stopAreaId: sp.stop_area_id||sp.parentId||null, lines: '' });
-    localStorage.setItem('sl_favorites_sp', JSON.stringify(favorites));
+    const idx = favorites.findIndex(f=>String(f.stopPointId)===String(spId));
+    if(idx>-1){ favorites.splice(idx,1); saveFavorites(); star.textContent='☆'; updateFavoritesUI(); return; }
+    const stopAreaId = sp.stop_area_id || sp.stopAreaId || sp.parentId || sp.site_id || null;
+    favorites.push({ stopPointId: sp.id, name: sp.name || '', stopAreaId: stopAreaId?String(stopAreaId):null, lines: '' });
+    saveFavorites();
     star.textContent='⭐';
+    updateFavoritesUI();
     return;
   }
   const item = ev.target.closest('.suggestion-item');
   if(item){
     const id = item.dataset.id;
-    await loadStopPoints();
-    const sp = allStopPoints.find(p => String(p.id) === String(id));
+    await loadStopPoints(); await loadSites();
+    const sp = allStopPoints.find(p=>String(p.id)===String(id));
     if(!sp) return;
-    // show as selected (mimic earlier behavior): set stop info and show topSupport
-    document.getElementById('stopName').textContent = sp.name || 'Okänd';
-    document.getElementById('stopDistance').textContent = '';
-    document.getElementById('stopArea').textContent = sp.id ? `StopPoint: ${sp.id}` : '';
-    document.getElementById('stopInfo').style.display = 'block';
-    topSupport.style.display = 'flex';
-    // hide search UI
+    currentStopPointId = sp.id;
+    currentStopAreaId = sp.stop_area_id || sp.stopAreaId || sp.parentId || sp.site_id || null;
+    let matchedSites = [];
+    if(currentStopAreaId){
+      matchedSites = allSites.filter(s=>{
+        const cand = [s.stop_area_id,s.stopAreaId,s.parentId,s.site_id];
+        return cand.some(c=>c && String(c)===String(currentStopAreaId));
+      });
+    }
+    if(matchedSites.length===0 && sp.name){
+      const nm = (sp.name||'').trim().toLowerCase();
+      matchedSites = allSites.filter(s=> s.name && s.name.trim().toLowerCase().startsWith(nm));
+    }
+    stopName.textContent = sp.name || (matchedSites[0] && matchedSites[0].name) || 'Okänd';
+    stopDistance.textContent = '';
+    stopAreaEl.textContent = currentStopPointId ? `StopPoint: ${currentStopPointId}` : '';
+    stopInfo.style.display='block';
+    topSupport.style.display='flex';
+    currentStop = matchedSites.length>0 ? matchedSites[0] : { id: sp.site_id || ('sp-'+sp.id), name: sp.name };
+    currentMode='location';
+    setActiveButton(locationBtn);
+    if(matchedSites.length>0) getDeparturesFromSitesWithFiltering(matchedSites, { stopPointId: currentStopPointId }, true);
+    else getDeparturesFromSitesWithFiltering([currentStop], { stopPointId: currentStopPointId }, true);
     searchContainer.classList.remove('show');
-    suggestions.style.display = 'none';
-    searchInput.value = '';
+    suggestions.style.display='none';
+    searchInput.value='';
   }
 });
 
-// initial preload so search button is responsive fast
-loadStopPoints();
+/* Favorites UI */
+function updateFavoritesUI(){
+  if(favorites.length>0){
+    favoritesInfo.textContent = `Favoriter (${favorites.length})`;
+    favoritesList.innerHTML = favorites.map(f=>{
+      return `<div class="favorite-item" data-id="${escapeHtml(f.stopPointId)}"><div class="favorite-left"><div class="favorite-name">⭐ ${escapeHtml(f.name||'')}</div><input class="fav-lines-input" data-id="${escapeHtml(f.stopPointId)}" placeholder="T.ex 2,57" value="${escapeHtml(f.lines||'')}" style="margin-left:8px" /></div><button class="remove-favorite" data-id="${escapeHtml(f.stopPointId)}">Ta bort</button></div>`;
+    }).join('');
+  } else {
+    favoritesInfo.textContent = 'Inga favoriter sparade. Klicka på stjärnan i sökresultat för att spara.';
+    favoritesList.innerHTML = '';
+  }
+  if(favorites.length>0){
+    favoritesListBottom.innerHTML = favorites.map(f=>{
+      return `<div class="favorite-item" data-id="${escapeHtml(f.stopPointId)}"><div class="favorite-left"><div class="favorite-name">⭐ ${escapeHtml(f.name||'')}</div><input class="fav-lines-input" data-id="${escapeHtml(f.stopPointId)}" placeholder="T.ex 2,57" value="${escapeHtml(f.lines||'')}" /></div><button class="remove-favorite" data-id="${escapeHtml(f.stopPointId)}">Ta bort</button></div>`;
+    }).join('');
+    favoritesCard.style.display='block';
+  } else {
+    favoritesListBottom.innerHTML='';
+    favoritesCard.style.display='none';
+  }
+  attachFavListeners();
+}
+function attachFavListeners(){
+  document.querySelectorAll('.remove-favorite').forEach(btn=>btn.onclick=()=>{
+    const id = btn.dataset.id;
+    const idx = favorites.findIndex(f=>String(f.stopPointId)===String(id));
+    if(idx>-1){ favorites.splice(idx,1); saveFavorites(); updateFavoritesUI(); }
+  });
+  document.querySelectorAll('.fav-lines-input').forEach(inp=>{
+    inp.onblur = ()=>{
+      const id = inp.dataset.id; const val = inp.value.trim(); const fav = favorites.find(f=>String(f.stopPointId)===String(id));
+      if(!fav) return; if(val===''){ fav.lines=''; saveFavorites(); return; }
+      const normalized = val.replace(/\s+/g,''); if(!/^(\d+(,\d+)*)$/.test(normalized)){ inp.value = fav.lines||''; showError('Endast siffror och kommatecken tillåtna i Valda linjer'); return; }
+      fav.lines = normalized; saveFavorites();
+    };
+    inp.addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); inp.blur(); }});
+  });
+}
 
-// ensure buymeacoffee text visible white (additional safety: set inline style on load)
-document.addEventListener('DOMContentLoaded', () => {
-  const bmc = document.getElementById('bmcLink');
-  if(bmc) bmc.style.color = '#ffffff';
+/* Show favorites departures aggregated */
+async function showFavoritesDepartures(){
+  try{
+    await loadStopPoints(); await loadSites();
+    if(favorites.length===0){ departuresList.innerHTML='<div class="no-departures">Inga favoriter valda</div>'; departuresCard.style.display='block'; return; }
+    showLoading(true);
+    const allSitesToQuery = new Map();
+    const favMeta = [];
+    for(const fav of favorites){
+      const sp = allStopPoints.find(p=>String(p.id)===String(fav.stopPointId));
+      let stopAreaId = fav.stopAreaId || (sp && (sp.stop_area_id||sp.stopAreaId||sp.parentId||sp.site_id)) || null;
+      let sitesForArea = [];
+      if(stopAreaId){
+        sitesForArea = allSites.filter(s=>{
+          const cand=[s.stop_area_id,s.stopAreaId,s.parentId,s.site_id];
+          return cand.some(c=>c && String(c)===String(stopAreaId));
+        });
+      }
+      if(sitesForArea.length===0 && sp && sp.name){
+        const nm = sp.name.trim().toLowerCase();
+        sitesForArea = allSites.filter(s=> s.name && s.name.trim().toLowerCase().startsWith(nm));
+      }
+      if(sitesForArea.length===0){
+        const rep = { id: (sp && sp.site_id) || (`sp-${fav.stopPointId}`), name: sp?sp.name:'Okänd' };
+        allSitesToQuery.set(rep.id, rep);
+        sitesForArea = [rep];
+      } else {
+        sitesForArea.forEach(s=> allSitesToQuery.set(s.id, s));
+      }
+      favMeta.push({ fav, sitesForArea, stopAreaId });
+    }
+    const sitesArray = Array.from(allSitesToQuery.values());
+    const worker = async s=>await fetchDeparturesForSite(s, true);
+    const concurrency = 3; const results=[]; let i=0;
+    const runners=new Array(concurrency).fill(0).map(async ()=>{
+      while(i<sitesArray.length){ const idx=i++; try{ results[idx]=await worker(sitesArray[idx]); }catch(e){ results[idx]=undefined; } }
+    });
+    await Promise.all(runners);
+    showLoading(false);
+    const siteDeps = new Map(); results.forEach(r=>{ if(r) siteDeps.set(String(r.stop.id), r.departures || []); });
+    let aggregated=[];
+    for(const meta of favMeta){
+      const fav = meta.fav; const lines = fav.lines && fav.lines.trim()!=='' ? fav.lines.split(',').map(s=>s.trim()).filter(Boolean) : [];
+      for(const site of meta.sitesForArea){
+        const deps = siteDeps.get(String(site.id)) || [];
+        deps.forEach(dep=>{
+          if(!departureMatchesStopPoint(dep, fav.stopPointId)) return;
+          if(lines.length>0){ const designation = dep.line && dep.line.designation ? String(dep.line.designation) : String(dep.designation || ''); if(!lines.includes(designation)) return; }
+          dep.fromStop = site.name || dep.fromStop || '';
+          aggregated.push(dep);
+        });
+      }
+    }
+    if(aggregated.length===0){ departuresList.innerHTML='<div class="no-departures">Inga avgångar för dina favoriter</div>'; departuresCard.style.display='block'; return; }
+    aggregated.sort((a,b)=> new Date(a.expected) - new Date(b.expected));
+    displayDepartures(aggregated);
+  }catch(e){ showLoading(false); showError('Kunde inte hämta favoritsavgångar'); console.error(e); }
+}
+
+/* UI helpers */
+function setActiveButton(el){
+  [locationBtn,favoritesBtn,searchBtn].forEach(b=>b.classList.remove('active'));
+  if(!el) return; el.classList.add('active');
+}
+
+/* Events */
+locationBtn.addEventListener('click', ()=>{
+  if(!navigator.geolocation){ showError('Geolocation stöds inte av din webbläsare'); return; }
+  showLoading(true);
+  stopInfo.style.display='none';
+  departuresCard.style.display='none';
+  searchContainer.classList.remove('show');
+  navigator.geolocation.getCurrentPosition(pos=>{
+    findNearestStop(pos.coords.latitude, pos.coords.longitude);
+  }, err=>{
+    showLoading(false);
+    let m='';
+    switch(err.code){
+      case err.PERMISSION_DENIED: m='Du nekade tillgång till din position'; break;
+      case err.POSITION_UNAVAILABLE: m='Platsinformation är inte tillgänglig'; break;
+      case err.TIMEOUT: m='Begäran om position tog för lång tid'; break;
+      default: m='Ett okänt fel uppstod';
+    }
+    showError(m);
+  }, { enableHighAccuracy:true, timeout:10000, maximumAge:0 });
 });
+
+favoritesBtn.addEventListener('click', ()=>{
+  searchContainer.classList.remove('show');
+  stopInfo.style.display='none';
+  departuresCard.style.display='none';
+  updateFavoritesUI();
+  currentMode='favorites';
+  setActiveButton(favoritesBtn);
+  showFavoritesDepartures();
+});
+
+searchBtn.addEventListener('click', async ()=>{
+  searchContainer.classList.add('show');
+  suggestions.style.display='none';
+  searchInput.value='';
+  lastSearchResults='';
+  await loadStopPoints();
+  searchInput.focus();
+  currentMode='search';
+  setActiveButton(searchBtn);
+});
+
+/* top favorite star toggles favorite for current stop-point */
+stopFavoriteStar && stopFavoriteStar.addEventListener('click', async ()=>{
+  if(!currentStopPointId){
+    showError('Ingen stop-point vald');
+    return;
+  }
+  const idx = favorites.findIndex(f=>String(f.stopPointId)===String(currentStopPointId));
+  if(idx>-1){ favorites.splice(idx,1); saveFavorites(); stopFavoriteStar.textContent='☆'; updateFavoritesUI(); return; }
+  await loadStopPoints();
+  const sp = allStopPoints.find(p=>String(p.id)===String(currentStopPointId));
+  const stopAreaId = sp && (sp.stop_area_id||sp.stopAreaId||sp.parentId||sp.site_id) ? String(sp.stop_area_id||sp.stopAreaId||sp.parentId||sp.site_id) : (currentStopAreaId||null);
+  favorites.push({ stopPointId: currentStopPointId, name: sp?sp.name:(currentStop && currentStop.name?currentStop.name:''), stopAreaId: stopAreaId, lines: '' });
+  saveFavorites(); stopFavoriteStar.textContent='⭐'; updateFavoritesUI();
+});
+
+/* Init */
+(async function init(){
+  await loadSites();
+  await loadStopPoints();
+  updateFavoritesUI();
+  setActiveButton(null);
+  topSupport.style.display = 'none';
+})();
 </script>
 </body>
 </html>
