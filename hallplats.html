@@ -96,7 +96,7 @@
 <body>
   <div class="container">
     <div class="card" id="topCard">
-      <h1>SL Avgångar</h1>
+      <h1>SL Avgångarv vt 1</h1>
 
       <div class="button-group">
         <button id="locationBtn">📍 Plats</button>
@@ -516,7 +516,26 @@ locationBtn.addEventListener('click', ()=>{
   }, { enableHighAccuracy:true, timeout:10000, maximumAge:0 });
 });
 
-favoritesBtn.addEventListener('click', ()=>{ searchContainer.classList.remove('show'); stopInfo.style.display='none'; departuresCard.style.display='none'; updateFavoritesUI(); currentMode='favorites'; setActiveButton(favoritesBtn); showFavoritesDepartures(); });
+favoritesBtn.addEventListener('click', ()=>{
+  searchContainer.classList.remove('show');
+  stopInfo.style.display = 'none';
+  departuresCard.style.display = 'none';
+  updateFavoritesUI();
+  currentMode = 'favorites';
+  setActiveButton(favoritesBtn);
+
+  // Om inga favoriter är sparade: visa meddelande och returnera tidigt
+  if (!favorites || favorites.length === 0) {
+    departuresList.innerHTML = '<div class="no-departures">Inga favoriter valda</div>';
+    departuresCard.style.display = 'block';
+    if (countdownInterval) clearInterval(countdownInterval);
+    return;
+  }
+
+  // Finns favoriter: hämta avgångar som tidigare
+  showFavoritesDepartures();
+});
+
 
 searchBtn.addEventListener('click', async ()=>{ searchContainer.classList.add('show'); suggestions.style.display='none'; searchInput.value=''; lastSearchResults=''; await loadStopPoints(); searchInput.focus(); currentMode='search'; setActiveButton(searchBtn); });
 
