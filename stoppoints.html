@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8" />
+  <title>SL stop points på karta</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
+  <style>
+    html,body,#map { height:100%; margin:0; padding:0; }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+
+  <script>
+    const map = L.map('map').setView([59.33, 18.07], 10);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 18,
+      attribution: '© OpenStreetMap contributors'
+    }).addTo(map);
+
+    // Cluster group för prestanda
+    const markers = L.markerClusterGroup();
+
+    // URL till SL stop-points
+    const url = 'https://transport.integration.sl.se/v1/stop-points';
+
+    // Hämta data och skapa markörer
+    fetch(url)
+      .then(res => {
+        if (!res.ok) throw new Error('Nätverksfel: ' + res.status);
+        return res.json();
+      })
+      .then(data => {
+        // data förväntas vara en array med objekt som innehåller lat och lon
+        data.forEach(stop => {
+          if (stop.lat && stop.lon) {
+            const m = L.marker([stop.lat, stop.lon]);
+            const popupHtml = `<strong>${escapeHtml(stop.name || stop.sname || '')}</strong><br/>
+                               ID: ${stop.id || ''}<br/>
+                               GID: ${stop.gid || ''}`;
+            m.bindPopup(popupHtml);
+            markers.addLayer(m);
+          }
+        });
+        map.addLayer(markers);
+        if (markers.getLayers().length) {
+          map.fitBounds(markers.getBounds(), {padding:[40,40]});
+        }
+      })
+      .catch(err => {
+        console.error(err);
+        alert('Kunde inte hämta stopp-punkter: ' + err.message);
+      });
+
+    // Enkel escaping för popup-texter
+    function escapeHtml(s) {
+      if (!s) return '';
+      return s.replace(/[&<>"']/g, function(ch) {
+        return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch];
+      });
+    }
+  </script>
+</body>
+</html>
