@@ -117,7 +117,7 @@
 <body>
   <div class="container">
     <div class="card" id="topCard">
-      <h1>SL Avgångar J</h1>
+      <h1>SL Avgångar jj</h1>
 
       <div class="button-group">
         <button id="locationBtn">📍 Plats</button>
@@ -188,7 +188,7 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
 
 <script>
-/* Klientlogik + Leaflet-karta för sökresultat */
+/* Fullständig klientlogik + Leaflet-karta */
 const locationBtn = document.getElementById('locationBtn');
 const favoritesBtn = document.getElementById('favoritesBtn');
 const searchBtn = document.getElementById('searchBtn');
@@ -215,7 +215,7 @@ const resultsMapEl = document.getElementById('resultsMap');
 
 let allSites = [];
 let allStopPoints = [];
-let favorites = JSON.parse(localStorage.getItem('sl_favorites_sp') || '[]');
+let favorites = JSON.parse(localStorage.getItem('sl_favorites_sp') || '[]'); // { stopPointId,name,stopAreaId,lines }
 let currentMode = 'none';
 let currentStop = null;
 let currentStopPointId = null;
@@ -246,17 +246,18 @@ function clearMapMarkers(){
   markersLayer.clearLayers();
 }
 
+/* Update map with matches, create markers, fit bounds and ensure tiles render */
 function updateMapForMatches(matches){
   if(!matches || matches.length===0){ mapContainer.style.display='none'; clearMapMarkers(); return; }
-  const withCoords = matches.filter(m => m.lat && m.lon).map(m=>{
-    return {
-      id: m.id,
-      name: m.name || '',
-      lat: parseFloat(m.lat),
-      lon: parseFloat(m.lon)
-    };
-  });
+  // Filter valid coords
+  const withCoords = matches.map(m=>{
+    const lat = parseFloat(m.lat);
+    const lon = parseFloat(m.lon);
+    if(!isFinite(lat) || !isFinite(lon)) return null;
+    return { id: m.id, name: m.name || '', lat, lon };
+  }).filter(Boolean);
   if(withCoords.length===0){ mapContainer.style.display='none'; clearMapMarkers(); return; }
+
   initMapIfNeeded();
   clearMapMarkers();
   const bounds = [];
@@ -264,23 +265,38 @@ function updateMapForMatches(matches){
     try{
       const marker = L.marker([pt.lat, pt.lon]);
       marker.bindPopup(`<strong>${escapeHtml(pt.name)}</strong><br>StopPoint: ${escapeHtml(pt.id)}`);
-      marker.on('click', ()=> {
-        // Select this stoppoint as if clicked in suggestions
-        selectStopPointById(pt.id);
+      marker.on('click', () => {
+        // Pan to marker and open popup first, then select after short delay so user sees marker
+        if(map) {
+          map.panTo([pt.lat, pt.lon]);
+        }
+        marker.openPopup();
+        // allow pan/animation to complete before selecting (which closes search UI)
+        setTimeout(()=> selectStopPointById(pt.id), 180);
       });
       marker.addTo(markersLayer);
       bounds.push([pt.lat, pt.lon]);
     }catch(e){ console.error('marker add error', e); }
   });
+
+  // Fit bounds / set view and ensure tiles render (invalidateSize after)
   if(bounds.length===1){
     map.setView(bounds[0], 17);
+    setTimeout(()=>{ if(map) map.invalidateSize(); }, 80);
   } else {
-    map.fitBounds(bounds, { padding: [30,30] });
+    try{
+      map.fitBounds(bounds, { padding: [30,30] });
+    }catch(e){
+      // fallback: set center to first
+      map.setView(bounds[0], 13);
+    }
+    setTimeout(()=>{ if(map) map.invalidateSize(); }, 80);
   }
+
   mapContainer.style.display = 'block';
 }
 
-/* Sync stars in suggestions and top star */
+/* Utility: ensure suggestions stars and top star sync */
 function refreshAllStars(){
   document.querySelectorAll('.suggestion-item .favorite-star').forEach(el=>{
     const id = el.dataset.id;
@@ -443,13 +459,26 @@ async function selectStopPointById(spId){
   // hide favoritesCard when selecting via map/search
   favoritesCard.style.display = 'none';
   refreshAllStars();
+
+  // Center map to chosen stop if map exists (so user gets visual feedback)
+  if(map && sp.lat && sp.lon){
+    const lat = parseFloat(sp.lat);
+    const lon = parseFloat(sp.lon);
+    if(isFinite(lat) && isFinite(lon)){
+      map.setView([lat, lon], 17);
+      setTimeout(()=>{ if(map) map.invalidateSize(); }, 80);
+    }
+  }
+
   if(matchedSites.length>0) getDeparturesFromSitesWithFiltering(matchedSites, { stopPointId: currentStopPointId }, true);
   else getDeparturesFromSitesWithFiltering([currentStop], { stopPointId: currentStopPointId }, true);
 
-  // Close suggestions and search UI to mirror existing flow
-  searchContainer.classList.remove('show');
-  suggestions.style.display='none';
-  searchInput.value='';
+  // Close suggestions and search UI after a short delay to allow centering/popups to be visible
+  setTimeout(()=>{
+    searchContainer.classList.remove('show');
+    suggestions.style.display='none';
+    searchInput.value='';
+  }, 160);
 }
 
 /* Find nearest stop-point and map to sites */
@@ -523,7 +552,7 @@ const doSearch = debounce(async (qRaw) => {
   const matches = allStopPoints.filter(pt=>{
     const n = (pt.name||'').toLowerCase(); const note = (pt.place||pt.town||'').toLowerCase();
     return n.includes(q) || note.includes(q);
-  }).slice(0,40);
+  }).slice(0,40); // more for map
   const newHash = JSON.stringify(matches.map(m=>m.id));
   if(newHash === lastSearchResults){
     updateMapForMatches(matches);
@@ -673,8 +702,11 @@ favoritesBtn.addEventListener('click', ()=>{
 
 searchBtn.addEventListener('click', async ()=>{
   searchContainer.classList.add('show');
-    initMapIfNeeded();
-  setTimeout(()=>{ if(map) map.invalidateSize(); }, 50);
+
+  // Init map and ensure correct sizing immediately after making container visible
+  initMapIfNeeded();
+  setTimeout(()=>{ if(map) map.invalidateSize(); }, 60);
+
   suggestions.style.display='none';
   searchInput.value='';
   lastSearchResults='';
