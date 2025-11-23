@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>SL-linje via OSM (Overpass)</title>
+
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    html,body { height:100%; margin:0; font-family:system-ui,Segoe UI,Roboto,Arial; }
+    #map { height: calc(100vh - 110px); width:100%; }
+    header { padding:10px; display:flex; gap:8px; align-items:center; background:#fff; box-shadow:0 1px 4px rgba(0,0,0,0.08); }
+    input,button,select { font-size:16px; padding:8px; border:1px solid #ccc; border-radius:6px; }
+    .controls { display:flex; gap:8px; flex:1; align-items:center; }
+    .status { padding:8px; font-size:14px; color:#444; min-width:220px; text-align:right; }
+    @media (max-width:480px) { header { flex-direction:column; align-items:stretch; } .status { text-align:left; } }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="controls">
+      <input id="lineInput" type="text" placeholder="Ange linjenummer, t.ex. 4 eller 76" />
+      <select id="mode">
+        <option value="auto">Auto (buss/spårvagn/tunnelbana)</option>
+        <option value="bus">Bus</option>
+        <option value="tram">Tram</option>
+        <option value="subway">Subway</option>
+        <option value="train">Train</option>
+      </select>
+      <button id="btn">Visa</button>
+    </div>
+    <div class="status" id="status">Klar</div>
+  </header>
+
+  <div id="map"></div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    // Konfiguration
+    const OVERPASS_URL = 'https://overpass-api.de/api/interpreter';
+    const map = L.map('map', { zoomControl: true }).setView([59.33,18.06], 11);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap contributors' }).addTo(map);
+
+    const stopsLayer = L.layerGroup().addTo(map);
+    const waysLayer = L.layerGroup().addTo(map);
+    const statusEl = document.getElementById('status');
+
+    document.getElementById('btn').addEventListener('click', () => {
+      const q = document.getElementById('lineInput').value.trim();
+      const mode = document.getElementById('mode').value;
+      if (!q) { statusEl.textContent = 'Ange ett linjenummer.'; return; }
+      fetchLineFromOSM(q, mode);
+    });
+
+    async function fetchLineFromOSM(lineRef, mode) {
+      stopsLayer.clearLayers();
+      waysLayer.clearLayers();
+      statusEl.textContent = 'Hämtar relationer från OSM...';
+
+      // Bygg Overpass-query — söker relationer med ref eller name som matchar linjen.
+      // mode används för att begränsa route-typ vid behov.
+      const routeFilter = (m) => {
+        if (m === 'auto') return '["type"="route"]';
+        return '["type"="route"]["route"="' + m + '"]';
+      };
+      const routeTypePart = routeFilter(mode === 'auto' ? 'auto' : mode);
+      // Vi söker både relation["ref"=lineRef] och relation["name"~"^lineRef"] för att få variationer
+      const query = `
+[out:json][timeout:25];
+(
+  relation${routeTypePart}["ref"="${escapeOverpass(lineRef)}"];
+  relation${routeTypePart}["name"~"^${escapeOverpass(lineRef)}"];
+);
+out body;
+>;
+out skel qt;
+`.trim();
+
+      try {
+        const resp = await fetch(OVERPASS_URL, { method: 'POST', body: query, headers: { 'Content-Type': 'text/plain' } });
+        if (!resp.ok) throw new Error('Overpass error ' + resp.status);
+        const json = await resp.json();
+        processOverpass(json, lineRef);
+      } catch (err) {
+        console.error(err);
+        statusEl.textContent = 'Fel vid hämtning: ' + err.message;
+      }
+    }
+
+    function processOverpass(data, lineRef) {
+      if (!data || !data.elements || data.elements.length === 0) {
+        statusEl.textContent = 'Ingen OSM-data hittades för linje ' + lineRef;
+        return;
+      }
+
+      // Indexera element efter typ och id
+      const nodes = new Map();
+      const ways = new Map();
+      const relations = [];
+
+      data.elements.forEach(el => {
+        if (el.type === 'node') nodes.set(el.id, el);
+        else if (el.type === 'way') ways.set(el.id, el);
+        else if (el.type === 'relation') relations.push(el);
+      });
+
+      if (relations.length === 0) {
+        statusEl.textContent = 'Ingen relation hittades för linje ' + lineRef;
+        return;
+      }
+
+      // Välj bästa relation: preferrera exact ref match, annars första
+      let chosen = relations.find(r => r.tags && (r.tags.ref === lineRef || r.tags.name && r.tags.name.startsWith(lineRef))) || relations[0];
+
+      // Extrahera stop-noder: relation.members med role "stop" eller "stop_entry_only" eller taggad public_transport=platform, stop_position, etc.
+      const stopNodes = [];
+      const stopNodeIds = new Set();
+
+      if (chosen.members && chosen.members.length) {
+        for (const m of chosen.members) {
+          if (m.type === 'node' && m.role && m.role.toLowerCase().includes('stop')) {
+            const n = nodes.get(m.ref);
+            if (n) { stopNodes.push(n); stopNodeIds.add(n.id); }
+          }
+        }
+      }
+
+      // Heuristik: om inga stop-members, sök efter nodes i relation som har public_transport=platform, highway=bus_stop, railway=stop, etc.
+      if (stopNodes.length === 0) {
+        for (const [id, n] of nodes) {
+          const t = n.tags || {};
+          if (t.highway === 'bus_stop' || t.public_transport === 'platform' || t.railway === 'tram_stop' || t.railway === 'station' || t.public_transport === 'stop_position') {
+            // Node är i samma relation? Vi kan kontrollera if relation.members contain this id, else accept heuristically if name/ref matches
+            // Här: om nodens "ref" eller name innehåller linjenumret så lägg till (extra permissiv)
+            const name = (t.name || '').toString();
+            if (name && name.match(/[0-9]+/) || true) {
+              stopNodes.push(n); stopNodeIds.add(n.id);
+            }
+          }
+        }
+      }
+
+      // Som sista utväg: sök bland way-members för att bygga geometri (t.ex. spår)
+      const wayGeoms = [];
+      if (chosen.members && chosen.members.length) {
+        for (const m of chosen.members) {
+          if (m.type === 'way' && ways.has(m.ref)) {
+            const w = ways.get(m.ref);
+            if (w.geometry && w.geometry.length) {
+              wayGeoms.push(w.geometry.map(p => [p.lat, p.lon]));
+            } else if (w.nodes && w.nodes.length) {
+              // om inga geometry-fält (kan hända beroende på overpass out-sätt), försök via nodes-map
+              const coords = w.nodes.map(nid => {
+                const nn = nodes.get(nid);
+                return nn ? [nn.lat, nn.lon] : null;
+              }).filter(Boolean);
+              if (coords.length) wayGeoms.push(coords);
+            }
+          }
+        }
+      }
+
+      // Om vi hittat stopNodes: rita dem och skapa en polyline längs deras ordning (membership-order om möjligt)
+      if (stopNodes.length) {
+        // Försök använda ordningen från relation.members när möjligt
+        const orderedStops = [];
+        if (chosen.members && chosen.members.length) {
+          for (const m of chosen.members) {
+            if (m.type === 'node' && stopNodeIds.has(m.ref)) {
+              const n = nodes.get(m.ref);
+              if (n) orderedStops.push(n);
+            }
+          }
+        }
+        // Fallback: om orderedStops tom, använd stopNodes
+        const finalStops = orderedStops.length ? orderedStops : stopNodes;
+
+        const latlngs = [];
+        finalStops.forEach(n => {
+          latlngs.push([n.lat, n.lon]);
+          const popup = `<b>${escapeHtml(n.tags && (n.tags.name || n.tags.ref) || 'Hållplats')}</b><br>ID: ${n.id}`;
+          const marker = L.circleMarker([n.lat, n.lon], { radius:6, fillColor:'#ff5722', color:'#fff', weight:1, fillOpacity:1 }).bindPopup(popup);
+          stopsLayer.addLayer(marker);
+        });
+
+        if (latlngs.length > 1) {
+          const poly = L.polyline(latlngs, { color:'#007bff', weight:4, opacity:0.8 });
+          waysLayer.addLayer(poly);
+          map.fitBounds(poly.getBounds(), { padding: [60,60] });
+        } else if (latlngs.length === 1) {
+          map.setView(latlngs[0], 15);
+        }
+
+        statusEl.textContent = `Visar ${finalStops.length} hållplatser för relation ${chosen.tags && chosen.tags.ref ? chosen.tags.ref : chosen.id}.`;
+        return;
+      }
+
+      // Om inga stops men way-geometri finns, rita way-geometrier
+      if (wayGeoms.length) {
+        // slår ihop geometrier till en polyline (enkelt)
+        wayGeoms.forEach(g => {
+          const poly = L.polyline(g, { color:'#007bff', weight:4, opacity:0.8 });
+          waysLayer.addLayer(poly);
+        });
+        const groupBounds = waysLayer.getBounds();
+        if (groupBounds.isValid()) map.fitBounds(groupBounds, { padding:[60,60] });
+        statusEl.textContent = `Visar ${wayGeoms.length} geometridel(ar) för relation ${chosen.tags && chosen.tags.ref ? chosen.tags.ref : chosen.id}.`;
+        return;
+      }
+
+      statusEl.textContent = 'Hittade varken stoppnoder eller geometri i relationen.';
+    }
+
+    function escapeOverpass(s) {
+      return String(s).replace(/["\\]/g, '\\$&');
+    }
+
+    function escapeHtml(s) {
+      if (!s) return '';
+      return String(s).replace(/[&<>"']/g, function(m){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;"})[m]; });
+    }
+
+    // Demo: förifyll ett vanligt exempel
+    document.getElementById('lineInput').value = '4';
+  </script>
+</body>
+</html>
