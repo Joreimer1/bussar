@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>SL-linje via OSM (Overpass)</title>
+  <title>SL-linje via OSM (Overpass) - Uppdaterad</title>
 
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
@@ -41,8 +41,10 @@
     const map = L.map('map', { zoomControl: true }).setView([59.33,18.06], 11);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap contributors' }).addTo(map);
 
-    const stopsLayer = L.layerGroup().addTo(map);
-    const waysLayer = L.layerGroup().addTo(map);
+    const stopsLayer = L.layerGroup();
+    const waysLayer = L.layerGroup();
+    stopsLayer.addTo(map);
+    waysLayer.addTo(map);
     const statusEl = document.getElementById('status');
 
     document.getElementById('btn').addEventListener('click', () => {
@@ -57,14 +59,12 @@
       waysLayer.clearLayers();
       statusEl.textContent = 'Hämtar relationer från OSM...';
 
-      // Bygg Overpass-query — söker relationer med ref eller name som matchar linjen.
-      // mode används för att begränsa route-typ vid behov.
       const routeFilter = (m) => {
         if (m === 'auto') return '["type"="route"]';
         return '["type"="route"]["route"="' + m + '"]';
       };
       const routeTypePart = routeFilter(mode === 'auto' ? 'auto' : mode);
-      // Vi söker både relation["ref"=lineRef] och relation["name"~"^lineRef"] för att få variationer
+
       const query = `
 [out:json][timeout:25];
 (
@@ -83,7 +83,7 @@ out skel qt;
         processOverpass(json, lineRef);
       } catch (err) {
         console.error(err);
-        statusEl.textContent = 'Fel vid hämtning: ' + err.message;
+        statusEl.textContent = 'Fel vid hämtning: ' + (err && err.message ? err.message : err);
       }
     }
 
@@ -93,7 +93,6 @@ out skel qt;
         return;
       }
 
-      // Indexera element efter typ och id
       const nodes = new Map();
       const ways = new Map();
       const relations = [];
@@ -109,10 +108,10 @@ out skel qt;
         return;
       }
 
-      // Välj bästa relation: preferrera exact ref match, annars första
-      let chosen = relations.find(r => r.tags && (r.tags.ref === lineRef || r.tags.name && r.tags.name.startsWith(lineRef))) || relations[0];
+      // Prioritera relation med exakt ref-match eller name-starts-with
+      let chosen = relations.find(r => r.tags && (r.tags.ref === lineRef || (r.tags.name && r.tags.name.startsWith(lineRef)))) || relations[0];
 
-      // Extrahera stop-noder: relation.members med role "stop" eller "stop_entry_only" eller taggad public_transport=platform, stop_position, etc.
+      // Extrahera stop-noder (med role innehållande "stop")
       const stopNodes = [];
       const stopNodeIds = new Set();
 
@@ -125,22 +124,18 @@ out skel qt;
         }
       }
 
-      // Heuristik: om inga stop-members, sök efter nodes i relation som har public_transport=platform, highway=bus_stop, railway=stop, etc.
+      // Heuristik: om inga stop-members, samla nodes med vanliga stopp-taggar som finns i elementen
       if (stopNodes.length === 0) {
         for (const [id, n] of nodes) {
           const t = n.tags || {};
           if (t.highway === 'bus_stop' || t.public_transport === 'platform' || t.railway === 'tram_stop' || t.railway === 'station' || t.public_transport === 'stop_position') {
-            // Node är i samma relation? Vi kan kontrollera if relation.members contain this id, else accept heuristically if name/ref matches
-            // Här: om nodens "ref" eller name innehåller linjenumret så lägg till (extra permissiv)
-            const name = (t.name || '').toString();
-            if (name && name.match(/[0-9]+/) || true) {
-              stopNodes.push(n); stopNodeIds.add(n.id);
-            }
+            stopNodes.push(n);
+            stopNodeIds.add(n.id);
           }
         }
       }
 
-      // Som sista utväg: sök bland way-members för att bygga geometri (t.ex. spår)
+      // Bygg way-geometrier från relationens way-members
       const wayGeoms = [];
       if (chosen.members && chosen.members.length) {
         for (const m of chosen.members) {
@@ -149,7 +144,6 @@ out skel qt;
             if (w.geometry && w.geometry.length) {
               wayGeoms.push(w.geometry.map(p => [p.lat, p.lon]));
             } else if (w.nodes && w.nodes.length) {
-              // om inga geometry-fält (kan hända beroende på overpass out-sätt), försök via nodes-map
               const coords = w.nodes.map(nid => {
                 const nn = nodes.get(nid);
                 return nn ? [nn.lat, nn.lon] : null;
@@ -160,9 +154,9 @@ out skel qt;
         }
       }
 
-      // Om vi hittat stopNodes: rita dem och skapa en polyline längs deras ordning (membership-order om möjligt)
+      // Rita stoppnoder om tillgängliga
       if (stopNodes.length) {
-        // Försök använda ordningen från relation.members när möjligt
+        // Försök få ordning från relation.members
         const orderedStops = [];
         if (chosen.members && chosen.members.length) {
           for (const m of chosen.members) {
@@ -172,21 +166,21 @@ out skel qt;
             }
           }
         }
-        // Fallback: om orderedStops tom, använd stopNodes
         const finalStops = orderedStops.length ? orderedStops : stopNodes;
 
         const latlngs = [];
         finalStops.forEach(n => {
           latlngs.push([n.lat, n.lon]);
-          const popup = `<b>${escapeHtml(n.tags && (n.tags.name || n.tags.ref) || 'Hållplats')}</b><br>ID: ${n.id}`;
+          const title = (n.tags && (n.tags.name || n.tags.ref)) || 'Hållplats';
+          const popup = `<b>${escapeHtml(title)}</b><br>ID: ${n.id}`;
           const marker = L.circleMarker([n.lat, n.lon], { radius:6, fillColor:'#ff5722', color:'#fff', weight:1, fillOpacity:1 }).bindPopup(popup);
           stopsLayer.addLayer(marker);
         });
 
         if (latlngs.length > 1) {
-          const poly = L.polyline(latlngs, { color:'#007bff', weight:4, opacity:0.8 });
+          const poly = L.polyline(latlngs, { color:'#007bff', weight:4, opacity:0.85 });
           waysLayer.addLayer(poly);
-          map.fitBounds(poly.getBounds(), { padding: [60,60] });
+          safeFitBounds([stopsLayer, waysLayer]);
         } else if (latlngs.length === 1) {
           map.setView(latlngs[0], 15);
         }
@@ -195,20 +189,53 @@ out skel qt;
         return;
       }
 
-      // Om inga stops men way-geometri finns, rita way-geometrier
+      // Om inga stopp men way-geometri finns, rita way-geometrier
       if (wayGeoms.length) {
-        // slår ihop geometrier till en polyline (enkelt)
         wayGeoms.forEach(g => {
-          const poly = L.polyline(g, { color:'#007bff', weight:4, opacity:0.8 });
+          const poly = L.polyline(g, { color:'#007bff', weight:4, opacity:0.85 });
           waysLayer.addLayer(poly);
         });
-        const groupBounds = waysLayer.getBounds();
-        if (groupBounds.isValid()) map.fitBounds(groupBounds, { padding:[60,60] });
+
+        safeFitBounds([waysLayer]);
         statusEl.textContent = `Visar ${wayGeoms.length} geometridel(ar) för relation ${chosen.tags && chosen.tags.ref ? chosen.tags.ref : chosen.id}.`;
         return;
       }
 
-      statusEl.textContent = 'Hittade varken stoppnoder eller geometri i relationen.';
+      statusEl.textContent = 'Hittade varken stoppnoder eller användbar geometri i relationen.';
+    }
+
+    // Hjälp: säkert fitBounds för en eller flera layerGroups
+    function safeFitBounds(layerGroups) {
+      const layers = [];
+      for (const lg of layerGroups) {
+        if (!lg) continue;
+        const ll = lg.getLayers ? lg.getLayers() : [];
+        for (const l of ll) layers.push(l);
+      }
+      if (layers.length === 0) return;
+
+      const fg = L.featureGroup(layers);
+      const bounds = fg.getBounds();
+      // Leaflet har isValid i nyare versioner; kontrollera robust
+      const valid = (typeof bounds.isValid === 'function') ? bounds.isValid() : (bounds && bounds.toBBoxString && bounds.toBBoxString() !== '0,0,0,0');
+      if (valid) {
+        map.fitBounds(bounds, { padding: [60, 60] });
+      } else {
+        // fallback: centra på första latlng om möjligt
+        try {
+          const firstLayer = layers[0];
+          let latlng = null;
+          if (firstLayer.getLatLng) latlng = firstLayer.getLatLng();
+          else if (firstLayer.getLatLngs) {
+            const ll = firstLayer.getLatLngs();
+            if (Array.isArray(ll) && ll.length) {
+              const item = Array.isArray(ll[0]) ? ll[0][0] : (ll[0] && ll[0][0]);
+              latlng = item;
+            }
+          }
+          if (latlng) map.setView(latlng, 13);
+        } catch (e) { /* ignore */ }
+      }
     }
 
     function escapeOverpass(s) {
