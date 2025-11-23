@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>SL-linje via OSM (Overpass) - Uppdaterad</title>
+  <title>SL-linje via OSM (Overpass) - Fixade bounds</title>
 
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
@@ -41,10 +41,8 @@
     const map = L.map('map', { zoomControl: true }).setView([59.33,18.06], 11);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap contributors' }).addTo(map);
 
-    const stopsLayer = L.layerGroup();
-    const waysLayer = L.layerGroup();
-    stopsLayer.addTo(map);
-    waysLayer.addTo(map);
+    const stopsLayer = L.layerGroup().addTo(map);
+    const waysLayer = L.layerGroup().addTo(map);
     const statusEl = document.getElementById('status');
 
     document.getElementById('btn').addEventListener('click', () => {
@@ -204,29 +202,27 @@ out skel qt;
       statusEl.textContent = 'Hittade varken stoppnoder eller användbar geometri i relationen.';
     }
 
-    // Hjälp: säkert fitBounds för en eller flera layerGroups
+    // Hjälp: säkert fitBounds för en eller flera layerGroups (ingen anrop av getBounds() på LayerGroup)
     function safeFitBounds(layerGroups) {
       const layers = [];
       for (const lg of layerGroups) {
         if (!lg) continue;
-        const ll = lg.getLayers ? lg.getLayers() : [];
+        const ll = (typeof lg.getLayers === 'function') ? lg.getLayers() : [];
         for (const l of ll) layers.push(l);
       }
       if (layers.length === 0) return;
 
       const fg = L.featureGroup(layers);
       const bounds = fg.getBounds();
-      // Leaflet har isValid i nyare versioner; kontrollera robust
       const valid = (typeof bounds.isValid === 'function') ? bounds.isValid() : (bounds && bounds.toBBoxString && bounds.toBBoxString() !== '0,0,0,0');
       if (valid) {
         map.fitBounds(bounds, { padding: [60, 60] });
       } else {
-        // fallback: centra på första latlng om möjligt
         try {
           const firstLayer = layers[0];
           let latlng = null;
-          if (firstLayer.getLatLng) latlng = firstLayer.getLatLng();
-          else if (firstLayer.getLatLngs) {
+          if (typeof firstLayer.getLatLng === 'function') latlng = firstLayer.getLatLng();
+          else if (typeof firstLayer.getLatLngs === 'function') {
             const ll = firstLayer.getLatLngs();
             if (Array.isArray(ll) && ll.length) {
               const item = Array.isArray(ll[0]) ? ll[0][0] : (ll[0] && ll[0][0]);
