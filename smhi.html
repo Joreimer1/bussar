@@ -288,20 +288,23 @@
                             font: { size: 16 }
                         }
                     },
-                    scales: {
+scales: {
                         'y-precip': {
                             type: 'linear',
                             position: 'left',
-                            beginAtZero: true,
+                            min: 0,
+                            max: 3,
                             title: {
                                 display: true,
-                                text: 'Nederbörd (mm/h)',
+                                text: 'Nederbörd',
                                 color: '#764ba2'
                             },
                             ticks: {
                                 color: '#764ba2',
+                                stepSize: 1,
                                 callback: function(value) {
-                                    return value + ' mm';
+                                    const labels = ['Uppehåll', 'Duggregn', 'Måttligt regn', 'Kraftigt regn'];
+                                    return labels[value] || '';
                                 }
                             },
                             grid: {
@@ -311,7 +314,8 @@
                         'y-temp': {
                             type: 'linear',
                             position: 'right',
-                            beginAtZero: false,
+                            min: -20,
+                            max: 25,
                             title: {
                                 display: true,
                                 text: 'Temperatur (°C)',
@@ -319,8 +323,9 @@
                             },
                             ticks: {
                                 color: '#667eea',
+                                stepSize: 5,
                                 callback: function(value) {
-                                    return value.toFixed(1) + '°C';
+                                    return value + '°C';
                                 }
                             },
                             grid: {
