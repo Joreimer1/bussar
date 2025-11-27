@@ -1,27 +1,555 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="sv">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Test Leaflet</title>
-
-  <!-- Enkel CDN utan integrity -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-  <style> #map { width:100%; height:480px; border-radius:8px; } </style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Walking Coverage — Gator i stadsdelen</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    body{font-family:Arial, sans-serif;margin:0;padding:14px;background:#f3f5f8;display:flex;flex-direction:column;align-items:center}
+    h1{margin:0 0 12px;color:#222}
+    #controls{margin-bottom:12px;display:flex;gap:8px;flex-wrap:wrap}
+    button{padding:8px 14px;border:0;border-radius:6px;background:#007bff;color:#fff;cursor:pointer}
+    button.secondary{background:#6c757d}
+    button.danger{background:#dc3545}
+    #map{width:100%;max-width:1000px;height:640px;border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,.08);cursor:crosshair}
+    #info{width:100%;max-width:1000px;margin-top:12px;background:white;padding:12px;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,.04)}
+    #info h2{margin:0 0 8px;font-size:16px}
+    #list{max-height:220px;overflow:auto;margin:8px 0;padding:0;list-style:none}
+    #list li{padding:6px 8px;border-bottom:1px solid #eee;display:flex;justify-content:space-between;align-items:center}
+    .bar{height:8px;background:#e9ecef;border-radius:6px;overflow:hidden;flex:1;margin-left:12px;margin-right:12px}
+    .bar > i{display:block;height:100%;background:linear-gradient(90deg,#28a745,#82e0a8)}
+    .small{font-size:13px;color:#555}
+    .done-name{color:#1b7a2f}
+    .near-done-name{color:#b07f2f}
+  </style>
 </head>
 <body>
+  <h1>Walking Coverage — Gator i stadsdelen</h1>
+
+  <div id="controls">
+    <button id="loadStreetsBtn">Ladda gator för vald stadsdel</button>
+    <button id="analyzeBtn" class="secondary">Analysera täckning</button>
+    <button id="resetBtn" class="danger">Rensa allt</button>
+    <button id="centerBtn" class="secondary">Centrera på rutten</button>
+  </div>
+
   <div id="map"></div>
+
+  <div id="info">
+    <h2>Sammanfattning</h2>
+    <div id="summary" class="small">Inget ännu. Klicka på kartan för att simulera promenad. Ladda gator för området och analysera.</div>
+    <ul id="list"></ul>
+  </div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
-    const map = L.map('map').setView([59.3293,18.0686],13);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom:19,
-      attribution: '&copy; OpenStreetMap contributors'
-    }).addTo(map);
+/* ---------- Konfiguration (standard) ---------- */
+const DENSIFY_M = 8;         // max mellan OSM-vertices i meter
+const SAMPLE_STEP_M = 2;     // sampling av användarrutt i meter
+const PROXIMITY_M = 8;       // hur nära ett segment räknas som "på" gatan
+const GRID_CELL_DEG = 0.0012; // enkel grid-index cellstorlek (≈ 100-130m beroende på lat)
+const MERGED_EPS_T = 0.012;  // t-buffer när vi slår ihop besökta punkter (justera efter sample)
 
-    // Enkel testmarkör
-    L.marker([59.3293,18.0686]).addTo(map).bindPopup('Stockholm').openPopup();
+// Trösklar för att betrakta gata som "klar"
+const GATE_DONE_PCT = 0.75;      // 75% av gatans längd
+const GATE_MIN_SEG_PCT = 0.40;   // minst 40% av segments (valfritt kompletterande krav)
+const GATE_MIN_CONTIG_M = 10;    // minst 10 m kontinuerlig täckning (valfritt kompletterande krav)
+
+/* ---------- Leaflet setup ---------- */
+const map = L.map('map').setView([59.3326, 18.0649], 15);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap contributors' }).addTo(map);
+
+/* ---------- Global state ---------- */
+let rawCoordinates = []; // user path [[lat,lon],...]
+let rawPolyline = null;
+let streetSegments = []; // varje segment {id, wayId, name, coords:[[lat,lon],[lat,lon]], lengthMeters, bbox, visitedIntervals, coveredMeters, coveredFraction}
+let gridIndex = null; // {grid:Map, cellSizeDeg}
+let streetBaseLayer = L.layerGroup().addTo(map);
+let coveredLayer = L.layerGroup().addTo(map);
+let doneWayLayer = L.layerGroup().addTo(map);
+
+/* ---------- Hjälpfunktioner ---------- */
+function calculateDistanceLatLng(a,b){ return L.latLng(a[0],a[1]).distanceTo(L.latLng(b[0],b[1])); }
+
+function densifyLine(points, maxDistM){
+  if(!points || points.length<2) return points?points.slice():[];
+  const out = [];
+  for(let i=0;i<points.length-1;i++){
+    const a=points[i], b=points[i+1];
+    out.push(a);
+    const dist = calculateDistanceLatLng(a,b);
+    if(dist > maxDistM){
+      const steps = Math.ceil(dist / maxDistM);
+      for(let s=1;s<steps;s++){
+        const t = s / steps;
+        out.push([ a[0] + (b[0]-a[0])*t, a[1] + (b[1]-a[1])*t ]);
+      }
+    }
+  }
+  out.push(points[points.length-1]);
+  return out;
+}
+
+/* Ramer-Douglas-Peucker (för eventuell förenkling) — använder lat,lon */
+function perpendicularDistance(point, lineStart, lineEnd) {
+  const x=point[0], y=point[1];
+  const x1=lineStart[0], y1=lineStart[1];
+  const x2=lineEnd[0], y2=lineEnd[1];
+  const dx=x2-x1, dy=y2-y1;
+  if(dx===0 && dy===0) return Math.hypot(x-x1,y-y1);
+  const t = ((x-x1)*dx + (y-y1)*dy) / (dx*dx + dy*dy);
+  let cx, cy;
+  if(t<0){ cx=x1; cy=y1; }
+  else if(t>1){ cx=x2; cy=y2; }
+  else{ cx = x1 + t*dx; cy = y1 + t*dy; }
+  return Math.hypot(x-cx, y-cy);
+}
+function RamerDouglasPeucker(points, epsilon) {
+  if(!points || points.length < 3) return points?points.slice():[];
+  let maxD=0, index=0, end=points.length-1;
+  for(let i=1;i<end;i++){
+    const d = perpendicularDistance(points[i], points[0], points[end]);
+    if(d>maxD){ maxD=d; index=i; }
+  }
+  if(maxD > epsilon){
+    const res1 = RamerDouglasPeucker(points.slice(0,index+1), epsilon);
+    const res2 = RamerDouglasPeucker(points.slice(index,end+1), epsilon);
+    return res1.slice(0,res1.length-1).concat(res2);
+  } else return [points[0], points[end]];
+}
+
+/* ---------- Grid-index (enkelt) ---------- */
+function buildGridIndex(segments, cellSizeDeg = GRID_CELL_DEG){
+  const grid = new Map();
+  function keyFor(lat, lon){ const r=Math.floor(lat/cellSizeDeg), c=Math.floor(lon/cellSizeDeg); return `${r},${c}`; }
+  segments.forEach(seg=>{
+    const [minLat,minLon,maxLat,maxLon] = seg.bbox;
+    const r0 = Math.floor(minLat/cellSizeDeg), r1=Math.floor(maxLat/cellSizeDeg);
+    const c0 = Math.floor(minLon/cellSizeDeg), c1=Math.floor(maxLon/cellSizeDeg);
+    for(let r=r0;r<=r1;r++) for(let c=c0;c<=c1;c++){
+      const k = `${r},${c}`;
+      if(!grid.has(k)) grid.set(k, []);
+      grid.get(k).push(seg.id);
+    }
+  });
+  return {grid, cellSizeDeg};
+}
+function queryGrid(gridIndex, lat, lon, extCells=1){
+  const {grid, cellSizeDeg} = gridIndex;
+  const rr = Math.floor(lat / cellSizeDeg), cc = Math.floor(lon / cellSizeDeg);
+  const ids = new Set();
+  for(let r=rr-extCells;r<=rr+extCells;r++){
+    for(let c=cc-extCells;c<=cc+extCells;c++){
+      const k = `${r},${c}`;
+      const list = grid.get(k);
+      if(list) list.forEach(id=>ids.add(id));
+    }
+  }
+  return Array.from(ids);
+}
+
+/* ---------- Segment bygg och förbered ---------- */
+function buildSegmentsFromWays(geojson, densifyM = DENSIFY_M){
+  const segments = [];
+  let segId = 0;
+  geojson.features.forEach((feat, wi) => {
+    if(!feat.geometry || feat.geometry.type !== 'LineString') return;
+    const coords = feat.geometry.coordinates.map(c => [c[1], c[0]]); // lat,lon
+    const densified = densifyLine(coords, densifyM);
+    for(let i=0;i<densified.length-1;i++){
+      const a = densified[i], b = densified[i+1];
+      const len = calculateDistanceLatLng(a,b);
+      const bbox = [ Math.min(a[0],b[0]), Math.min(a[1],b[1]), Math.max(a[0],b[0]), Math.max(a[1],b[1]) ];
+      segments.push({
+        id: segId++,
+        wayId: feat.properties && (feat.properties['@id'] || feat.properties.osm_id || feat.id) ? (feat.properties['@id'] || feat.properties.osm_id || feat.id) : wi,
+        name: (feat.properties && (feat.properties.name || feat.properties['name:sv'])) || (feat.properties && feat.properties.highway) || "unnamed",
+        wayProperties: feat.properties || {},
+        coords: [a,b],
+        lengthMeters: len,
+        bbox,
+        visitedIntervals: [],
+        coveredMeters: 0,
+        coveredFraction: 0
+      });
+    }
+  });
+  return segments;
+}
+
+/* ---------- Sampling av path ---------- */
+function samplePath(rawPath, stepM = SAMPLE_STEP_M){
+  const out = [];
+  for(let i=0;i<rawPath.length-1;i++){
+    const a = rawPath[i], b = rawPath[i+1];
+    const dist = calculateDistanceLatLng(a,b);
+    const steps = Math.max(1, Math.ceil(dist / stepM));
+    for(let s=0;s<steps;s++){
+      const t = s / steps;
+      out.push([ a[0] + (b[0]-a[0])*t, a[1] + (b[1]-a[1])*t ]);
+    }
+  }
+  out.push(rawPath[rawPath.length-1]);
+  return out;
+}
+
+/* Projektion av punkt på segment */
+function projPointOnSeg(pt, seg){
+  const ax = seg.coords[0][0], ay = seg.coords[0][1];
+  const bx = seg.coords[1][0], by = seg.coords[1][1];
+  const px = pt[0], py = pt[1];
+  const dx = bx - ax, dy = by - ay;
+  const len2 = dx*dx + dy*dy;
+  if(len2 === 0) return {distMeters: calculateDistanceLatLng([ax,ay],[px,py]), t:0};
+  const t = ((px-ax)*dx + (py-ay)*dy) / len2;
+  const tc = Math.max(0, Math.min(1, t));
+  const projLat = ax + tc*dx;
+  const projLon = ay + tc*dy;
+  const dist = calculateDistanceLatLng([px,py],[projLat,projLon]);
+  return {distMeters: dist, t: tc};
+}
+
+function markSegmentVisited(seg, t){ seg.visitedIntervals.push([t,t]); }
+
+/* Slå ihop intervall och beräkna coverage */
+function finalizeSegmentCoverage(segments){
+  segments.forEach(seg=>{
+    if(!seg.visitedIntervals.length){ seg.coveredMeters=0; seg.coveredFraction=0; seg._mergedIntervals=[]; return; }
+    const sorted = seg.visitedIntervals.slice().sort((a,b)=>a[0]-b[0]);
+    const merged = [];
+    let cur = [sorted[0][0]-MERGED_EPS_T, sorted[0][1]+MERGED_EPS_T];
+    for(let i=1;i<sorted.length;i++){
+      const s = sorted[i];
+      if(s[0]-MERGED_EPS_T <= cur[1]){
+        cur[1] = Math.max(cur[1], s[1]+MERGED_EPS_T);
+      } else {
+        merged.push([Math.max(0,cur[0]), Math.min(1,cur[1])]);
+        cur = [s[0]-MERGED_EPS_T, s[1]+MERGED_EPS_T];
+      }
+    }
+    merged.push([Math.max(0,cur[0]), Math.min(1,cur[1])]);
+
+    let covered = 0;
+    merged.forEach(iv=>{
+      const frac = Math.max(0, iv[1]-iv[0]);
+      covered += frac * seg.lengthMeters;
+    });
+    seg.coveredMeters = Math.min(seg.lengthMeters, covered);
+    seg.coveredFraction = seg.lengthMeters>0 ? (seg.coveredMeters/seg.lengthMeters) : 0;
+    seg._mergedIntervals = merged;
+  });
+}
+
+/* ---------- Visualisering ---------- */
+function drawStreetBase(segments){
+  streetBaseLayer.clearLayers();
+  doneWayLayer.clearLayers();
+  segments.forEach(seg=>{
+    const latlngs = [ seg.coords[0], seg.coords[1] ];
+    L.polyline(latlngs, {color:'#bdbfc1', weight:4, opacity:0.9}).addTo(streetBaseLayer);
+  });
+}
+function drawCoverage(segments){
+  coveredLayer.clearLayers();
+  segments.forEach(seg=>{
+    if(!seg._mergedIntervals || seg._mergedIntervals.length===0) return;
+    seg._mergedIntervals.forEach(iv=>{
+      const t0 = Math.max(0, Math.min(1, iv[0])), t1 = Math.max(0, Math.min(1, iv[1]));
+      const a = seg.coords[0], b = seg.coords[1];
+      const p0 = [ a[0] + (b[0]-a[0])*t0, a[1] + (b[1]-a[1])*t0 ];
+      const p1 = [ a[0] + (b[0]-a[0])*t1, a[1] + (b[1]-a[1])*t1 ];
+      L.polyline([p0,p1], {color:'#28a745', weight:6, opacity:0.95}).addTo(coveredLayer);
+    });
+  });
+}
+function drawDoneWays(waysAggregated){
+  doneWayLayer.clearLayers();
+  waysAggregated.forEach(w=>{
+    if(!w.done) return;
+    const segs = streetSegments.filter(s => s.wayId === w.wayId);
+    segs.forEach(s => {
+      L.polyline([s.coords[0], s.coords[1]], {color:'#0b5f2a', weight:6, opacity:0.95}).addTo(doneWayLayer);
+    });
+  });
+}
+
+/* ---------- Aggregation och "done"-regel ---------- */
+function aggregatePerWayEnhanced(segments){
+  const byWay = new Map();
+
+  segments.forEach(s => {
+    if (!byWay.has(s.wayId)) byWay.set(s.wayId, {
+      wayId: s.wayId,
+      name: s.name,
+      totalMeters: 0,
+      coveredMeters: 0,
+      segCount: 0,
+      segCoveredCount: 0,
+      segCoveredIntervals: [] // {length, merged}
+    });
+    const w = byWay.get(s.wayId);
+    w.totalMeters += s.lengthMeters;
+    w.coveredMeters += s.coveredMeters || 0;
+    w.segCount += 1;
+    if ((s.coveredMeters || 0) > 0) { w.segCoveredCount += 1; }
+    w.segCoveredIntervals.push({length: s.lengthMeters, merged: s._mergedIntervals || []});
+  });
+
+  const out = [];
+  byWay.forEach(w => {
+    const coveredPct = w.totalMeters > 0 ? (w.coveredMeters / w.totalMeters) : 0;
+    const segCoveredPct = w.segCount > 0 ? (w.segCoveredCount / w.segCount) : 0;
+
+    // uppskatta största kontinuerliga täckta del
+    let maxContig = 0;
+    w.segCoveredIntervals.forEach(si => {
+      if (!si.merged || si.merged.length === 0) return;
+      si.merged.forEach(iv => {
+        const frac = Math.max(0, iv[1] - iv[0]);
+        const len = frac * si.length;
+        if (len > maxContig) maxContig = len;
+      });
+    });
+
+    const passesLengthPct = coveredPct >= GATE_DONE_PCT;
+    const passesSegPct = segCoveredPct >= GATE_MIN_SEG_PCT;
+    const passesContig = maxContig >= GATE_MIN_CONTIG_M;
+
+    const done = passesLengthPct && (GATE_MIN_SEG_PCT ? passesSegPct : true) && (GATE_MIN_CONTIG_M ? passesContig : true);
+
+    out.push({
+      wayId: w.wayId,
+      name: w.name,
+      totalMeters: w.totalMeters,
+      coveredMeters: w.coveredMeters,
+      coveredPct,
+      segCount: w.segCount,
+      segCoveredCount: w.segCoveredCount,
+      segCoveredPct,
+      maxContigMeters: maxContig,
+      done
+    });
+  });
+
+  out.sort((a,b) => {
+    if (a.done !== b.done) return a.done ? -1 : 1;
+    return b.coveredPct - a.coveredPct;
+  });
+
+  return out;
+}
+
+function aggregateDistrict(ways){
+  const total = ways.reduce((acc,w)=>acc + w.totalMeters, 0);
+  const covered = ways.reduce((acc,w)=>acc + w.coveredMeters, 0);
+  return {total, covered, coveredPct: total>0 ? covered/total : 0};
+}
+
+/* ---------- Ny: Slå ihop per gatunamn (viktat) ---------- */
+function aggregateByStreetName(waysAggregated) {
+  const byName = new Map();
+  waysAggregated.forEach(w => {
+    const name = (w.name || 'unnamed').trim();
+    if(!byName.has(name)) byName.set(name, { name, totalMeters:0, coveredMeters:0, doneCount:0, wayCount:0, maxContigMeters:0 });
+    const entry = byName.get(name);
+    entry.totalMeters += w.totalMeters;
+    entry.coveredMeters += w.coveredMeters;
+    entry.wayCount += 1;
+    if(w.done) entry.doneCount += 1;
+    if(w.maxContigMeters > entry.maxContigMeters) entry.maxContigMeters = w.maxContigMeters;
+  });
+
+  const list = Array.from(byName.values()).map(e => {
+    const coveredPct = e.totalMeters > 0 ? (e.coveredMeters / e.totalMeters) : 0;
+    const doneByWays = e.doneCount >= Math.ceil(e.wayCount * 0.5);
+    const doneByLength = coveredPct >= GATE_DONE_PCT;
+    const done = doneByLength || doneByWays;
+    return {
+      name: e.name,
+      totalMeters: e.totalMeters,
+      coveredMeters: e.coveredMeters,
+      coveredPct,
+      maxContigMeters: e.maxContigMeters,
+      done
+    };
+  });
+
+  list.sort((a,b) => {
+    if(a.done !== b.done) return a.done ? -1 : 1;
+    return b.coveredPct - a.coveredPct;
+  });
+
+  return list;
+}
+
+/* ---------- Huvudanalys ---------- */
+function analyzeCoverage(){
+  if(rawCoordinates.length < 2){ alert('Simulera promenad genom att klicka minst två punkter på kartan först.'); return; }
+  if(!streetSegments || streetSegments.length===0){ alert('Ladda gatnät först (Ladda gator för vy).'); return; }
+
+  streetSegments.forEach(s=>s.visitedIntervals = []);
+  const samples = samplePath(rawCoordinates, SAMPLE_STEP_M);
+
+  for(const pt of samples){
+    const candIds = queryGrid(gridIndex, pt[0], pt[1], 1);
+    for(const id of candIds){
+      const seg = streetSegments[id];
+      const proj = projPointOnSeg(pt, seg);
+      if(proj.distMeters <= PROXIMITY_M){
+        markSegmentVisited(seg, proj.t);
+      }
+    }
+  }
+
+  finalizeSegmentCoverage(streetSegments);
+  drawCoverage(streetSegments);
+  const ways = aggregatePerWayEnhanced(streetSegments);
+  const district = aggregateDistrict(ways);
+
+  // Slå ihop per gatunamn och rendera
+  const streets = aggregateByStreetName(ways);
+  renderSummaryFromStreets(streets, district);
+  drawDoneStreets(streets);
+}
+
+/* ---------- UI render (uppdaterad: visar per gatunamn) ---------- */
+function renderSummaryFromStreets(streets, district){
+  const summaryEl = document.getElementById('summary');
+  summaryEl.innerHTML = `<strong>Stadsdelstäckning:</strong> ${(district.coveredPct*100).toFixed(2)}% av ${(district.total/1000).toFixed(2)} km` +
+                        ` (täckt: ${(district.covered/1000).toFixed(2)} km).`;
+  const listEl = document.getElementById('list');
+  listEl.innerHTML = '';
+
+  const top = streets.slice(0,200);
+  top.forEach(s=>{
+    const li = document.createElement('li');
+    const title = document.createElement('div');
+    const nameStrong = document.createElement('strong');
+    nameStrong.textContent = String(s.name || 'unnamed');
+    if(s.done) nameStrong.className = 'done-name';
+    else if(s.coveredPct >= 0.5) nameStrong.className = 'near-done-name';
+    title.appendChild(nameStrong);
+
+    const meta = document.createElement('div');
+    meta.className = 'small';
+    meta.style.marginTop = '4px';
+    meta.textContent = ` ${Math.round(s.totalMeters)} m • störst kontin: ${Math.round(s.maxContigMeters)} m`;
+    title.appendChild(meta);
+
+    const right = document.createElement('div');
+    right.style.display='flex'; right.style.alignItems='center';
+
+    const pctText = document.createElement('div');
+    pctText.className='small'; pctText.textContent = s.done ? 'Klar' : `${(s.coveredPct*100).toFixed(1)}%`;
+
+    const bar = document.createElement('div');
+    bar.className='bar';
+    const inner = document.createElement('i');
+    inner.style.width = `${Math.round(s.coveredPct*100)}%`;
+    bar.appendChild(inner);
+
+    right.appendChild(pctText); right.appendChild(bar);
+    li.appendChild(title); li.appendChild(right);
+    listEl.appendChild(li);
+  });
+}
+
+/* ---------- Rita hela gator (per gatunamn) ---------- */
+function drawDoneStreets(streetsAggregatedByName){
+  doneWayLayer.clearLayers();
+  const doneNames = new Set(streetsAggregatedByName.filter(s => s.done).map(s => s.name));
+  if(doneNames.size === 0) return;
+  streetSegments.forEach(s => {
+    if(doneNames.has(s.name)){
+      L.polyline([s.coords[0], s.coords[1]], {color:'#0b5f2a', weight:6, opacity:0.95}).addTo(doneWayLayer);
+    }
+  });
+}
+
+/* ---------- OSM / Overpass hentning ---------- */
+async function loadStreetsForView(){
+  const bounds = map.getBounds();
+  const s = bounds.getSouth(), w = bounds.getWest(), n = bounds.getNorth(), e = bounds.getEast();
+  const query = `
+    [out:json][timeout:25];
+    (
+      way["highway"~"^(residential|unclassified|tertiary|secondary|primary|service|footway|living_street|pedestrian)$"](${s},${w},${n},${e});
+    );
+    out body;
+    >;
+    out skel qt;
+  `;
+  const url = 'https://overpass-api.de/api/interpreter';
+  try {
+    const resp = await fetch(url, { method:'POST', body: query });
+    if(!resp.ok) throw new Error('Overpass error ' + resp.status);
+    const data = await resp.json();
+    const geo = overpassToGeoJSON(data);
+    streetSegments = buildSegmentsFromWays(geo, DENSIFY_M);
+    gridIndex = buildGridIndex(streetSegments);
+    drawStreetBase(streetSegments);
+    alert(`Hämtade ${geo.features.length} ways → ${streetSegments.length} segments.`);
+  } catch(err){
+    console.error(err);
+    alert('Misslyckades att hämta gator: ' + (err.message || err));
+  }
+}
+
+/* Enkel Overpass -> GeoJSON assembler (byggt för ways + nodes) */
+function overpassToGeoJSON(osmJson){
+  const nodes = new Map();
+  (osmJson.elements || []).forEach(el => { if(el.type === 'node') nodes.set(el.id, el); });
+  const features = [];
+  (osmJson.elements || []).forEach(el => {
+    if(el.type === 'way'){
+      const coords = [];
+      let ok = true;
+      for(const nid of el.nodes){
+        const n = nodes.get(nid);
+        if(!n){ ok=false; break; }
+        coords.push([n.lon, n.lat]);
+      }
+      if(!ok || coords.length < 2) return;
+      const props = Object.assign({}, el.tags || {});
+      props['@id'] = 'way/'+el.id;
+      features.push({ type:'Feature', id: el.id, properties: props, geometry: { type:'LineString', coordinates: coords }});
+    }
+  });
+  return { type:'FeatureCollection', features };
+}
+
+/* ---------- Kartinteraktion: simulera promenad med klick ---------- */
+map.on('click', function(e){
+  const lat = e.latlng.lat, lon = e.latlng.lng;
+  rawCoordinates.push([lat, lon]);
+  if(rawPolyline) map.removeLayer(rawPolyline);
+  rawPolyline = L.polyline(rawCoordinates, { color:'red', weight:4, dashArray:'6,8' }).addTo(map);
+});
+
+/* ---------- Buttons ---------- */
+document.getElementById('loadStreetsBtn').addEventListener('click', loadStreetsForView);
+document.getElementById('analyzeBtn').addEventListener('click', analyzeCoverage);
+document.getElementById('resetBtn').addEventListener('click', ()=>{
+  rawCoordinates = [];
+  if(rawPolyline) map.removeLayer(rawPolyline);
+  rawPolyline = null;
+  streetSegments = [];
+  gridIndex = null;
+  streetBaseLayer.clearLayers();
+  coveredLayer.clearLayers();
+  doneWayLayer.clearLayers();
+  document.getElementById('summary').textContent = 'Inget ännu. Klicka på kartan för att simulera promenad. Ladda gator för området och analysera.';
+  document.getElementById('list').innerHTML = '';
+});
+document.getElementById('centerBtn').addEventListener('click', ()=>{
+  if(rawCoordinates.length) map.fitBounds(L.latLngBounds(rawCoordinates).pad(0.12));
+});
+
+/* ---------- Enkel hjälpfunktion för html-escaping ---------- */
+function escapeHtml(s){ return String(s).replace(/[&<>"']/g, c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])); }
+
+/* ---------- Init done ---------- */
   </script>
 </body>
 </html>
