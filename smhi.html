@@ -232,10 +232,23 @@
                 return time.getHours() + ':00';
             });
             
-            const temperatures = forecast.map(f => getParameterValue(f, 't'));
+            const temperatures = forecast.map(f => {
+                const temp = getParameterValue(f, 't');
+                // Begränsa temperatur till skalan -20 till +25
+                return Math.max(-20, Math.min(25, temp));
+            });
+            
             const precipitation = forecast.map(f => {
-                const pmean = getParameterValue(f, 'pmean');
-                return pmean || 0;
+                const pmean = getParameterValue(f, 'pmean') || 0;
+                // Kategorisera nederbörd:
+                // 0 = Uppehåll (0 mm/h)
+                // 1 = Duggregn (0-0.5 mm/h)
+                // 2 = Måttligt regn (0.5-2 mm/h)
+                // 3 = Kraftigt regn (>2 mm/h)
+                if (pmean === 0) return 0;
+                if (pmean <= 0.5) return 1;
+                if (pmean <= 2) return 2;
+                return 3;
             });
             
             const ctx = document.getElementById('combinedChart').getContext('2d');
@@ -257,13 +270,19 @@
                         {
                             label: 'Temperatur (°C)',
                             data: temperatures,
-                            borderColor: '#667eea',
+                            segment: {
+                                borderColor: ctx => {
+                                    const temp = ctx.p1.parsed.y;
+                                    return temp >= 0 ? '#ef4444' : '#3b82f6';
+                                }
+                            },
                             backgroundColor: 'transparent',
                             borderWidth: 3,
                             fill: false,
                             tension: 0.4,
                             pointRadius: 4,
                             pointHoverRadius: 6,
+                            pointBackgroundColor: temperatures.map(t => t >= 0 ? '#ef4444' : '#3b82f6'),
                             yAxisID: 'y-temp',
                             type: 'line',
                             order: 1
@@ -288,7 +307,7 @@
                             font: { size: 16 }
                         }
                     },
-scales: {
+                    scales: {
                         'y-precip': {
                             type: 'linear',
                             position: 'left',
@@ -329,7 +348,19 @@ scales: {
                                 }
                             },
                             grid: {
-                                drawOnChartArea: true
+                                drawOnChartArea: true,
+                                color: function(context) {
+                                    if (context.tick.value === 0) {
+                                        return '#3b82f6';
+                                    }
+                                    return 'rgba(0, 0, 0, 0.1)';
+                                },
+                                lineWidth: function(context) {
+                                    if (context.tick.value === 0) {
+                                        return 3;
+                                    }
+                                    return 1;
+                                }
                             }
                         }
                     }
