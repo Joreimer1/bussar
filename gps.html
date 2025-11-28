@@ -256,6 +256,7 @@ function drawCoverage(segments){
 }
 
 /* ---------- Aggregation ---------- */
+/* Behåll aggregatePerWay om du vill jämföra, men vi använder aggregatePerStreetName för visning */
 function aggregatePerWay(segments){
   const byWay = new Map();
   segments.forEach(s=>{
@@ -265,13 +266,52 @@ function aggregatePerWay(segments){
     w.coveredMeters += s.coveredMeters || 0;
   });
   const list = Array.from(byWay.values()).map(w=>({ ...w, coveredPct: w.totalMeters>0 ? (w.coveredMeters / w.totalMeters) : 0 }));
-  // sortera efter coverage desc
   list.sort((a,b)=>b.coveredPct - a.coveredPct);
   return list;
 }
-function aggregateDistrict(ways){
-  const total = ways.reduce((acc,w)=>acc + w.totalMeters, 0);
-  const covered = ways.reduce((acc,w)=>acc + w.coveredMeters, 0);
+
+/* ---------- Ny: Aggregation per gatunamn ---------- */
+function normalizeName(n){
+  if(!n) return 'unnamed';
+  return String(n).trim().replace(/\s+/g,' ').toLowerCase();
+}
+
+function aggregatePerStreetName(segments){
+  const byName = new Map();
+  segments.forEach(s=>{
+    const nameKey = normalizeName(s.name);
+    if(!byName.has(nameKey)) byName.set(nameKey, {
+      name: s.name || 'unnamed',
+      totalMeters: 0,
+      coveredMeters: 0,
+      wayIds: new Set()
+    });
+    const entry = byName.get(nameKey);
+    entry.totalMeters += s.lengthMeters || 0;
+    entry.coveredMeters += s.coveredMeters || 0;
+    if(s.wayId) entry.wayIds.add(s.wayId);
+  });
+
+  const list = Array.from(byName.values()).map(e=>({
+    name: e.name,
+    totalMeters: e.totalMeters,
+    coveredMeters: e.coveredMeters,
+    coveredPct: e.totalMeters>0 ? (e.coveredMeters / e.totalMeters) : 0,
+    wayCount: e.wayIds.size
+  }));
+
+  // sortera efter coverage desc, sedan efter totalMeters desc
+  list.sort((a,b) => {
+    if(b.coveredPct !== a.coveredPct) return b.coveredPct - a.coveredPct;
+    return b.totalMeters - a.totalMeters;
+  });
+
+  return list;
+}
+
+function aggregateDistrict(items){
+  const total = items.reduce((acc,w)=>acc + (w.totalMeters||0), 0);
+  const covered = items.reduce((acc,w)=>acc + (w.coveredMeters||0), 0);
   return {total, covered, coveredPct: total>0 ? covered/total : 0};
 }
 
@@ -298,24 +338,27 @@ function analyzeCoverage(){
 
   finalizeSegmentCoverage(streetSegments);
   drawCoverage(streetSegments);
-  const ways = aggregatePerWay(streetSegments);
-  const district = aggregateDistrict(ways);
-  renderSummary(ways, district);
+
+  // Använd aggregering per gatunamn
+  const streets = aggregatePerStreetName(streetSegments);
+  const district = aggregateDistrict(streets);
+  renderSummary(streets, district);
 }
 
 /* ---------- UI render ---------- */
-function renderSummary(ways, district){
+function renderSummary(streets, district){
   const summaryEl = document.getElementById('summary');
-  summaryEl.innerHTML = `<strong>Stadsdelstäckning:</strong> ${(district.coveredPct*100).toFixed(2)}% av ${ (district.total/1000).toFixed(2) } km` +
+  summaryEl.innerHTML = `<strong>Stadsdelstäckning:</strong> ${(district.coveredPct*100).toFixed(2)}% av ${(district.total/1000).toFixed(2)} km` +
                         ` (täckt: ${(district.covered/1000).toFixed(2)} km).`;
   const listEl = document.getElementById('list');
   listEl.innerHTML = '';
-  // visa top 100 eller färre
-  const top = ways.slice(0,120);
+  // visa top 120 eller färre
+  const top = streets.slice(0,120);
   top.forEach(w=>{
     const li = document.createElement('li');
     const title = document.createElement('div');
-    title.innerHTML = `<strong>${escapeHtml(String(w.name || 'unnamed'))}</strong> <span class="small">(${(w.totalMeters).toFixed(0)} m)</span>`;
+    const wayInfo = w.wayCount ? ` <span class="small">(${w.wayCount} ways)</span>` : '';
+    title.innerHTML = `<strong>${escapeHtml(String(w.name || 'unnamed'))}</strong>${wayInfo} <span class="small">(${(w.totalMeters).toFixed(0)} m)</span>`;
     const right = document.createElement('div');
     right.style.display='flex'; right.style.alignItems='center';
     const pctText = document.createElement('div');
