@@ -3,15 +3,16 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Walking Coverage — Gatuandelar</title>
+  <title>Walking Coverage — Gatuandelar (Inspelning)</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
     body{font-family:Arial, sans-serif;margin:0;padding:14px;background:#f3f5f8;display:flex;flex-direction:column;align-items:center}
     h1{margin:0 0 12px;color:#222}
-    #controls{margin-bottom:12px;display:flex;gap:8px;flex-wrap:wrap}
+    #controls{margin-bottom:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
     button{padding:8px 14px;border:0;border-radius:6px;background:#007bff;color:#fff;cursor:pointer}
     button.secondary{background:#6c757d}
     button.danger{background:#dc3545}
+    button.success{background:#28a745}
     #map{width:100%;max-width:1000px;height:640px;border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,.08);cursor:crosshair}
     #info{width:100%;max-width:1000px;margin-top:12px;background:white;padding:12px;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,.04)}
     #info h2{margin:0 0 8px;font-size:16px}
@@ -20,17 +21,25 @@
     .bar{height:8px;background:#e9ecef;border-radius:6px;overflow:hidden;flex:1;margin-left:12px;margin-right:12px}
     .bar > i{display:block;height:100%;background:linear-gradient(90deg,#28a745,#82e0a8)}
     .small{font-size:13px;color:#555}
+    .tracks{margin-top:8px}
+    .track-item{display:flex;justify-content:space-between;padding:6px 8px;border-bottom:1px solid #f0f0f0}
+    .track-actions button{margin-left:6px;padding:6px 8px;font-size:13px}
     .debug { font-size:12px;color:#666;margin-left:8px }
   </style>
 </head>
 <body>
-  <h1>Walking Coverage — Gator i stadsdelen 2</h1>
+  <h1>Walking Coverage — Gator i stadsdelen (Inspelning)</h1>
 
   <div id="controls">
     <button id="loadStreetsBtn">Ladda gator för vy</button>
     <button id="analyzeBtn" class="secondary">Analysera täckning</button>
     <button id="resetBtn" class="danger">Rensa allt</button>
     <button id="centerBtn" class="secondary">Centrera på rutten</button>
+
+    <button id="startRecBtn" class="success">Starta inspelning</button>
+    <button id="stopRecBtn" class="secondary" disabled>Stoppa inspelning</button>
+    <button id="saveRecBtn" class="secondary" disabled>Spara sträcka</button>
+
     <label class="debug"><input type="checkbox" id="debugChk"> Debug</label>
   </div>
 
@@ -38,30 +47,37 @@
 
   <div id="info">
     <h2>Sammanfattning</h2>
-    <div id="summary" class="small">Inget ännu. Klicka på kartan för att simulera promenad. Ladda gator för området och analysera.</div>
+    <div id="summary" class="small">Inget ännu. Ladda gator för området, spela in promenader och analysera.</div>
+
+    <h2>Inspelade sträckor</h2>
+    <div id="tracksContainer" class="tracks small"></div>
+
+    <h2>Gatunivå (topplista)</h2>
     <ul id="list"></ul>
   </div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
-/* ---------- Konfiguration (standardvärden som ger robustare träffar) ---------- */
-const DENSIFY_M = 4;         // max mellan OSM-vertices i meter (fler vertices)
-const SAMPLE_STEP_M = 1;     // sampling av användarrutt i meter (täta samplingar)
-const PROXIMITY_M = 12;      // hur nära ett segment räknas som "på" gatan (ökad tolerans)
-const GRID_CELL_DEG = 0.0012; // enkel grid-index cellstorlek (≈ 100-130m beroende på lat)
-const MERGED_SLACK_M = 0.5;  // slack i meter när vi slår ihop meterintervall
+/* ---------- Konfiguration ---------- */
+const DENSIFY_M = 4;
+const SAMPLE_STEP_M = 1;
+const PROXIMITY_M = 12;
+const GRID_CELL_DEG = 0.0012;
+const MERGED_SLACK_M = 0.5;
 
 /* ---------- Leaflet setup ---------- */
 const map = L.map('map').setView([59.3326, 18.0649], 15);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap contributors' }).addTo(map);
 
 /* ---------- Global state ---------- */
-let rawCoordinates = []; // user path [[lat,lon],...]
-let rawPolyline = null;
-let streetSegments = []; // varje segment {id, wayId, name, coords:[[lat,lon],[lat,lon]], lengthMeters, bbox, visitedMeters, coveredMeters, coveredFraction}
-let gridIndex = null; // {grid:Map, cellSizeDeg}
+let streetSegments = [];
+let gridIndex = null;
 let streetBaseLayer = L.layerGroup().addTo(map);
 let coveredLayer = L.layerGroup().addTo(map);
+let recordedTracks = loadTracksFromStorage(); // array of {id, name, coords:[[lat,lon],...], startTs, endTs, lengthMeters}
+let currentTrack = null; // {coords, startTs}
+let watchId = null;
+let trackLayerGroup = L.layerGroup().addTo(map);
 
 /* ---------- Hjälpfunktioner ---------- */
 function calculateDistanceLatLng(a,b){ return L.latLng(a[0],a[1]).distanceTo(L.latLng(b[0],b[1])); }
@@ -85,35 +101,7 @@ function densifyLine(points, maxDistM){
   return out;
 }
 
-/* Ramer-Douglas-Peucker (för eventuell förenkling) — använder lat,lon */
-function perpendicularDistance(point, lineStart, lineEnd) {
-  const x=point[0], y=point[1];
-  const x1=lineStart[0], y1=lineStart[1];
-  const x2=lineEnd[0], y2=lineEnd[1];
-  const dx=x2-x1, dy=y2-y1;
-  if(dx===0 && dy===0) return Math.hypot(x-x1,y-y1);
-  const t = ((x-x1)*dx + (y-y1)*dy) / (dx*dx + dy*dy);
-  let cx, cy;
-  if(t<0){ cx=x1; cy=y1; }
-  else if(t>1){ cx=x2; cy=y2; }
-  else{ cx = x1 + t*dx; cy = y1 + t*dy; }
-  return Math.hypot(x-cx, y-cy);
-}
-function RamerDouglasPeucker(points, epsilon) {
-  if(!points || points.length < 3) return points?points.slice():[];
-  let maxD=0, index=0, end=points.length-1;
-  for(let i=1;i<end;i++){
-    const d = perpendicularDistance(points[i], points[0], points[end]);
-    if(d>maxD){ maxD=d; index=i; }
-  }
-  if(maxD > epsilon){
-    const res1 = RamerDouglasPeucker(points.slice(0,index+1), epsilon);
-    const res2 = RamerDouglasPeucker(points.slice(index,end+1), epsilon);
-    return res1.slice(0,res1.length-1).concat(res2);
-  } else return [points[0], points[end]];
-}
-
-/* ---------- Grid-index (enkelt) ---------- */
+/* ---------- Grid-index ---------- */
 function buildGridIndex(segments, cellSizeDeg = GRID_CELL_DEG){
   const grid = new Map();
   segments.forEach(seg=>{
@@ -142,13 +130,13 @@ function queryGrid(gridIndex, lat, lon, extCells=2){
   return Array.from(ids);
 }
 
-/* ---------- Segment bygg och förbered ---------- */
+/* ---------- Segment bygg ---------- */
 function buildSegmentsFromWays(geojson, densifyM = DENSIFY_M){
   const segments = [];
   let segId = 0;
   geojson.features.forEach((feat, wi) => {
     if(!feat.geometry || feat.geometry.type !== 'LineString') return;
-    const coords = feat.geometry.coordinates.map(c => [c[1], c[0]]); // lat,lon
+    const coords = feat.geometry.coordinates.map(c => [c[1], c[0]]);
     const densified = densifyLine(coords, densifyM);
     for(let i=0;i<densified.length-1;i++){
       const a = densified[i], b = densified[i+1];
@@ -161,7 +149,7 @@ function buildSegmentsFromWays(geojson, densifyM = DENSIFY_M){
         coords: [a,b],
         lengthMeters: len,
         bbox,
-        visitedMeters: [],      // samla meterpositioner längs segmentet
+        visitedMeters: [],
         coveredMeters: 0,
         coveredFraction: 0,
         _mergedIntervals: []
@@ -171,9 +159,10 @@ function buildSegmentsFromWays(geojson, densifyM = DENSIFY_M){
   return segments;
 }
 
-/* ---------- Sampling av path ---------- */
+/* ---------- Sampling path (används för analyser) ---------- */
 function samplePath(rawPath, stepM = SAMPLE_STEP_M){
   const out = [];
+  if(!rawPath || rawPath.length < 2) return out;
   for(let i=0;i<rawPath.length-1;i++){
     const a = rawPath[i], b = rawPath[i+1];
     const dist = calculateDistanceLatLng(a,b);
@@ -187,7 +176,7 @@ function samplePath(rawPath, stepM = SAMPLE_STEP_M){
   return out;
 }
 
-/* Projektion av punkt på segment — returnerar även position i meter längs segmentet */
+/* Projektion på segment (returnerar posMeters) */
 function projPointOnSeg(pt, seg){
   const ax = seg.coords[0][0], ay = seg.coords[0][1];
   const bx = seg.coords[1][0], by = seg.coords[1][1];
@@ -207,32 +196,21 @@ function projPointOnSeg(pt, seg){
   return {distMeters: dist, t: tc, posMeters: posMeters};
 }
 
-/* Markera träff: spara meterposition (inte t) */
+/* Markera träff (meters-baserat) */
 function markSegmentVisited(seg, posMeters){
   seg.visitedMeters = seg.visitedMeters || [];
   seg.visitedMeters.push(posMeters);
 }
 
-/* Slå ihop meterpositioner till intervall och beräkna coverage (meters-baserat) */
+/* Slå ihop meterintervall och beräkna coverage */
 function finalizeSegmentCoverage(segments){
   segments.forEach(seg=>{
     if(!seg.visitedMeters || seg.visitedMeters.length === 0){
-      seg.coveredMeters = 0;
-      seg.coveredFraction = 0;
-      seg._mergedIntervals = [];
-      return;
+      seg.coveredMeters = 0; seg.coveredFraction = 0; seg._mergedIntervals = []; return;
     }
-
-    // sortera meterpositioner
     seg.visitedMeters.sort((a,b)=>a-b);
-
-    // delta runt varje punkt i meter (ungefär halva sampling-steget)
     const delta = Math.max(0.5, SAMPLE_STEP_M * 0.6);
-
-    // skapa intervall runt varje träff i meter
     const intervals = seg.visitedMeters.map(m => [ Math.max(0, m - delta), Math.min(seg.lengthMeters, m + delta) ]);
-
-    // slå ihop intilliggande intervall (med liten slack)
     const merged = [];
     let cur = intervals[0].slice();
     for(let i=1;i<intervals.length;i++){
@@ -245,19 +223,14 @@ function finalizeSegmentCoverage(segments){
       }
     }
     merged.push([Math.max(0,cur[0]), Math.min(seg.lengthMeters,cur[1])]);
-
-    // summera täckt meter
     let covered = 0;
     merged.forEach(iv=>{
       const a = Math.max(0, iv[0]);
       const b = Math.min(seg.lengthMeters, iv[1]);
       if(b > a) covered += (b - a);
     });
-
     seg.coveredMeters = Math.min(seg.lengthMeters, covered);
     seg.coveredFraction = seg.lengthMeters > 0 ? (seg.coveredMeters / seg.lengthMeters) : 0;
-
-    // spara merged i t-enheter för visualisering
     seg._mergedIntervals = merged.map(iv => [ iv[0] / seg.lengthMeters, iv[1] / seg.lengthMeters ]);
   });
 }
@@ -289,7 +262,6 @@ function normalizeName(n){
   if(!n) return 'unnamed';
   return String(n).trim().replace(/\s+/g,' ').toLowerCase();
 }
-
 function aggregatePerStreetName(segments){
   const byName = new Map();
   segments.forEach(s=>{
@@ -305,7 +277,6 @@ function aggregatePerStreetName(segments){
     entry.coveredMeters += s.coveredMeters || 0;
     if(s.wayId) entry.wayIds.add(s.wayId);
   });
-
   const list = Array.from(byName.values()).map(e=>({
     name: e.name,
     totalMeters: e.totalMeters,
@@ -313,39 +284,36 @@ function aggregatePerStreetName(segments){
     coveredPct: e.totalMeters>0 ? (e.coveredMeters / e.totalMeters) : 0,
     wayCount: e.wayIds.size
   }));
-
   list.sort((a,b) => {
     if(b.coveredPct !== a.coveredPct) return b.coveredPct - a.coveredPct;
     return b.totalMeters - a.totalMeters;
   });
-
   return list;
 }
-
 function aggregateDistrict(items){
   const total = items.reduce((acc,w)=>acc + (w.totalMeters||0), 0);
   const covered = items.reduce((acc,w)=>acc + (w.coveredMeters||0), 0);
   return {total, covered, coveredPct: total>0 ? covered/total : 0};
 }
 
-/* ---------- Huvudanalys ---------- */
+/* ---------- Huvudanalys (använder alla sparade sträckor) ---------- */
 function analyzeCoverage(){
-  if(rawCoordinates.length < 2){ alert('Simulera promenad genom att klicka minst två punkter på kartan först.'); return; }
+  if(!recordedTracks || recordedTracks.length === 0){ alert('Inga sparade sträckor. Spela in en promenad först.'); return; }
   if(!streetSegments || streetSegments.length===0){ alert('Ladda gatnät först (Ladda gator för vy).'); return; }
+
+  // reset segments
+  streetSegments.forEach(s=>{ s.visitedMeters = []; s.coveredMeters = 0; s.coveredFraction = 0; s._mergedIntervals = []; });
+
+  // samla samples från alla sparade spår
+  const allSamples = [];
+  recordedTracks.forEach(tr => {
+    const samples = samplePath(tr.coords, SAMPLE_STEP_M);
+    samples.forEach(s => allSamples.push(s));
+  });
 
   const debug = document.getElementById('debugChk').checked;
 
-  // reset
-  streetSegments.forEach(s=>{
-    s.visitedMeters = [];
-    s.coveredMeters = 0;
-    s.coveredFraction = 0;
-    s._mergedIntervals = [];
-  });
-
-  const samples = samplePath(rawCoordinates, SAMPLE_STEP_M);
-
-  for(const pt of samples){
+  for(const pt of allSamples){
     const candIds = queryGrid(gridIndex, pt[0], pt[1], 2);
     for(const id of candIds){
       const seg = streetSegments[id];
@@ -354,8 +322,6 @@ function analyzeCoverage(){
       if(proj.distMeters <= PROXIMITY_M){
         markSegmentVisited(seg, proj.posMeters);
         if(debug) console.log('HIT seg', seg.id, seg.wayId, seg.name, 'posM=', proj.posMeters.toFixed(2), 'distM=', Math.round(proj.distMeters));
-      } else {
-        if(debug) console.log('MISS seg', seg.id, seg.wayId, seg.name, 'distM=', Math.round(proj.distMeters));
       }
     }
   }
@@ -367,9 +333,7 @@ function analyzeCoverage(){
   const district = aggregateDistrict(streets);
   renderSummary(streets, district);
 
-  if(document.getElementById('debugChk').checked){
-    console.log('Segments with coverage:', streetSegments.filter(s=>s.coveredMeters>0).map(s=>[s.id,s.name,Math.round(s.lengthMeters),Math.round(s.coveredMeters)]));
-  }
+  if(debug) console.log('Segments with coverage:', streetSegments.filter(s=>s.coveredMeters>0).map(s=>[s.id,s.name,Math.round(s.lengthMeters),Math.round(s.coveredMeters)]));
 }
 
 /* ---------- UI render ---------- */
@@ -429,7 +393,7 @@ async function loadStreetsForView(){
   }
 }
 
-/* Enkel Overpass -> GeoJSON assembler (byggt för ways + nodes) */
+/* Enkel Overpass -> GeoJSON assembler */
 function overpassToGeoJSON(osmJson){
   const nodes = new Map();
   (osmJson.elements || []).forEach(el => { if(el.type === 'node') nodes.set(el.id, el); });
@@ -452,34 +416,158 @@ function overpassToGeoJSON(osmJson){
   return { type:'FeatureCollection', features };
 }
 
-/* ---------- Kartinteraktion: simulera promenad med klick ---------- */
-map.on('click', function(e){
-  const lat = e.latlng.lat, lon = e.latlng.lng;
-  rawCoordinates.push([lat, lon]);
-  if(rawPolyline) map.removeLayer(rawPolyline);
-  rawPolyline = L.polyline(rawCoordinates, { color:'red', weight:4, dashArray:'6,8' }).addTo(map);
-});
+/* ---------- Inspelning: start/stop/spara ---------- */
+function startRecording(){
+  if(!navigator.geolocation){ alert('Geolocation stöds inte i din webbläsare.'); return; }
+  if(watchId !== null){ alert('Inspelning redan igång.'); return; }
+  currentTrack = { coords: [], startTs: Date.now(), endTs: null, id: 't' + Date.now() };
+  // start watchPosition
+  watchId = navigator.geolocation.watchPosition(pos => {
+    const lat = pos.coords.latitude, lon = pos.coords.longitude;
+    currentTrack.coords.push([lat, lon]);
+    drawCurrentTrackPreview();
+  }, err => {
+    console.error('Geolocation error', err);
+  }, { enableHighAccuracy: true, maximumAge: 1000, timeout: 10000 });
+  document.getElementById('startRecBtn').disabled = true;
+  document.getElementById('stopRecBtn').disabled = false;
+  document.getElementById('saveRecBtn').disabled = true;
+}
+function stopRecording(){
+  if(watchId === null) return;
+  navigator.geolocation.clearWatch(watchId);
+  watchId = null;
+  currentTrack.endTs = Date.now();
+  document.getElementById('startRecBtn').disabled = false;
+  document.getElementById('stopRecBtn').disabled = true;
+  document.getElementById('saveRecBtn').disabled = false;
+  drawCurrentTrackPreview();
+}
+function saveCurrentTrack(){
+  if(!currentTrack || !currentTrack.coords || currentTrack.coords.length < 2){ alert('Inga koordinater att spara.'); return; }
+  // beräkna längd
+  let len = 0;
+  for(let i=0;i<currentTrack.coords.length-1;i++){
+    len += calculateDistanceLatLng(currentTrack.coords[i], currentTrack.coords[i+1]);
+  }
+  const track = {
+    id: currentTrack.id,
+    name: 'Sträcka ' + (recordedTracks.length + 1),
+    coords: currentTrack.coords.slice(),
+    startTs: currentTrack.startTs,
+    endTs: currentTrack.endTs || Date.now(),
+    lengthMeters: len
+  };
+  recordedTracks.push(track);
+  saveTracksToStorage();
+  currentTrack = null;
+  document.getElementById('saveRecBtn').disabled = true;
+  renderTracksList();
+  redrawAllTracks();
+}
+function discardCurrentTrack(){
+  if(watchId !== null) navigator.geolocation.clearWatch(watchId);
+  watchId = null;
+  currentTrack = null;
+  document.getElementById('startRecBtn').disabled = false;
+  document.getElementById('stopRecBtn').disabled = true;
+  document.getElementById('saveRecBtn').disabled = true;
+  drawCurrentTrackPreview();
+}
+
+/* ---------- Tracks UI och storage ---------- */
+function saveTracksToStorage(){ try{ localStorage.setItem('walking_tracks_v1', JSON.stringify(recordedTracks)); }catch(e){console.warn('localStorage failed', e);} }
+function loadTracksFromStorage(){ try{ const s = localStorage.getItem('walking_tracks_v1'); return s ? JSON.parse(s) : []; }catch(e){return []; } }
+
+function renderTracksList(){
+  const c = document.getElementById('tracksContainer');
+  c.innerHTML = '';
+  if(!recordedTracks || recordedTracks.length===0){ c.innerHTML = '<div class="small">Inga sparade sträckor.</div>'; return; }
+  recordedTracks.forEach((t, idx) => {
+    const div = document.createElement('div');
+    div.className = 'track-item';
+    const left = document.createElement('div');
+    left.innerHTML = `<strong>${escapeHtml(t.name)}</strong> <span class="small">(${(t.lengthMeters/1000).toFixed(2)} km)</span>`;
+    const right = document.createElement('div');
+    right.className = 'track-actions';
+    const btnCenter = document.createElement('button'); btnCenter.textContent = 'Centrera'; btnCenter.className='secondary';
+    btnCenter.onclick = ()=>{ if(t.coords && t.coords.length) map.fitBounds(L.latLngBounds(t.coords).pad(0.12)); };
+    const btnDelete = document.createElement('button'); btnDelete.textContent = 'Ta bort'; btnDelete.className='danger';
+    btnDelete.onclick = ()=>{ if(confirm('Ta bort sträcka?')){ recordedTracks.splice(idx,1); saveTracksToStorage(); renderTracksList(); redrawAllTracks(); } };
+    right.appendChild(btnCenter); right.appendChild(btnDelete);
+    div.appendChild(left); div.appendChild(right);
+    c.appendChild(div);
+  });
+}
+
+/* Rita alla sparade tracks (röda) och aktuell preview (röd streckad) */
+function redrawAllTracks(){
+  trackLayerGroup.clearLayers();
+  recordedTracks.forEach(t=>{
+    if(t.coords && t.coords.length>1){
+      L.polyline(t.coords, {color:'red', weight:4, opacity:0.9}).addTo(trackLayerGroup);
+    }
+  });
+  drawCurrentTrackPreview();
+}
+function drawCurrentTrackPreview(){
+  // ta bort tidigare preview
+  // vi använder ett separat layer för preview
+  if(window._currentPreviewLayer){ map.removeLayer(window._currentPreviewLayer); window._currentPreviewLayer = null; }
+  if(currentTrack && currentTrack.coords && currentTrack.coords.length>0){
+    window._currentPreviewLayer = L.polyline(currentTrack.coords, {color:'red', weight:4, dashArray:'6,8', opacity:0.9}).addTo(map);
+  }
+}
 
 /* ---------- Buttons ---------- */
 document.getElementById('loadStreetsBtn').addEventListener('click', loadStreetsForView);
 document.getElementById('analyzeBtn').addEventListener('click', analyzeCoverage);
 document.getElementById('resetBtn').addEventListener('click', ()=>{
-  rawCoordinates = [];
-  if(rawPolyline) map.removeLayer(rawPolyline);
-  rawPolyline = null;
+  if(!confirm('Rensa allt (inklusive sparade sträckor)?')) return;
+  rawClearAll();
+});
+document.getElementById('centerBtn').addEventListener('click', ()=>{
+  // centrera på alla sparade tracks eller på kartans vy
+  if(recordedTracks && recordedTracks.length){
+    const allCoords = recordedTracks.flatMap(t=>t.coords);
+    if(allCoords.length) map.fitBounds(L.latLngBounds(allCoords).pad(0.12));
+  } else {
+    alert('Inga sparade sträckor att centrera på.');
+  }
+});
+document.getElementById('startRecBtn').addEventListener('click', startRecording);
+document.getElementById('stopRecBtn').addEventListener('click', stopRecording);
+document.getElementById('saveRecBtn').addEventListener('click', saveCurrentTrack);
+
+/* ---------- Rensa allt ---------- */
+function rawClearAll(){
+  recordedTracks = [];
+  saveTracksToStorage();
   streetSegments = [];
   gridIndex = null;
   streetBaseLayer.clearLayers();
   coveredLayer.clearLayers();
-  document.getElementById('summary').textContent = 'Inget ännu. Klicka på kartan för att simulera promenad. Ladda gator för området och analysera.';
+  trackLayerGroup.clearLayers();
+  document.getElementById('summary').textContent = 'Inget ännu. Ladda gator för området, spela in promenader och analysera.';
   document.getElementById('list').innerHTML = '';
-});
-document.getElementById('centerBtn').addEventListener('click', ()=>{
-  if(rawCoordinates.length) map.fitBounds(L.latLngBounds(rawCoordinates).pad(0.12));
+  renderTracksList();
+}
+
+/* ---------- Kartklick (behåll för manuella tester) ---------- */
+map.on('click', function(e){
+  // om man vill lägga till manuellt punkt i currentTrack (valfritt)
+  if(currentTrack){
+    currentTrack.coords.push([e.latlng.lat, e.latlng.lng]);
+    drawCurrentTrackPreview();
+  }
 });
 
 /* ---------- Enkel hjälpfunktion för html-escaping ---------- */
 function escapeHtml(s){ return s.replace(/[&<>"']/g, c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])); }
+
+/* ---------- Init: rendera sparade tracks om några ---------- */
+renderTracksList();
+redrawAllTracks();
 
 /* ---------- Init done ---------- */
   </script>
