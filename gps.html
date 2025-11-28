@@ -20,16 +20,18 @@
     .bar{height:8px;background:#e9ecef;border-radius:6px;overflow:hidden;flex:1;margin-left:12px;margin-right:12px}
     .bar > i{display:block;height:100%;background:linear-gradient(90deg,#28a745,#82e0a8)}
     .small{font-size:13px;color:#555}
+    .debug { font-size:12px;color:#666;margin-left:8px }
   </style>
 </head>
 <body>
-  <h1>Walking Coverage — Gator i stadsdelen</h1>
+  <h1>Walking Coverage — Gator i stadsdelen 2</h1>
 
   <div id="controls">
     <button id="loadStreetsBtn">Ladda gator för vy</button>
     <button id="analyzeBtn" class="secondary">Analysera täckning</button>
     <button id="resetBtn" class="danger">Rensa allt</button>
     <button id="centerBtn" class="secondary">Centrera på rutten</button>
+    <label class="debug"><input type="checkbox" id="debugChk"> Debug</label>
   </div>
 
   <div id="map"></div>
@@ -42,12 +44,12 @@
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
-/* ---------- Konfiguration ---------- */
-const DENSIFY_M = 8;         // max mellan OSM-vertices i meter
-const SAMPLE_STEP_M = 2;     // sampling av användarrutt i meter
-const PROXIMITY_M = 8;       // hur nära ett segment räknas som "på" gatan
+/* ---------- Konfiguration (standardvärden som ger robustare träffar) ---------- */
+const DENSIFY_M = 4;         // max mellan OSM-vertices i meter (fler vertices)
+const SAMPLE_STEP_M = 1;     // sampling av användarrutt i meter (täta samplingar)
+const PROXIMITY_M = 12;      // hur nära ett segment räknas som "på" gatan (ökad tolerans)
 const GRID_CELL_DEG = 0.0012; // enkel grid-index cellstorlek (≈ 100-130m beroende på lat)
-const MERGED_EPS_T = 0.012;  // t-buffer när vi slår ihop besökta punkter (justera efter sample)
+const MERGED_SLACK_M = 0.5;  // slack i meter när vi slår ihop meterintervall
 
 /* ---------- Leaflet setup ---------- */
 const map = L.map('map').setView([59.3326, 18.0649], 15);
@@ -56,7 +58,7 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution:
 /* ---------- Global state ---------- */
 let rawCoordinates = []; // user path [[lat,lon],...]
 let rawPolyline = null;
-let streetSegments = []; // varje segment {id, wayId, name, coords:[[lat,lon],[lat,lon]], lengthMeters, bbox, visitedIntervals, coveredMeters, coveredFraction}
+let streetSegments = []; // varje segment {id, wayId, name, coords:[[lat,lon],[lat,lon]], lengthMeters, bbox, visitedMeters, coveredMeters, coveredFraction}
 let gridIndex = null; // {grid:Map, cellSizeDeg}
 let streetBaseLayer = L.layerGroup().addTo(map);
 let coveredLayer = L.layerGroup().addTo(map);
@@ -114,7 +116,6 @@ function RamerDouglasPeucker(points, epsilon) {
 /* ---------- Grid-index (enkelt) ---------- */
 function buildGridIndex(segments, cellSizeDeg = GRID_CELL_DEG){
   const grid = new Map();
-  function keyFor(lat, lon){ const r=Math.floor(lat/cellSizeDeg), c=Math.floor(lon/cellSizeDeg); return `${r},${c}`; }
   segments.forEach(seg=>{
     const [minLat,minLon,maxLat,maxLon] = seg.bbox;
     const r0 = Math.floor(minLat/cellSizeDeg), r1=Math.floor(maxLat/cellSizeDeg);
@@ -127,7 +128,7 @@ function buildGridIndex(segments, cellSizeDeg = GRID_CELL_DEG){
   });
   return {grid, cellSizeDeg};
 }
-function queryGrid(gridIndex, lat, lon, extCells=1){
+function queryGrid(gridIndex, lat, lon, extCells=2){
   const {grid, cellSizeDeg} = gridIndex;
   const rr = Math.floor(lat / cellSizeDeg), cc = Math.floor(lon / cellSizeDeg);
   const ids = new Set();
@@ -160,9 +161,10 @@ function buildSegmentsFromWays(geojson, densifyM = DENSIFY_M){
         coords: [a,b],
         lengthMeters: len,
         bbox,
-        visitedIntervals: [],
+        visitedMeters: [],      // samla meterpositioner längs segmentet
         coveredMeters: 0,
-        coveredFraction: 0
+        coveredFraction: 0,
+        _mergedIntervals: []
       });
     }
   });
@@ -185,50 +187,78 @@ function samplePath(rawPath, stepM = SAMPLE_STEP_M){
   return out;
 }
 
-/* Projektion av punkt på segment */
+/* Projektion av punkt på segment — returnerar även position i meter längs segmentet */
 function projPointOnSeg(pt, seg){
   const ax = seg.coords[0][0], ay = seg.coords[0][1];
   const bx = seg.coords[1][0], by = seg.coords[1][1];
   const px = pt[0], py = pt[1];
   const dx = bx - ax, dy = by - ay;
   const len2 = dx*dx + dy*dy;
-  if(len2 === 0) return {distMeters: calculateDistanceLatLng([ax,ay],[px,py]), t:0};
+  if(len2 === 0) {
+    const dist = calculateDistanceLatLng([ax,ay],[px,py]);
+    return {distMeters: dist, t:0, posMeters: 0};
+  }
   const t = ((px-ax)*dx + (py-ay)*dy) / len2;
   const tc = Math.max(0, Math.min(1, t));
   const projLat = ax + tc*dx;
   const projLon = ay + tc*dy;
   const dist = calculateDistanceLatLng([px,py],[projLat,projLon]);
-  return {distMeters: dist, t: tc};
+  const posMeters = tc * seg.lengthMeters;
+  return {distMeters: dist, t: tc, posMeters: posMeters};
 }
 
-function markSegmentVisited(seg, t){ seg.visitedIntervals.push([t,t]); }
+/* Markera träff: spara meterposition (inte t) */
+function markSegmentVisited(seg, posMeters){
+  seg.visitedMeters = seg.visitedMeters || [];
+  seg.visitedMeters.push(posMeters);
+}
 
-/* Slå ihop intervall och beräkna coverage */
+/* Slå ihop meterpositioner till intervall och beräkna coverage (meters-baserat) */
 function finalizeSegmentCoverage(segments){
   segments.forEach(seg=>{
-    if(!seg.visitedIntervals.length){ seg.coveredMeters=0; seg.coveredFraction=0; return; }
-    const sorted = seg.visitedIntervals.slice().sort((a,b)=>a[0]-b[0]);
+    if(!seg.visitedMeters || seg.visitedMeters.length === 0){
+      seg.coveredMeters = 0;
+      seg.coveredFraction = 0;
+      seg._mergedIntervals = [];
+      return;
+    }
+
+    // sortera meterpositioner
+    seg.visitedMeters.sort((a,b)=>a-b);
+
+    // delta runt varje punkt i meter (ungefär halva sampling-steget)
+    const delta = Math.max(0.5, SAMPLE_STEP_M * 0.6);
+
+    // skapa intervall runt varje träff i meter
+    const intervals = seg.visitedMeters.map(m => [ Math.max(0, m - delta), Math.min(seg.lengthMeters, m + delta) ]);
+
+    // slå ihop intilliggande intervall (med liten slack)
     const merged = [];
-    let cur = [sorted[0][0]-MERGED_EPS_T, sorted[0][1]+MERGED_EPS_T];
-    for(let i=1;i<sorted.length;i++){
-      const s = sorted[i];
-      if(s[0]-MERGED_EPS_T <= cur[1]){
-        cur[1] = Math.max(cur[1], s[1]+MERGED_EPS_T);
+    let cur = intervals[0].slice();
+    for(let i=1;i<intervals.length;i++){
+      const iv = intervals[i];
+      if(iv[0] <= cur[1] + MERGED_SLACK_M){
+        cur[1] = Math.max(cur[1], iv[1]);
       } else {
-        merged.push([Math.max(0,cur[0]), Math.min(1,cur[1])]);
-        cur = [s[0]-MERGED_EPS_T, s[1]+MERGED_EPS_T];
+        merged.push([Math.max(0,cur[0]), Math.min(seg.lengthMeters,cur[1])]);
+        cur = iv.slice();
       }
     }
-    merged.push([Math.max(0,cur[0]), Math.min(1,cur[1])]);
+    merged.push([Math.max(0,cur[0]), Math.min(seg.lengthMeters,cur[1])]);
 
+    // summera täckt meter
     let covered = 0;
     merged.forEach(iv=>{
-      const frac = Math.max(0, iv[1]-iv[0]);
-      covered += frac * seg.lengthMeters;
+      const a = Math.max(0, iv[0]);
+      const b = Math.min(seg.lengthMeters, iv[1]);
+      if(b > a) covered += (b - a);
     });
+
     seg.coveredMeters = Math.min(seg.lengthMeters, covered);
-    seg.coveredFraction = seg.lengthMeters>0 ? (seg.coveredMeters/seg.lengthMeters) : 0;
-    seg._mergedIntervals = merged;
+    seg.coveredFraction = seg.lengthMeters > 0 ? (seg.coveredMeters / seg.lengthMeters) : 0;
+
+    // spara merged i t-enheter för visualisering
+    seg._mergedIntervals = merged.map(iv => [ iv[0] / seg.lengthMeters, iv[1] / seg.lengthMeters ]);
   });
 }
 
@@ -244,7 +274,6 @@ function drawCoverage(segments){
   coveredLayer.clearLayers();
   segments.forEach(seg=>{
     if(!seg._mergedIntervals || seg._mergedIntervals.length===0) return;
-    // för varje intervall, rita en subsegment (linjär interpolation)
     seg._mergedIntervals.forEach(iv=>{
       const t0 = Math.max(0, Math.min(1, iv[0])), t1 = Math.max(0, Math.min(1, iv[1]));
       const a = seg.coords[0], b = seg.coords[1];
@@ -255,22 +284,7 @@ function drawCoverage(segments){
   });
 }
 
-/* ---------- Aggregation ---------- */
-/* Behåll aggregatePerWay om du vill jämföra, men vi använder aggregatePerStreetName för visning */
-function aggregatePerWay(segments){
-  const byWay = new Map();
-  segments.forEach(s=>{
-    if(!byWay.has(s.wayId)) byWay.set(s.wayId, {wayId:s.wayId, name:s.name, totalMeters:0, coveredMeters:0});
-    const w = byWay.get(s.wayId);
-    w.totalMeters += s.lengthMeters;
-    w.coveredMeters += s.coveredMeters || 0;
-  });
-  const list = Array.from(byWay.values()).map(w=>({ ...w, coveredPct: w.totalMeters>0 ? (w.coveredMeters / w.totalMeters) : 0 }));
-  list.sort((a,b)=>b.coveredPct - a.coveredPct);
-  return list;
-}
-
-/* ---------- Ny: Aggregation per gatunamn ---------- */
+/* ---------- Aggregation per gatunamn ---------- */
 function normalizeName(n){
   if(!n) return 'unnamed';
   return String(n).trim().replace(/\s+/g,' ').toLowerCase();
@@ -300,7 +314,6 @@ function aggregatePerStreetName(segments){
     wayCount: e.wayIds.size
   }));
 
-  // sortera efter coverage desc, sedan efter totalMeters desc
   list.sort((a,b) => {
     if(b.coveredPct !== a.coveredPct) return b.coveredPct - a.coveredPct;
     return b.totalMeters - a.totalMeters;
@@ -320,18 +333,29 @@ function analyzeCoverage(){
   if(rawCoordinates.length < 2){ alert('Simulera promenad genom att klicka minst två punkter på kartan först.'); return; }
   if(!streetSegments || streetSegments.length===0){ alert('Ladda gatnät först (Ladda gator för vy).'); return; }
 
+  const debug = document.getElementById('debugChk').checked;
+
   // reset
-  streetSegments.forEach(s=>s.visitedIntervals = []);
+  streetSegments.forEach(s=>{
+    s.visitedMeters = [];
+    s.coveredMeters = 0;
+    s.coveredFraction = 0;
+    s._mergedIntervals = [];
+  });
 
   const samples = samplePath(rawCoordinates, SAMPLE_STEP_M);
 
   for(const pt of samples){
-    const candIds = queryGrid(gridIndex, pt[0], pt[1], 1);
+    const candIds = queryGrid(gridIndex, pt[0], pt[1], 2);
     for(const id of candIds){
       const seg = streetSegments[id];
+      if(!seg) continue;
       const proj = projPointOnSeg(pt, seg);
       if(proj.distMeters <= PROXIMITY_M){
-        markSegmentVisited(seg, proj.t);
+        markSegmentVisited(seg, proj.posMeters);
+        if(debug) console.log('HIT seg', seg.id, seg.wayId, seg.name, 'posM=', proj.posMeters.toFixed(2), 'distM=', Math.round(proj.distMeters));
+      } else {
+        if(debug) console.log('MISS seg', seg.id, seg.wayId, seg.name, 'distM=', Math.round(proj.distMeters));
       }
     }
   }
@@ -339,10 +363,13 @@ function analyzeCoverage(){
   finalizeSegmentCoverage(streetSegments);
   drawCoverage(streetSegments);
 
-  // Använd aggregering per gatunamn
   const streets = aggregatePerStreetName(streetSegments);
   const district = aggregateDistrict(streets);
   renderSummary(streets, district);
+
+  if(document.getElementById('debugChk').checked){
+    console.log('Segments with coverage:', streetSegments.filter(s=>s.coveredMeters>0).map(s=>[s.id,s.name,Math.round(s.lengthMeters),Math.round(s.coveredMeters)]));
+  }
 }
 
 /* ---------- UI render ---------- */
@@ -352,13 +379,12 @@ function renderSummary(streets, district){
                         ` (täckt: ${(district.covered/1000).toFixed(2)} km).`;
   const listEl = document.getElementById('list');
   listEl.innerHTML = '';
-  // visa top 120 eller färre
   const top = streets.slice(0,120);
   top.forEach(w=>{
     const li = document.createElement('li');
     const title = document.createElement('div');
     const wayInfo = w.wayCount ? ` <span class="small">(${w.wayCount} ways)</span>` : '';
-    title.innerHTML = `<strong>${escapeHtml(String(w.name || 'unnamed'))}</strong>${wayInfo} <span class="small">(${(w.totalMeters).toFixed(0)} m)</span>`;
+    title.innerHTML = `<strong>${escapeHtml(String(w.name || 'unnamed'))}</strong>${wayInfo} <span class="small">(${(w.totalMeters).toFixed(0)} m / ${(w.coveredMeters).toFixed(0)} m)</span>`;
     const right = document.createElement('div');
     right.style.display='flex'; right.style.alignItems='center';
     const pctText = document.createElement('div');
@@ -377,9 +403,7 @@ function renderSummary(streets, district){
 /* ---------- OSM / Overpass hentning ---------- */
 async function loadStreetsForView(){
   const bounds = map.getBounds();
-  // bygg Overpass bbox: south,west,north,east
   const s = bounds.getSouth(), w = bounds.getWest(), n = bounds.getNorth(), e = bounds.getEast();
-  // Overpass query: highways (exempel: include most pedestrian-usable highways)
   const query = `
     [out:json][timeout:25];
     (
@@ -394,7 +418,6 @@ async function loadStreetsForView(){
     const resp = await fetch(url, { method:'POST', body: query });
     if(!resp.ok) throw new Error('Overpass error ' + resp.status);
     const data = await resp.json();
-    // Convert Overpass JSON to GeoJSON LineStrings (simple assembler)
     const geo = overpassToGeoJSON(data);
     streetSegments = buildSegmentsFromWays(geo, DENSIFY_M);
     gridIndex = buildGridIndex(streetSegments);
