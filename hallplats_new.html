@@ -49,7 +49,8 @@
   .remove-small{background:linear-gradient(180deg,var(--remove-1),var(--remove-2));color:var(--white);border:0;padding:8px 10px;border-radius:8px;font-weight:700}
 
   .map-container{margin-top:10px;border-radius:10px;overflow:hidden;border:1px solid #23343d;display:none}
-  #resultsMap{width:100%;height:240px;background:#0b1a20}
+  /* Increased map height */
+  #resultsMap{width:100%;height:320px;background:#0b1a20}
 
   .departures-title{font-size:18px;text-align:center;margin-bottom:12px}
   .departure-item{display:flex;gap:12px;align-items:center;padding:10px;border-radius:10px;background:#0f1a20;border-left:4px solid #334b59;margin-bottom:8px}
@@ -80,14 +81,15 @@
     .remove-btn{min-width:100px;padding:10px}
     .fav-lines-input{width:100px}
     .fav-actions{flex-basis:36%}
-    #resultsMap{height:180px}
+    /* smaller map on small screens */
+    #resultsMap{height:240px}
   }
 </style>
 </head>
 <body>
   <div class="container">
     <div class="card" id="topCard">
-      <h1>SL Avgångar 5</h1>
+      <h1>SL Avgångar 6</h1>
 
       <div class="button-group">
         <button id="locationBtn">📍 Plats</button>
@@ -105,6 +107,7 @@
 
         <div class="suggestions" id="suggestions"></div>
 
+        <!-- Dessa element finns kvar i DOM men döljs när sök är aktivt -->
         <div class="favorites-info" id="favoritesInfo"></div>
         <div class="favorites-list" id="favoritesList"></div>
 
@@ -566,7 +569,6 @@ async function getDeparturesFromSitesWithFiltering(stops, opts={}, force=false){
 
     let allDeps = [];
     results.forEach(res=>{ if(!res) return; res.departures.forEach(dep=>{
-      // Ensure dep.fromStop exists using site name if possible
       dep.fromStop = dep.fromStop || (res.stop && res.stop.name ? getDepFromStopLabel(dep, res.stop.name) : '');
       dep.fromStop = dep.fromStop || '';
       if(opts && opts.stopPointId){ if(!departureMatchesStopPoint(dep, opts.stopPointId)) return; }
@@ -802,6 +804,9 @@ locationBtn.addEventListener('click', async ()=>{
   setActiveButton(locationBtn);
   searchContainer.classList.remove('show');
   favoritesCard.style.display = 'none';
+  // Ensure favorites-info/list visible again when leaving search
+  favoritesInfo.style.display = '';
+  favoritesList.style.display = '';
   try{
     if(navigator.geolocation){
       showLoading(true);
@@ -822,6 +827,9 @@ favoritesBtn.addEventListener('click', async ()=>{
   searchContainer.classList.remove('show');
   setActiveButton(favoritesBtn);
   favoritesCard.style.display = 'block';
+  // Ensure favorites-info/list visible in search container when user opens favorites view
+  favoritesInfo.style.display = '';
+  favoritesList.style.display = '';
   updateFavoritesUI();
   startFavoritesAutoRefresh();
 });
@@ -833,9 +841,17 @@ searchBtn.addEventListener('click', ()=>{
   favoritesCard.style.display = 'none';
   suggestions.style.display = 'none';
   searchInput.focus();
+
+  // Hide favorites UI inside search when search is active
   if(willShow){
     departuresCard.style.display = 'none';
     if(countdownInterval){ clearInterval(countdownInterval); countdownInterval = null; }
+    favoritesInfo.style.display = 'none';
+    favoritesList.style.display = 'none';
+  } else {
+    // when hiding search, restore favorites-info/list visibility (but not necessarily show content)
+    favoritesInfo.style.display = '';
+    favoritesList.style.display = '';
   }
 });
 
