@@ -271,7 +271,8 @@ async function refreshFavoritesDeparturesOnce(){
               }
             }
             // Sätt från-stop så att UI visar varifrån avgången kommer
-            dep.fromStop = getDepFromStopLabel(dep, res.stop && res.stop.name ? res.stop.name : site.name);
+            // Sätt från-stop med fallback till favoritens stopPointId om extraktion misslyckas
+            dep.fromStop = getDepFromStopLabel(dep, (res.stop && res.stop.name) ? res.stop.name : site.name, f.stopPointId);
             allAggregated.push(dep);
           });
         }catch(e){
@@ -439,29 +440,52 @@ function escapeHtml(s){ if(!s) return ''; return String(s).replace(/&/g,'&amp;')
 function debounce(fn, wait=250){ let t=null; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a),wait); }; }
 
 // Hjälpare: extrahera stopPoint-id från en avgång
+// Robustare extrahering av stopPoint-id från en avgång
 function extractStopPointId(dep){
   if(!dep) return null;
-  const candidates = [
-    dep.stop_point,
-    dep.stopPoint,
-    dep.stopPointId,
-    dep.stop_point_id,
-    dep.stop_point_obj,
-    dep.stopPointObj,
-    dep.stop_point_obj && dep.stop_point_obj.id,
-    dep.stopPointObj && dep.stopPointObj.id
-  ];
-  for(const c of candidates){
-    if(!c) continue;
-    if(typeof c === 'object'){
-      if(c.id) return String(c.id);
-      if(c.stop_point_id) return String(c.stop_point_id);
-      if(c.parentId) return String(c.parentId);
-    } else {
-      return String(c);
+
+  // Direktfält
+  const direct = ['stop_point','stopPoint','stopPointId','stop_point_id','stop_pointId'];
+  for(const k of direct){
+    if(dep[k]){
+      if(typeof dep[k] === 'object'){
+        if(dep[k].id) return String(dep[k].id);
+        if(dep[k].stop_point_id) return String(dep[k].stop_point_id);
+      } else {
+        return String(dep[k]);
+      }
     }
   }
+
+  // Vanliga objektfält
+  const objs = ['stop_point_obj','stopPointObj','stopPointObj','stop_point_object'];
+  for(const k of objs){
+    if(dep[k] && typeof dep[k] === 'object'){
+      if(dep[k].id) return String(dep[k].id);
+      if(dep[k].stop_point_id) return String(dep[k].stop_point_id);
+      if(dep[k].parentId) return String(dep[k].parentId);
+    }
+  }
+
+  // Ibland ligger id under site eller nested site-objekt
+  if(dep.site && typeof dep.site === 'object'){
+    if(dep.site.stop_point_id) return String(dep.site.stop_point_id);
+    if(dep.site.id) return String(dep.site.id);
+  }
+
+  // Flera alternativa namn
+  if(dep.parentId) return String(dep.parentId);
+  if(dep.stop_area_id) return String(dep.stop_area_id);
+
   return null;
+}
+
+function getDepFromStopLabel(dep, siteName, fallbackStopPointId){
+  const id = extractStopPointId(dep) || (fallbackStopPointId ? String(fallbackStopPointId) : null);
+  if(siteName && id) return `${siteName} ${id}`;
+  if(siteName) return siteName;
+  if(id) return id;
+  return '';
 }
 
 // Hjälpare: format för "från ... id"
