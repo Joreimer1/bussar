@@ -82,6 +82,48 @@
     .fav-actions{flex-basis:36%}
     #resultsMap{height:240px}
   }
+
+  /* Permanentvisning: vitt tema, isolerat via body.permanent-view */
+  body.permanent-view{
+    background:#ffffff;
+    color:#1a1a1a;
+  }
+  body.permanent-view .card{
+    background:#f7f7f7;
+    color:#1a1a1a;
+    box-shadow:0 6px 16px rgba(0,0,0,.12);
+    border:1px solid #e6e6e6;
+  }
+  body.permanent-view #departuresCard{
+    background:#ffffff;
+    border:1px solid #e6e6e6;
+  }
+  body.permanent-view .departure-item{
+    background:#fafafa;
+    border-left-color:#d0d0d0;
+  }
+  body.permanent-view .departure-destination{ color:#4a4a4a; }
+  body.permanent-view .departure-from{ color:#5a5a5a; }
+  body.permanent-view .departures-title{ color:#1a1a1a; }
+
+  /* Röd tid om < 3 min i permanentvisning */
+  body.permanent-view .departure-time.red-time{
+    color:#c62828;
+    font-weight:800;
+  }
+
+  /* Återgå-länk: visas endast i permanentvisning */
+  #permanentExit{
+    display:none;
+    text-align:right;
+    margin-bottom:8px;
+    font-weight:700;
+    color:#1a1a1a;
+    text-decoration:none;
+  }
+  body.permanent-view #permanentExit{
+    display:block;
+  }
 </style>
 </head>
 <body>
@@ -142,6 +184,7 @@
     </div>
 
     <div class="card" id="departuresCard" style="display:none">
+      <a href="#" id="permanentExit">Återgå</a>
       <div class="departures-title">Nästa avgångar</div>
       <div id="departuresList"></div>
     </div>
@@ -149,7 +192,6 @@
     <div class="card" id="favoritesCard" style="display:none">
       <div class="departures-title">Mina favorithållplatser</div>
       <div id="favoritesListBottom"></div>
-      <!-- Permanentvisning-länken (ny) -->
       <div style="text-align:center;margin-top:12px">
         <a href="#" id="permanentLink" style="color:#ffffff;font-weight:700;text-decoration:none">
           Permanentvisning
@@ -185,7 +227,9 @@ const topSupport = document.getElementById('topSupport');
 const clearSearchBtn = document.getElementById('clearSearchBtn');
 const mapContainer = document.getElementById('mapContainer');
 const resultsMapEl = document.getElementById('resultsMap');
+
 const permanentLink = document.getElementById('permanentLink');
+const permanentExit = document.getElementById('permanentExit');
 
 let allSites = [];
 let allStopPoints = [];
@@ -198,9 +242,6 @@ let currentUserPos = null;
 const departuresCache = {};
 const DEPARTURES_TTL = 20_000;
 let countdownInterval = null;
-
-/* Permanentvisning: separat flagga/interval (stör inte normalflödet) */
-let permanentViewInterval = null;
 
 /* Utilities */
 function showLoading(v){ loading.style.display = v ? 'block' : 'none'; }
@@ -461,7 +502,7 @@ function resolveFromStopForDepartures(departures){
   });
 }
 
-/* Display departures */
+/* Display departures (med röd tid < 3 min i permanentvisning) */
 function displayDepartures(departures){
   resolveFromStopForDepartures(departures);
   function update(){
@@ -480,7 +521,21 @@ function displayDepartures(departures){
       const clock = expected.toLocaleTimeString('sv-SE',{hour:'2-digit',minute:'2-digit'});
       let arrow=''; if(dep.direction_code===1) arrow='⬆️'; else if(dep.direction_code===2) arrow='⬇️';
       const transport = (dep.line && dep.line.transport_mode) ? dep.line.transport_mode : dep.transport_mode || '';
-      return `<div class="departure-item"><div style="min-width:28px;text-align:center">${arrow}</div><div style="flex:1"><div class="departure-line">${dep.line && dep.line.designation?dep.line.designation:''} ${transport}</div><div class="departure-destination">${escapeHtml(dep.destination||'')}</div><div class="departure-from">från ${escapeHtml(dep.fromStop||'')}</div></div><div style="text-align:right"><div class="departure-time">${timeDisplay}</div><div style="font-size:11px;color:var(--muted)">${clock}</div></div></div>`;
+
+      const redClass = (document.body.classList.contains('permanent-view') && totalSeconds < 180) ? ' red-time' : '';
+
+      return `<div class="departure-item">
+        <div style="min-width:28px;text-align:center">${arrow}</div>
+        <div style="flex:1">
+          <div class="departure-line">${dep.line && dep.line.designation?dep.line.designation:''} ${transport}</div>
+          <div class="departure-destination">${escapeHtml(dep.destination||'')}</div>
+          <div class="departure-from">från ${escapeHtml(dep.fromStop||'')}</div>
+        </div>
+        <div style="text-align:right">
+          <div class="departure-time${redClass}">${timeDisplay}</div>
+          <div style="font-size:11px;color:var(--muted)">${clock}</div>
+        </div>
+      </div>`;
     }).join('');
     departuresList.innerHTML = out;
   }
@@ -807,25 +862,31 @@ favObserver.observe(favoritesCard, { attributes: true, attributeFilter: ['style'
 
 (async ()=>{ try{ if(window.getComputedStyle(favoritesCard).display !== 'none'){ await ensureCachesLoaded(); startFavoritesAutoRefresh(); } }catch(e){ console.error('init fav observer', e); } })();
 
-/* Permanentvisning: döljer knappraden och favoriterkortet, återanvänder favoriterflödet */
+/* Permanentvisning: aktivera vitt tema och visa endast avgångar */
 permanentLink.addEventListener('click', async (e) => {
   e.preventDefault();
   // Dölj knappraden och favoriterkortet (inte hela topCard)
-  favoritesCard.style.display = 'none';
   const btnGroup = document.querySelector('.button-group');
   if(btnGroup) btnGroup.style.display = 'none';
+  favoritesCard.style.display = 'none';
 
-  // Visa endast "Nästa avgångar" med blandat flöde från favoriter
+  // Aktivera vitt tema
+  document.body.classList.add('permanent-view');
+
+  // Hämta och visa blandade avgångar från favoriter
   await ensureCachesLoaded();
   refreshFavoritesDeparturesOnce();
   departuresCard.style.display = 'block';
-
-  // Starta en separat auto-refresh för permanentvisningen (stör ej favoritsidans observer)
-  if(!permanentViewInterval){
-    permanentViewInterval = setInterval(()=>{ refreshFavoritesDeparturesOnce(); }, 120000);
-  }
 });
 
+/* Återgå från permanentvisning (återställ svart tema och knappar) */
+permanentExit.addEventListener('click', (e) => {
+  e.preventDefault();
+  document.body.classList.remove('permanent-view');
+  const btnGroup = document.querySelector('.button-group');
+  if(btnGroup) btnGroup.style.display = '';
+  // Dölj Återgå-länken (styrt av CSS-klassen), och lämna avgångar synliga tills användaren väljer vy
+});
 /* Button handlers */
 
 /* Location button */
@@ -833,12 +894,11 @@ locationBtn.addEventListener('click', async ()=>{
   setActiveButton(locationBtn);
   searchContainer.classList.remove('show');
   favoritesCard.style.display = 'none';
-  // Återställ knappraden om permanentvisning gömt den
+
+  // Återställ knappraden och tema om permanentvisning varit aktiv
   const btnGroup = document.querySelector('.button-group');
   if(btnGroup) btnGroup.style.display = '';
-
-  // Stoppa ev. separat permanent-interval
-  if(permanentViewInterval){ clearInterval(permanentViewInterval); permanentViewInterval = null; }
+  document.body.classList.remove('permanent-view');
 
   // Ensure favorites-info/list visible again when leaving search
   favoritesInfo.style.display = '';
@@ -864,12 +924,10 @@ favoritesBtn.addEventListener('click', async ()=>{
   searchContainer.classList.remove('show');
   setActiveButton(favoritesBtn);
 
-  // Återställ knappraden om permanentvisning gömt den
+  // Återställ knappraden och tema om permanentvisning varit aktiv
   const btnGroup = document.querySelector('.button-group');
   if(btnGroup) btnGroup.style.display = '';
-
-  // Stoppa ev. separat permanent-interval
-  if(permanentViewInterval){ clearInterval(permanentViewInterval); permanentViewInterval = null; }
+  document.body.classList.remove('permanent-view');
 
   // Dölj stop-info så att ingen tidigare vald hållplats visas i favoriter-vyn
   stopInfo.style.display = 'none';
@@ -888,12 +946,10 @@ searchBtn.addEventListener('click', ()=>{
   setActiveButton(searchBtn);
   const willShow = !searchContainer.classList.contains('show');
 
-  // Återställ knappraden om permanentvisning gömt den
+  // Återställ knappraden och tema om permanentvisning varit aktiv
   const btnGroup = document.querySelector('.button-group');
   if(btnGroup) btnGroup.style.display = '';
-
-  // Stoppa ev. separat permanent-interval
-  if(permanentViewInterval){ clearInterval(permanentViewInterval); permanentViewInterval = null; }
+  document.body.classList.remove('permanent-view');
 
   // Toggle search UI
   searchContainer.classList.toggle('show');
@@ -982,4 +1038,3 @@ updateFavoritesUI();
 </script>
 </body>
 </html>
-
