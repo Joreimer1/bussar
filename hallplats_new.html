@@ -116,7 +116,7 @@
 <body>
   <div class="container">
     <div class="card" id="topCard">
-      <h1>SL Avgångar 3</h1>
+      <h1>SL Avgångar 4</h1>
 
       <div class="button-group">
         <button id="locationBtn">📍 Plats</button>
@@ -184,65 +184,6 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
 
 <script>
-// --- START: Robust fyllning av dep.fromStop innan visning ---
-function resolveFromStopForDepartures(departures){
-  // Hjälpare: hitta stopPoint-objekt i cache
-  function findStopPointById(id){
-    if(!id) return null;
-    if(!allStopPoints || allStopPoints.length===0) return null;
-    return allStopPoints.find(sp => String(sp.id) === String(id) || String(sp.stop_point_id) === String(id));
-  }
-
-  // För varje avgång: om fromStop saknas, försök härleda från dep, site eller favorites
-  departures.forEach(dep => {
-    if(dep.fromStop && String(dep.fromStop).trim() !== '') return;
-
-    // 1) Försök extrahera id från avgången
-    const extractedId = extractStopPointId(dep);
-    if(extractedId){
-      // Försök hitta namn i stop-point-cachen
-      const sp = findStopPointById(extractedId);
-      if(sp && sp.name){
-        dep.fromStop = `${sp.name} ${extractedId}`;
-        return;
-      }
-      // Om ingen namn hittas, använd site/dep.site eller bara id
-      if(dep.site && dep.site.name){
-        dep.fromStop = `${dep.site.name} ${extractedId}`;
-        return;
-      }
-      dep.fromStop = extractedId;
-      return;
-    }
-
-    // 2) Om ingen id i avgången, kolla om dep.site finns
-    if(dep.site && dep.site.name){
-      // Om site innehåller ett stop_area eller id, inkludera det om möjligt
-      const siteId = dep.site.stop_area_id || dep.site.id || dep.site.site_id;
-      if(siteId) dep.fromStop = `${dep.site.name} ${siteId}`;
-      else dep.fromStop = dep.site.name;
-      return;
-    }
-
-    // 3) Fallback: kolla favorites (om någon favorit matchar dep via site/area)
-    if(Array.isArray(favorites) && favorites.length>0){
-      // försök matcha via stopAreaId eller namn
-      const fav = favorites.find(f=>{
-        if(f.stopPointId && departureMatchesStopPoint(dep, f.stopPointId)) return true;
-        if(f.stopAreaId && departureMatchesStopArea(dep, f.stopAreaId)) return true;
-        return false;
-      });
-      if(fav){
-        dep.fromStop = `${fav.name || 'Favorit'} ${fav.stopPointId || fav.stopAreaId || ''}`.trim();
-        return;
-      }
-    }
-
-    // 4) Sista utväg: lämna tomt eller använd befintligt fält (ingen ändring)
-  });
-}
-// --- SLUT: Robust fyllning av dep.fromStop innan visning ---
-  
 /* Fullständig klientlogik + Leaflet-karta */
 const locationBtn = document.getElementById('locationBtn');
 const favoritesBtn = document.getElementById('favoritesBtn');
@@ -275,151 +216,46 @@ let currentMode = 'none';
 let currentStop = null;
 let currentStopPointId = null;
 let currentStopAreaId = null;
-let currentUserPos = null; // <-- NY VARIABEL HÄR
+let currentUserPos = null;
 const departuresCache = {};
 const DEPARTURES_TTL = 20_000;
 let countdownInterval = null;
 
-  // --- START: Auto-refresh för Favoriter varannan minut (korrigerad) ---
-let favoritesRefreshInterval = null;
+/* Utilities */
+function showLoading(v){ loading.style.display = v ? 'block' : 'none'; }
+function showError(msg){ error.textContent = msg; error.style.display = 'block'; setTimeout(()=>error.style.display='none',5000); }
+function escapeHtml(s){ if(!s) return ''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;'); }
+function debounce(fn, wait=250){ let t=null; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a),wait); }; }
 
-async function refreshFavoritesDeparturesOnce(){
-  try{
-    showLoading(true);
-    await loadStopPoints();
-    await loadSites();
+/* Normalize favorites on load */
+(function normalizeFavoritesOnLoad(){
+  if(!Array.isArray(favorites)) favorites = [];
+  favorites = favorites.map(f=>{
+    const copy = Object.assign({}, f);
+    if(copy.stopPointId !== undefined && copy.stopPointId !== null) copy.stopPointId = String(copy.stopPointId);
+    if(copy.stopAreaId !== undefined && copy.stopAreaId !== null) copy.stopAreaId = String(copy.stopAreaId);
+    if(copy.lines === undefined || copy.lines === null) copy.lines = '';
+    if(copy.name === undefined || copy.name === null) copy.name = '';
+    return copy;
+  });
+  localStorage.setItem('sl_favorites_sp', JSON.stringify(favorites));
+})();
 
-    const allAggregated = [];
-
-    // För varje favorit: hitta relevanta sites och hämta avgångar, filtrera per favorit
-    for(const f of favorites){
-      // Hitta sites som matchar favoritens stopAreaId eller namn
-      let matchedSites = [];
-      if(f.stopAreaId){
-        matchedSites = allSites.filter(s=>{
-          const cand = [s.stop_area_id, s.stopAreaId, s.parentId, s.site_id];
-          return cand.some(c=>c && String(c)===String(f.stopAreaId));
-        });
-      }
-      if(matchedSites.length === 0 && f.name){
-        const nm = (f.name||'').trim().toLowerCase();
-        matchedSites = allSites.filter(s=> s.name && s.name.trim().toLowerCase().startsWith(nm));
-      }
-      // Fallback: om inga sites hittas, skapa ett enkelt site-objekt så att fetch-funktionen kan hantera det
-      if(matchedSites.length === 0){
-        matchedSites = [{ id: f.stopAreaId || ('sp-'+f.stopPointId), name: f.name || ('Favorit ' + f.stopPointId) }];
-      }
-
-      // Hämta avgångar för varje matchad site (seriellt för att undvika överbelastning)
-      for(const site of matchedSites){
-        try{
-          const res = await fetchDeparturesForSite(site, true);
-          const deps = res.departures || [];
-          // Filtrera avgångar så att endast de som matchar favoritens stopPointId/stopAreaId/linjer inkluderas
-          deps.forEach(dep=>{
-            // stopPoint-filter
-            if(f.stopPointId && !departureMatchesStopPoint(dep, f.stopPointId)) return;
-            // stopArea-filter
-            if(!f.stopPointId && f.stopAreaId && !departureMatchesStopArea(dep, f.stopAreaId)) return;
-            // linjefilter (om angivet)
-            if(f.lines && String(f.lines).trim() !== ''){
-              const allowed = String(f.lines).split(',').map(s=>s.trim()).filter(Boolean);
-              if(allowed.length>0){
-                const designation = dep.line && dep.line.designation ? String(dep.line.designation) : String(dep.designation || '');
-                if(!allowed.includes(designation)) return;
-              }
-            }
-            // Sätt från-stop så att UI visar varifrån avgången kommer
-            // Sätt från-stop med fallback till favoritens stopPointId om extraktion misslyckas
-            dep.fromStop = getDepFromStopLabel(dep, (res.stop && res.stop.name) ? res.stop.name : site.name, f.stopPointId);
-            allAggregated.push(dep);
-          });
-        }catch(e){
-          console.error('refreshFavoritesDeparturesOnce - fetchDeparturesForSite error', e);
-        }
-      }
-    }
-
-    // Sortera och visa aggregerade avgångar
-    if(allAggregated.length === 0){
-      departuresList.innerHTML = '<div class="no-departures">Inga avgångar hittades</div>';
-      departuresCard.style.display = 'block';
-      if(countdownInterval) clearInterval(countdownInterval);
-      showLoading(false);
-      return;
-    }
-    allAggregated.sort((a,b)=> new Date(a.expected) - new Date(b.expected));
-    displayDepartures(allAggregated);
-    showLoading(false);
-  }catch(e){
-    showLoading(false);
-    console.error('refreshFavoritesDeparturesOnce', e);
-  }
-}
-
-function startFavoritesAutoRefresh(){
-  if(favoritesRefreshInterval) return;
-  // Kör en gång direkt och sedan var 2:e minut
-  refreshFavoritesDeparturesOnce();
-  favoritesRefreshInterval = setInterval(()=> {
-    refreshFavoritesDeparturesOnce();
-  }, 120000); // 120000 ms = 2 minuter
-}
-
-function stopFavoritesAutoRefresh(){
-  if(!favoritesRefreshInterval) return;
-  clearInterval(favoritesRefreshInterval);
-  favoritesRefreshInterval = null;
-}
-
-// --- START: Robust observer som säkerställer cache innan favorit-uppdatering ---
-async function ensureCachesLoaded(){
-  // Ladda stop-points och sites om de inte redan finns
-  if(!allStopPoints || allStopPoints.length === 0) await loadStopPoints();
-  if(!allSites || allSites.length === 0) await loadSites();
-  // Normalisera favorites: säkerställ att stopPointId finns som sträng
+/* Save favorites (normalized) */
+function saveFavorites(){
   if(Array.isArray(favorites)){
     favorites = favorites.map(f => {
       const copy = Object.assign({}, f);
       if(copy.stopPointId !== undefined && copy.stopPointId !== null) copy.stopPointId = String(copy.stopPointId);
       if(copy.stopAreaId !== undefined && copy.stopAreaId !== null) copy.stopAreaId = String(copy.stopAreaId);
+      if(copy.lines === undefined || copy.lines === null) copy.lines = '';
+      if(copy.name === undefined || copy.name === null) copy.name = '';
       return copy;
     });
   }
-  saveFavorites(); // uppdatera localStorage om vi normaliserade något
+  localStorage.setItem('sl_favorites_sp', JSON.stringify(favorites));
+  refreshAllStars();
 }
-
-const favObserver = new MutationObserver(()=> {
-  (async () => {
-    try{
-      const visible = window.getComputedStyle(favoritesCard).display !== 'none';
-      if(visible){
-        await ensureCachesLoaded();
-        startFavoritesAutoRefresh();
-      } else {
-        stopFavoritesAutoRefresh();
-      }
-    }catch(e){ console.error('favObserver', e); }
-  })();
-});
-favObserver.observe(favoritesCard, { attributes: true, attributeFilter: ['style'] });
-
-// Om favoriter redan visas vid laddning: ladda cache först
-(async ()=>{
-  try{
-    if(window.getComputedStyle(favoritesCard).display !== 'none'){
-      await ensureCachesLoaded();
-      startFavoritesAutoRefresh();
-    }
-  }catch(e){ console.error('init fav observer', e); }
-})();
-// --- SLUT: Robust observer ---
-
-// Säkerställ att om favoriter redan visas vid laddning så startas refresh
-if(window.getComputedStyle(favoritesCard).display !== 'none'){
-  startFavoritesAutoRefresh();
-}
-// --- SLUT: Auto-refresh för Favoriter varannan minut (korrigerad) ---
 
 /* Leaflet map state */
 let map = null;
@@ -463,12 +299,8 @@ function updateMapForMatches(matches){
       const marker = L.marker([pt.lat, pt.lon]);
       marker.bindPopup(`<strong>${escapeHtml(pt.name)}</strong><br>StopPoint: ${escapeHtml(pt.id)}`);
       marker.on('click', () => {
-        // Pan to marker and open popup first, then select after short delay so user sees marker
-        if(map) {
-          map.panTo([pt.lat, pt.lon]);
-        }
+        if(map) map.panTo([pt.lat, pt.lon]);
         marker.openPopup();
-        // allow pan/animation to complete before selecting (which closes search UI)
         setTimeout(()=> selectStopPointById(pt.id), 180);
       });
       marker.addTo(markersLayer);
@@ -476,7 +308,6 @@ function updateMapForMatches(matches){
     }catch(e){ console.error('marker add error', e); }
   });
 
-  // --- NY KOD START: Rita ut din position ---
   if(currentUserPos && map){
     try {
       const userMarker = L.circleMarker([currentUserPos.lat, currentUserPos.lon], {
@@ -492,9 +323,7 @@ function updateMapForMatches(matches){
       bounds.push([currentUserPos.lat, currentUserPos.lon]);
     } catch(e) { console.error('User pos marker error', e); }
   }
-  // --- NY KOD SLUT ---
 
-  // Fit bounds / set view and ensure tiles render (invalidateSize after)
   if(bounds.length===1){
     map.setView(bounds[0], 17);
     setTimeout(()=>{ if(map) map.invalidateSize(); }, 80);
@@ -502,7 +331,6 @@ function updateMapForMatches(matches){
     try{
       map.fitBounds(bounds, { padding: [30,30] });
     }catch(e){
-      // fallback: set center to first
       map.setView(bounds[0], 13);
     }
     setTimeout(()=>{ if(map) map.invalidateSize(); }, 80);
@@ -511,84 +339,6 @@ function updateMapForMatches(matches){
   mapContainer.style.display = 'block';
 }
 
-/* Utility: ensure suggestions stars and top star sync */
-function refreshAllStars(){
-  document.querySelectorAll('.suggestion-item .favorite-star').forEach(el=>{
-    const id = el.dataset.id;
-    const found = favorites.some(f=>String(f.stopPointId)===String(id));
-    el.textContent = found ? '⭐' : '☆';
-  });
-  if(stopFavoriteStar){
-    const idx = currentStopPointId ? favorites.findIndex(f=>String(f.stopPointId)===String(currentStopPointId)) : -1;
-    stopFavoriteStar.textContent = (idx>-1) ? '⭐' : '☆';
-  }
-}
-
-function saveFavorites(){ localStorage.setItem('sl_favorites_sp', JSON.stringify(favorites)); refreshAllStars(); }
-
-function showLoading(v){ loading.style.display = v ? 'block' : 'none'; }
-function showError(msg){ error.textContent = msg; error.style.display = 'block'; setTimeout(()=>error.style.display='none',5000); }
-function escapeHtml(s){ if(!s) return ''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;'); }
-function debounce(fn, wait=250){ let t=null; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a),wait); }; }
-
-// Hjälpare: extrahera stopPoint-id från en avgång
-// Robustare extrahering av stopPoint-id från en avgång
-function extractStopPointId(dep){
-  if(!dep) return null;
-
-  // Direktfält
-  const direct = ['stop_point','stopPoint','stopPointId','stop_point_id','stop_pointId'];
-  for(const k of direct){
-    if(dep[k]){
-      if(typeof dep[k] === 'object'){
-        if(dep[k].id) return String(dep[k].id);
-        if(dep[k].stop_point_id) return String(dep[k].stop_point_id);
-      } else {
-        return String(dep[k]);
-      }
-    }
-  }
-
-  // Vanliga objektfält
-  const objs = ['stop_point_obj','stopPointObj','stopPointObj','stop_point_object'];
-  for(const k of objs){
-    if(dep[k] && typeof dep[k] === 'object'){
-      if(dep[k].id) return String(dep[k].id);
-      if(dep[k].stop_point_id) return String(dep[k].stop_point_id);
-      if(dep[k].parentId) return String(dep[k].parentId);
-    }
-  }
-
-  // Ibland ligger id under site eller nested site-objekt
-  if(dep.site && typeof dep.site === 'object'){
-    if(dep.site.stop_point_id) return String(dep.site.stop_point_id);
-    if(dep.site.id) return String(dep.site.id);
-  }
-
-  // Flera alternativa namn
-  if(dep.parentId) return String(dep.parentId);
-  if(dep.stop_area_id) return String(dep.stop_area_id);
-
-  return null;
-}
-
-function getDepFromStopLabel(dep, siteName, fallbackStopPointId){
-  const id = extractStopPointId(dep) || (fallbackStopPointId ? String(fallbackStopPointId) : null);
-  if(siteName && id) return `${siteName} ${id}`;
-  if(siteName) return siteName;
-  if(id) return id;
-  return '';
-}
-
-// Hjälpare: format för "från ... id"
-function getDepFromStopLabel(dep, siteName){
-  const id = extractStopPointId(dep);
-  if(siteName && id) return `${siteName} ${id}`;
-  if(siteName) return siteName;
-  if(id) return id;
-  return '';
-}
-  
 /* Load caches */
 async function loadSites(){
   const cached = localStorage.getItem('sl_sites_cache');
@@ -676,6 +426,93 @@ function departureMatchesStopArea(dep, stopAreaId){
   return false;
 }
 
+/* Robust extrahering av stopPoint-id från en avgång */
+function extractStopPointId(dep){
+  if(!dep) return null;
+  const direct = ['stop_point','stopPoint','stopPointId','stop_point_id','stop_pointId','stop_pointid'];
+  for(const k of direct){
+    if(dep[k]){
+      if(typeof dep[k] === 'object'){
+        if(dep[k].id) return String(dep[k].id);
+        if(dep[k].stop_point_id) return String(dep[k].stop_point_id);
+      } else {
+        return String(dep[k]);
+      }
+    }
+  }
+  const objs = ['stop_point_obj','stopPointObj','stop_point_object'];
+  for(const k of objs){
+    if(dep[k] && typeof dep[k] === 'object'){
+      if(dep[k].id) return String(dep[k].id);
+      if(dep[k].stop_point_id) return String(dep[k].stop_point_id);
+      if(dep[k].parentId) return String(dep[k].parentId);
+    }
+  }
+  if(dep.site && typeof dep.site === 'object'){
+    if(dep.site.stop_point_id) return String(dep.site.stop_point_id);
+    if(dep.site.id) return String(dep.site.id);
+  }
+  if(dep.parentId) return String(dep.parentId);
+  if(dep.stop_area_id) return String(dep.stop_area_id);
+  return null;
+}
+
+/* Formatterare: skapa "Hållplatsnamn id" med fallback */
+function getDepFromStopLabel(dep, siteName, fallbackStopPointId){
+  const id = extractStopPointId(dep) || (fallbackStopPointId ? String(fallbackStopPointId) : null);
+  if(siteName && id) return `${siteName} ${id}`;
+  if(siteName) return siteName;
+  if(id) return id;
+  return '';
+}
+
+/* Robust fyllning av dep.fromStop innan visning */
+function resolveFromStopForDepartures(departures){
+  function findStopPointById(id){
+    if(!id) return null;
+    if(!allStopPoints || allStopPoints.length===0) return null;
+    return allStopPoints.find(sp => String(sp.id) === String(id) || String(sp.stop_point_id) === String(id));
+  }
+
+  departures.forEach(dep => {
+    if(dep.fromStop && String(dep.fromStop).trim() !== '') return;
+
+    const extractedId = extractStopPointId(dep);
+    if(extractedId){
+      const sp = findStopPointById(extractedId);
+      if(sp && sp.name){
+        dep.fromStop = `${sp.name} ${extractedId}`;
+        return;
+      }
+      if(dep.site && dep.site.name){
+        dep.fromStop = `${dep.site.name} ${extractedId}`;
+        return;
+      }
+      dep.fromStop = extractedId;
+      return;
+    }
+
+    if(dep.site && dep.site.name){
+      const siteId = dep.site.stop_area_id || dep.site.id || dep.site.site_id;
+      if(siteId) dep.fromStop = `${dep.site.name} ${siteId}`;
+      else dep.fromStop = dep.site.name;
+      return;
+    }
+
+    if(Array.isArray(favorites) && favorites.length>0){
+      const fav = favorites.find(f=>{
+        if(f.stopPointId && departureMatchesStopPoint(dep, f.stopPointId)) return true;
+        if(f.stopAreaId && departureMatchesStopArea(dep, f.stopAreaId)) return true;
+        return false;
+      });
+      if(fav){
+        dep.fromStop = `${fav.name || 'Favorit'} ${fav.stopPointId || fav.stopAreaId || ''}`.trim();
+        return;
+      }
+    }
+  });
+}
+
 /* Display departures */
 function displayDepartures(departures){
   resolveFromStopForDepartures(departures);
@@ -730,11 +567,9 @@ async function selectStopPointById(spId){
   stopInfo.style.display='block'; topSupport.style.display='flex';
   currentStop = matchedSites.length>0 ? matchedSites[0] : { id: sp.site_id || ('sp-'+sp.id), name: sp.name };
   currentMode='location'; setActiveButton(locationBtn);
-  // hide favoritesCard when selecting via map/search
   favoritesCard.style.display = 'none';
   refreshAllStars();
 
-  // Center map to chosen stop if map exists (so user gets visual feedback)
   if(map && sp.lat && sp.lon){
     const lat = parseFloat(sp.lat);
     const lon = parseFloat(sp.lon);
@@ -747,7 +582,6 @@ async function selectStopPointById(spId){
   if(matchedSites.length>0) getDeparturesFromSitesWithFiltering(matchedSites, { stopPointId: currentStopPointId }, true);
   else getDeparturesFromSitesWithFiltering([currentStop], { stopPointId: currentStopPointId }, true);
 
-  // Close suggestions and search UI after a short delay to allow centering/popups to be visible
   setTimeout(()=>{
     searchContainer.classList.remove('show');
     suggestions.style.display='none';
@@ -805,7 +639,7 @@ async function getDeparturesFromSitesWithFiltering(stops, opts={}, force=false){
     showLoading(false);
 
     let allDeps = [];
-    results.forEach(res=>{ if(!res) return; res.departures.forEach(dep=>{ dep.fromStop = getDepFromStopLabel(dep, res.stop && res.stop.name ? res.stop.name : '');
+    results.forEach(res=>{ if(!res) return; res.departures.forEach(dep=>{ dep.fromStop = dep.fromStop || (res.stop && res.stop.name ? getDepFromStopLabel(dep, res.stop.name) : ''); dep.fromStop = dep.fromStop || ''; // ensure field exists
       if(opts && opts.stopPointId){ if(!departureMatchesStopPoint(dep, opts.stopPointId)) return; }
       else if(opts && opts.stopAreaId){ if(!departureMatchesStopArea(dep, opts.stopAreaId)) return; }
       if(opts && opts.favoriteLines){ const allowed = String(opts.favoriteLines).split(',').map(s=>s.trim()).filter(Boolean); if(allowed.length>0){ const designation = dep.line && dep.line.designation ? String(dep.line.designation) : String(dep.designation || ''); if(!allowed.includes(designation)) return; } }
@@ -826,7 +660,7 @@ const doSearch = debounce(async (qRaw) => {
   const matches = allStopPoints.filter(pt=>{
     const n = (pt.name||'').toLowerCase(); const note = (pt.place||pt.town||'').toLowerCase();
     return n.includes(q) || note.includes(q);
-  }).slice(0,40); // more for map
+  }).slice(0,40);
   const newHash = JSON.stringify(matches.map(m=>m.id));
   if(newHash === lastSearchResults){
     updateMapForMatches(matches);
@@ -850,12 +684,13 @@ suggestions.addEventListener('click', async (ev)=>{
   const star = ev.target.closest('.favorite-star');
   if(star){
     ev.stopPropagation();
-    const spId = star.dataset.id; await loadStopPoints();
+    const spId = star.dataset.id;
+    await loadStopPoints();
     const sp = allStopPoints.find(p=>String(p.id)===String(spId)); if(!sp) return;
     const idx = favorites.findIndex(f=>String(f.stopPointId)===String(spId));
     if(idx>-1){ favorites.splice(idx,1); saveFavorites(); star.textContent='☆'; updateFavoritesUI(); return; }
     const stopAreaId = sp.stop_area_id || sp.stopAreaId || sp.parentId || sp.site_id || null;
-    favorites.push({ stopPointId: sp.id, name: sp.name || '', stopAreaId: stopAreaId?String(stopAreaId):null, lines: '' });
+    favorites.push({ stopPointId: String(sp.id), name: sp.name || '', stopAreaId: stopAreaId?String(stopAreaId):null, lines: '' });
     saveFavorites(); star.textContent='⭐'; updateFavoritesUI(); return;
   }
   const item = ev.target.closest('.suggestion-item');
@@ -874,154 +709,250 @@ function updateFavoritesUI(){
       const linesText = f.lines && f.lines.trim()!=='' ? escapeHtml(f.lines) : 'Alla';
       return `<div class="favorite-item" data-id="${escapeHtml(f.stopPointId)}"><div class="favorite-left"><div class="favorite-name">⭐ ${escapeHtml(f.name||'')}</div><div class="favorite-id">Hållplats nr: ${escapeHtml(f.stopPointId)}</div><div class="favorite-lines">Valda linjer: ${linesText}</div></div><div class="fav-actions"><input class="fav-lines-input" data-id="${escapeHtml(f.stopPointId)}" placeholder="T.ex 2,57" value="${escapeHtml(f.lines||'')}" /><button class="remove-small" data-id="${escapeHtml(f.stopPointId)}">Ta bort</button></div></div>`;
     }).join('');
-  } else { favoritesInfo.textContent = 'Inga favoriter sparade. Klicka på stjärnan i sökresultat för att spara.'; favoritesList.innerHTML = ''; }
-  if(favorites.length>0){
-    favoritesListBottom.innerHTML = favorites.map(f=>{ const linesText = f.lines && f.lines.trim()!=='' ? escapeHtml(f.lines) : 'Alla'; return `<div class="favorite-item" data-id="${escapeHtml(f.stopPointId)}"><div class="favorite-left"><div class="favorite-name">⭐ ${escapeHtml(f.name||'')}</div><div class="favorite-id">Hållplats nr: ${escapeHtml(f.stopPointId)}</div><div class="favorite-lines">Valda linjer: ${linesText}</div></div><div class="fav-actions"><input class="fav-lines-input" data-id="${escapeHtml(f.stopPointId)}" placeholder="T.ex 2,57" value="${escapeHtml(f.lines||'')}" /><button class="remove-small" data-id="${escapeHtml(f.stopPointId)}">Ta bort</button></div></div>` }).join('');
-    favoritesCard.style.display='block';
-  } else { favoritesListBottom.innerHTML=''; favoritesCard.style.display='none'; }
-  attachFavListeners();
+  } else {
+    favoritesInfo.textContent = 'Inga favoriter';
+    favoritesList.innerHTML = '';
+  }
+  // Bottom list (full page)
+  favoritesListBottom.innerHTML = favorites.map(f=>`<div style="padding:8px;border-bottom:1px solid #22313a">⭐ ${escapeHtml(f.name||'')} — ${escapeHtml(f.stopPointId||'')}</div>`).join('');
   refreshAllStars();
 }
 
-function attachFavListeners(){
-  document.querySelectorAll('.remove-small').forEach(btn=>btn.onclick=()=>{
-    const id = btn.dataset.id; const idx = favorites.findIndex(f=>String(f.stopPointId)===String(id));
+/* Click handlers for favorites list (remove / update lines) */
+favoritesList.addEventListener('click', (ev)=>{
+  const rem = ev.target.closest('.remove-small');
+  if(rem){
+    const id = rem.dataset.id;
+    const idx = favorites.findIndex(f=>String(f.stopPointId)===String(id));
     if(idx>-1){ favorites.splice(idx,1); saveFavorites(); updateFavoritesUI(); }
+  }
+});
+favoritesList.addEventListener('input', (ev)=>{
+  const inp = ev.target.closest('.fav-lines-input');
+  if(inp){
+    const id = inp.dataset.id;
+    const idx = favorites.findIndex(f=>String(f.stopPointId)===String(id));
+    if(idx>-1){ favorites[idx].lines = inp.value || ''; saveFavorites(); }
+  }
+});
+
+/* Utility: ensure suggestions stars and top star sync */
+function refreshAllStars(){
+  document.querySelectorAll('.suggestion-item .favorite-star').forEach(el=>{
+    const id = el.dataset.id;
+    const found = favorites.some(f=>String(f.stopPointId)===String(id));
+    el.textContent = found ? '⭐' : '☆';
   });
-  document.querySelectorAll('.fav-lines-input').forEach(inp=>{
-    inp.onblur = ()=>{
-      const id = inp.dataset.id; const val = inp.value.trim(); const fav = favorites.find(f=>String(f.stopPointId)===String(id));
-      if(!fav) return; if(val===''){ fav.lines=''; saveFavorites(); updateFavoritesUI(); return; }
-      const normalized = val.replace(/\s+/g,''); if(!/^(\d+(,\d+)*)$/.test(normalized)){ inp.value = fav.lines||''; showError('Endast siffror och kommatecken tillåtna i Valda linjer'); return; }
-      fav.lines = normalized; saveFavorites(); updateFavoritesUI();
-    };
-    inp.addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); inp.blur(); }});
-  });
+  if(stopFavoriteStar){
+    const idx = currentStopPointId ? favorites.findIndex(f=>String(f.stopPointId)===String(currentStopPointId)) : -1;
+    stopFavoriteStar.textContent = (idx>-1) ? '⭐' : '☆';
+  }
 }
 
-/* Favorites departures aggregated */
-async function showFavoritesDepartures(){
+/* Start/stop favorites view and auto-refresh handling */
+function setActiveButton(btn){
+  [locationBtn, favoritesBtn, searchBtn].forEach(b=>b.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+}
+
+/* Ensure caches loaded and normalize favorites */
+async function ensureCachesLoaded(){
+  if(!allStopPoints || allStopPoints.length === 0) await loadStopPoints();
+  if(!allSites || allSites.length === 0) await loadSites();
+  if(Array.isArray(favorites)){
+    favorites = favorites.map(f => {
+      const copy = Object.assign({}, f);
+      if(copy.stopPointId !== undefined && copy.stopPointId !== null) copy.stopPointId = String(copy.stopPointId);
+      if(copy.stopAreaId !== undefined && copy.stopAreaId !== null) copy.stopAreaId = String(copy.stopAreaId);
+      if(copy.lines === undefined || copy.lines === null) copy.lines = '';
+      if(copy.name === undefined || copy.name === null) copy.name = '';
+      return copy;
+    });
+  }
+  localStorage.setItem('sl_favorites_sp', JSON.stringify(favorites));
+  refreshAllStars();
+}
+
+/* Auto-refresh for favorites (2 min) */
+let favoritesRefreshInterval = null;
+
+async function refreshFavoritesDeparturesOnce(){
   try{
-    await loadStopPoints(); await loadSites();
-    if(favorites.length===0){ departuresList.innerHTML='<div class="no-departures">Inga favoriter valda</div>'; departuresCard.style.display='block'; return; }
     showLoading(true);
-    const allSitesToQuery = new Map(); const favMeta = [];
-    for(const fav of favorites){
-      const sp = allStopPoints.find(p=>String(p.id)===String(fav.stopPointId));
-      let stopAreaId = fav.stopAreaId || (sp && (sp.stop_area_id||sp.stopAreaId||sp.parentId||sp.site_id)) || null;
-      let sitesForArea = [];
-      if(stopAreaId){
-        sitesForArea = allSites.filter(s=>{ const cand=[s.stop_area_id,s.stopAreaId,s.parentId,s.site_id]; return cand.some(c=>c && String(c)===String(stopAreaId)); });
-      }
-      if(sitesForArea.length===0 && sp && sp.name){ const nm = sp.name.trim().toLowerCase(); sitesForArea = allSites.filter(s=> s.name && s.name.trim().toLowerCase().startsWith(nm)); }
-      if(sitesForArea.length===0){ const rep = { id: (sp && sp.site_id) || (`sp-${fav.stopPointId}`), name: sp?sp.name:'Okänd' }; allSitesToQuery.set(rep.id, rep); sitesForArea = [rep]; }
-      else sitesForArea.forEach(s=> allSitesToQuery.set(s.id, s));
-      favMeta.push({ fav, sitesForArea, stopAreaId });
-    }
-    const sitesArray = Array.from(allSitesToQuery.values());
-    const worker = async s=>await fetchDeparturesForSite(s, true);
-    const concurrency = 3; const results=[]; let i=0;
-    const runners=new Array(concurrency).fill(0).map(async ()=>{ while(i<sitesArray.length){ const idx=i++; try{ results[idx]=await worker(sitesArray[idx]); }catch(e){ results[idx]=undefined; } }});
-    await Promise.all(runners);
-    showLoading(false);
-    const siteDeps = new Map(); results.forEach(r=>{ if(r) siteDeps.set(String(r.stop.id), r.departures || []); });
-    let aggregated=[];
-    for(const meta of favMeta){
-      const fav = meta.fav; const lines = fav.lines && fav.lines.trim()!=='' ? fav.lines.split(',').map(s=>s.trim()).filter(Boolean) : [];
-      for(const site of meta.sitesForArea){
-        const deps = siteDeps.get(String(site.id)) || [];
-        deps.forEach(dep=>{
-          if(!departureMatchesStopPoint(dep, fav.stopPointId)) return;
-          if(lines.length>0){ const designation = dep.line && dep.line.designation ? String(dep.line.designation) : String(dep.designation || ''); if(!lines.includes(designation)) return; }
-          dep.fromStop = site.name || dep.fromStop || '';
-          aggregated.push(dep);
+    await ensureCachesLoaded();
+
+    const allAggregated = [];
+
+    for(const f of favorites){
+      let matchedSites = [];
+      if(f.stopAreaId){
+        matchedSites = allSites.filter(s=>{
+          const cand = [s.stop_area_id, s.stopAreaId, s.parentId, s.site_id];
+          return cand.some(c=>c && String(c)===String(f.stopAreaId));
         });
       }
+      if(matchedSites.length === 0 && f.name){
+        const nm = (f.name||'').trim().toLowerCase();
+        matchedSites = allSites.filter(s=> s.name && s.name.trim().toLowerCase().startsWith(nm));
+      }
+      if(matchedSites.length === 0){
+        matchedSites = [{ id: f.stopAreaId || ('sp-'+f.stopPointId), name: f.name || ('Favorit ' + f.stopPointId) }];
+      }
+
+      for(const site of matchedSites){
+        try{
+          const res = await fetchDeparturesForSite(site, true);
+          const deps = res.departures || [];
+          deps.forEach(dep=>{
+            if(f.stopPointId && !departureMatchesStopPoint(dep, f.stopPointId)) return;
+            if(!f.stopPointId && f.stopAreaId && !departureMatchesStopArea(dep, f.stopAreaId)) return;
+            if(f.lines && String(f.lines).trim() !== ''){
+              const allowed = String(f.lines).split(',').map(s=>s.trim()).filter(Boolean);
+              if(allowed.length>0){
+                const designation = dep.line && dep.line.designation ? String(dep.line.designation) : String(dep.designation || '');
+                if(!allowed.includes(designation)) return;
+              }
+            }
+            dep.fromStop = getDepFromStopLabel(dep, (res.stop && res.stop.name) ? res.stop.name : site.name, f.stopPointId);
+            allAggregated.push(dep);
+          });
+        }catch(e){
+          console.error('refreshFavoritesDeparturesOnce - fetchDeparturesForSite error', e);
+        }
+      }
     }
-    if(aggregated.length===0){ departuresList.innerHTML='<div class="no-departures">Inga avgångar för dina favoriter</div>'; departuresCard.style.display='block'; return; }
-    aggregated.sort((a,b)=> new Date(a.expected) - new Date(b.expected));
-    displayDepartures(aggregated);
-  }catch(e){ showLoading(false); showError('Kunde inte hämta favoritsavgångar'); console.error(e); }
+
+    if(allAggregated.length === 0){
+      departuresList.innerHTML = '<div class="no-departures">Inga avgångar hittades</div>';
+      departuresCard.style.display = 'block';
+      if(countdownInterval) clearInterval(countdownInterval);
+      showLoading(false);
+      return;
+    }
+
+    resolveFromStopForDepartures(allAggregated);
+    allAggregated.sort((a,b)=> new Date(a.expected) - new Date(b.expected));
+    displayDepartures(allAggregated);
+    showLoading(false);
+  }catch(e){
+    showLoading(false);
+    console.error('refreshFavoritesDeparturesOnce', e);
+  }
 }
 
-/* UI helpers */
-function setActiveButton(el){ [locationBtn,favoritesBtn,searchBtn].forEach(b=>b.classList.remove('active')); if(!el) return; el.classList.add('active'); }
+function startFavoritesAutoRefresh(){
+  if(favoritesRefreshInterval) return;
+  refreshFavoritesDeparturesOnce();
+  favoritesRefreshInterval = setInterval(()=> {
+    refreshFavoritesDeparturesOnce();
+  }, 120000);
+}
+function stopFavoritesAutoRefresh(){
+  if(!favoritesRefreshInterval) return;
+  clearInterval(favoritesRefreshInterval);
+  favoritesRefreshInterval = null;
+}
 
-/* Events */
-locationBtn.addEventListener('click', ()=>{
-  if(!navigator.geolocation){ showError('Geolocation stöds inte av din webbläsare'); return; }
-  showLoading(true); stopInfo.style.display='none'; departuresCard.style.display='none'; searchContainer.classList.remove('show');
-  navigator.geolocation.getCurrentPosition(pos=>{ findNearestStop(pos.coords.latitude, pos.coords.longitude); }, err=>{
-    showLoading(false); let m=''; switch(err.code){ case err.PERMISSION_DENIED: m='Du nekade tillgång till din position'; break; case err.POSITION_UNAVAILABLE: m='Platsinformation är inte tillgänglig'; break; case err.TIMEOUT: m='Begäran om position tog för lång tid'; break; default: m='Ett okänt fel uppstod'; } showError(m);
-  }, { enableHighAccuracy:true, timeout:10000, maximumAge:0 });
+/* Observe favoritesCard visibility and ensure caches before starting refresh */
+const favObserver = new MutationObserver(()=> {
+  (async () => {
+    try{
+      const visible = window.getComputedStyle(favoritesCard).display !== 'none';
+      if(visible){
+        await ensureCachesLoaded();
+        startFavoritesAutoRefresh();
+      } else {
+        stopFavoritesAutoRefresh();
+      }
+    }catch(e){ console.error('favObserver', e); }
+  })();
+});
+favObserver.observe(favoritesCard, { attributes: true, attributeFilter: ['style'] });
+
+(async ()=>{
+  try{
+    if(window.getComputedStyle(favoritesCard).display !== 'none'){
+      await ensureCachesLoaded();
+      startFavoritesAutoRefresh();
+    }
+  }catch(e){ console.error('init fav observer', e); }
+})();
+
+/* Button handlers */
+locationBtn.addEventListener('click', async ()=>{
+  // Try to get geolocation and find nearest stop
+  setActiveButton(locationBtn);
+  searchContainer.classList.remove('show');
+  favoritesCard.style.display = 'none';
+  try{
+    if(navigator.geolocation){
+      showLoading(true);
+      navigator.geolocation.getCurrentPosition(async (pos)=>{
+        currentUserPos = { lat: pos.coords.latitude, lon: pos.coords.longitude };
+        await findNearestStop(currentUserPos.lat, currentUserPos.lon);
+        showLoading(false);
+      }, async (err)=>{
+        showLoading(false);
+        showError('Kunde inte hämta din plats');
+      }, { timeout: 8000 });
+    } else {
+      showError('Geolocation ej tillgängligt');
+    }
+  }catch(e){ showError('Fel vid platsförfrågan'); console.error(e); }
 });
 
-favoritesBtn.addEventListener('click', ()=>{
+favoritesBtn.addEventListener('click', async ()=>{
+  await ensureCachesLoaded();
   searchContainer.classList.remove('show');
-  stopInfo.style.display = 'none';
-  departuresCard.style.display = 'none';
-  updateFavoritesUI();
-  currentMode = 'favorites';
   setActiveButton(favoritesBtn);
+  favoritesCard.style.display = 'block';
+  updateFavoritesUI();
+  startFavoritesAutoRefresh();
+});
 
-  if (!favorites || favorites.length === 0) {
-    departuresList.innerHTML = '<div class="no-departures">Inga favoriter valda</div>';
-    departuresCard.style.display = 'block';
-    if (countdownInterval) clearInterval(countdownInterval);
+searchBtn.addEventListener('click', ()=>{
+  setActiveButton(searchBtn);
+  searchContainer.classList.toggle('show');
+  favoritesCard.style.display = 'none';
+  suggestions.style.display = 'none';
+  searchInput.focus();
+});
+
+/* Clear search */
+clearSearchBtn.addEventListener('click', ()=>{
+  searchInput.value = '';
+  suggestions.style.display = 'none';
+  updateMapForMatches([]);
+});
+
+/* Suggestion star handler helper (kept for clarity) */
+async function handleSuggestionStarClick(spId, starEl){
+  await loadStopPoints();
+  const sp = allStopPoints.find(p=>String(p.id)===String(spId));
+  if(!sp) return;
+  const idx = favorites.findIndex(f=>String(f.stopPointId)===String(spId));
+  if(idx>-1){
+    favorites.splice(idx,1);
+    saveFavorites();
+    starEl.textContent='☆';
+    updateFavoritesUI();
     return;
   }
+  const stopAreaId = sp.stop_area_id || sp.stopAreaId || sp.parentId || sp.site_id || null;
+  favorites.push({
+    stopPointId: String(sp.id),
+    name: sp.name || '',
+    stopAreaId: stopAreaId ? String(stopAreaId) : null,
+    lines: ''
+  });
+  saveFavorites();
+  starEl.textContent='⭐';
+  updateFavoritesUI();
+}
 
-  showFavoritesDepartures();
-});
+/* Initial UI state */
+updateFavoritesUI();
 
-searchBtn.addEventListener('click', async ()=>{
-  searchContainer.classList.add('show');
-
-  // --- NY KOD START: Hämta position vid sökning ---
-  if(navigator.geolocation){
-    navigator.geolocation.getCurrentPosition(pos => {
-      currentUserPos = { lat: pos.coords.latitude, lon: pos.coords.longitude };
-      // Uppdatera kartan direkt om en sökning redan gjorts
-      if(searchInput.value.trim().length >= 2) {
-         doSearch(searchInput.value);
-      }
-    }, err => console.log('Ingen pos för karta', err), { timeout: 10000, maximumAge: 60000 });
-  }
-  // --- NY KOD SLUT ---
-
-  // Init map and ensure correct sizing immediately after making container visible
-  initMapIfNeeded();
-  setTimeout(()=>{ if(map) map.invalidateSize(); }, 60);
-
-  suggestions.style.display='none';
-  searchInput.value='';
-  lastSearchResults='';
-  await loadStopPoints();
-  searchInput.focus();
-  currentMode='search';
-  setActiveButton(searchBtn);
-  favoritesInfo.textContent = '';
-  favoritesList.innerHTML = '';
-  favoritesCard.style.display = 'none';
-  departuresCard.style.display = 'none';
-  updateMapForMatches([]); // clear map when opening search
-});
-
-stopFavoriteStar && stopFavoriteStar.addEventListener('click', async ()=>{
-  if(!currentStopPointId){ showError('Ingen stop-point vald'); return; }
-  const idx = favorites.findIndex(f=>String(f.stopPointId)===String(currentStopPointId));
-  if(idx>-1){ favorites.splice(idx,1); saveFavorites(); stopFavoriteStar.textContent='☆'; updateFavoritesUI(); return; }
-  await loadStopPoints();
-  const sp = allStopPoints.find(p=>String(p.id)===String(currentStopPointId));
-  const stopAreaId = sp && (sp.stop_area_id||sp.stopAreaId||sp.parentId||sp.site_id) ? String(sp.stop_area_id||sp.stopAreaId||sp.parentId||sp.site_id) : (currentStopAreaId||null);
-  favorites.push({ stopPointId: currentStopPointId, name: sp?sp.name:(currentStop && currentStop.name?currentStop.name:''), stopAreaId: stopAreaId, lines: '' });
-  saveFavorites(); stopFavoriteStar.textContent='⭐'; updateFavoritesUI();
-});
-
-clearSearchBtn.addEventListener('click', ()=>{ searchInput.value=''; suggestions.style.display='none'; searchInput.focus(); lastSearchResults=''; updateMapForMatches([]); });
-
-/* Init */
-(async function init(){ await loadSites(); await loadStopPoints(); updateFavoritesUI(); setActiveButton(null); topSupport.style.display = 'none'; refreshAllStars(); })();
 </script>
 </body>
 </html>
