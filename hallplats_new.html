@@ -18,7 +18,7 @@
   .card{background:var(--card);padding:18px;border-radius:12px;margin-bottom:14px;box-shadow:0 8px 24px rgba(0,0,0,.38)}
   h1{font-size:20px;text-align:center;font-weight:500;margin-bottom:12px;color:#e6eef8}
   .button-group{display:flex;gap:10px;margin-bottom:12px}
-  button{flex:1;background:var(--accent);border:0;color:#e2e8f0;padding:10px;border-radius:10px;cursor:pointer;font-weight:600}
+  button{flex:1;background:var(--accent);border:0;color:var(--white);padding:10px;border-radius:10px;cursor:pointer;font-weight:600}
   button.secondary{background:var(--accent)}
   button.active{outline:3px solid #ffffff;outline-offset:2px;border-radius:10px}
 
@@ -49,7 +49,6 @@
   .remove-small{background:linear-gradient(180deg,var(--remove-1),var(--remove-2));color:var(--white);border:0;padding:8px 10px;border-radius:8px;font-weight:700}
 
   .map-container{margin-top:10px;border-radius:10px;overflow:hidden;border:1px solid #23343d;display:none}
-  /* Increased map height */
   #resultsMap{width:100%;height:320px;background:#0b1a20}
 
   .departures-title{font-size:18px;text-align:center;margin-bottom:12px}
@@ -81,7 +80,6 @@
     .remove-btn{min-width:100px;padding:10px}
     .fav-lines-input{width:100px}
     .fav-actions{flex-basis:36%}
-    /* smaller map on small screens */
     #resultsMap{height:240px}
   }
 </style>
@@ -89,7 +87,7 @@
 <body>
   <div class="container">
     <div class="card" id="topCard">
-      <h1>SL Avgångar 9</h1>
+      <h1>SL Avgångar 10</h1>
 
       <div class="button-group">
         <button id="locationBtn">📍 Plats</button>
@@ -107,7 +105,6 @@
 
         <div class="suggestions" id="suggestions"></div>
 
-        <!-- Dessa element finns kvar i DOM men döljs när sök är aktivt -->
         <div class="favorites-info" id="favoritesInfo"></div>
         <div class="favorites-list" id="favoritesList"></div>
 
@@ -181,6 +178,7 @@ const stopFavoriteStar = document.getElementById('stopFavoriteStar');
 const topSupport = document.getElementById('topSupport');
 const clearSearchBtn = document.getElementById('clearSearchBtn');
 const mapContainer = document.getElementById('mapContainer');
+const resultsMapEl = document.getElementById('resultsMap');
 
 let allSites = [];
 let allStopPoints = [];
@@ -800,6 +798,8 @@ favObserver.observe(favoritesCard, { attributes: true, attributeFilter: ['style'
 (async ()=>{ try{ if(window.getComputedStyle(favoritesCard).display !== 'none'){ await ensureCachesLoaded(); startFavoritesAutoRefresh(); } }catch(e){ console.error('init fav observer', e); } })();
 
 /* Button handlers */
+
+/* Location button */
 locationBtn.addEventListener('click', async ()=>{
   setActiveButton(locationBtn);
   searchContainer.classList.remove('show');
@@ -822,18 +822,25 @@ locationBtn.addEventListener('click', async ()=>{
   }catch(e){ showError('Fel vid platsförfrågan'); console.error(e); }
 });
 
+/* Favorites button - hide stopInfo and show favorites */
 favoritesBtn.addEventListener('click', async ()=>{
   await ensureCachesLoaded();
   searchContainer.classList.remove('show');
   setActiveButton(favoritesBtn);
+
+  // Dölj stop-info så att ingen tidigare vald hållplats visas i favoriter-vyn
+  stopInfo.style.display = 'none';
+  topSupport.style.display = 'none';
+  stopName.textContent = '';
+  stopDistance.textContent = '';
+  stopAreaEl.textContent = '';
+
   favoritesCard.style.display = 'block';
-  // Ensure favorites-info/list visible in search container when user opens favorites view
-  favoritesInfo.style.display = '';
-  favoritesList.style.display = '';
   updateFavoritesUI();
   startFavoritesAutoRefresh();
 });
 
+/* Search button - clear suggestions, map and stopInfo when opening search */
 searchBtn.addEventListener('click', ()=>{
   setActiveButton(searchBtn);
   const willShow = !searchContainer.classList.contains('show');
@@ -841,37 +848,36 @@ searchBtn.addEventListener('click', ()=>{
   // Toggle search UI
   searchContainer.classList.toggle('show');
 
-  // Dölj andra vyer alltid
+  // Always hide the favorites page and departures card when toggling search
   favoritesCard.style.display = 'none';
   departuresCard.style.display = 'none';
   if(countdownInterval){ clearInterval(countdownInterval); countdownInterval = null; }
 
-  // Rensa sökresultat och karta helt
-  lastSearchResults = '';               // töm sök-cache
-  suggestions.innerHTML = '';           // ta bort DOM-innehåll
+  // Clear suggestions and map markers so search view is clean
+  lastSearchResults = '';
+  suggestions.innerHTML = '';
   suggestions.style.display = 'none';
-  updateMapForMatches([]);              // tar bort markörer och döljer mapContainer
-  clearMapMarkers();                    // extra säkerhet
+  updateMapForMatches([]); // hides mapContainer and clears markers
+  clearMapMarkers(); // extra safety
 
-  // Dölj och rensa favorites-sektionen i sökpanelen
+  // Hide favorites section inside search panel
   favoritesInfo.textContent = '';
   favoritesList.innerHTML = '';
   favoritesList.style.display = 'none';
 
-  // DÖLJ stop-info och support (det som visar "Barnängen 62 meter" etc)
+  // Hide stop-info and support (remove any previously selected stop)
   stopInfo.style.display = 'none';
   topSupport.style.display = 'none';
-  // Rensa textfält så inget gammalt syns
   stopName.textContent = '';
   stopDistance.textContent = '';
   stopAreaEl.textContent = '';
 
-  // Fokusera input om vi öppnar sök
+  // Focus input if search is now visible
   if(willShow){
-    searchInput.value = ''; // valfritt: rensa sökfält
+    searchInput.value = '';
     searchInput.focus();
   } else {
-    // När sök stängs: återställ favorites-list synlighet (innehåll återfylls av updateFavoritesUI)
+    // When closing search, restore favorites-list visibility and content
     favoritesInfo.style.display = '';
     favoritesList.style.display = '';
     updateFavoritesUI();
@@ -879,7 +885,7 @@ searchBtn.addEventListener('click', ()=>{
 });
 
 /* Clear search */
-clearSearchBtn.addEventListener('click', ()=>{ searchInput.value = ''; suggestions.style.display = 'none'; updateMapForMatches([]); });
+clearSearchBtn.addEventListener('click', ()=>{ searchInput.value = ''; suggestions.style.display = 'none'; suggestions.innerHTML = ''; updateMapForMatches([]); });
 
 /* Suggestion star helper (kept for clarity) */
 async function handleSuggestionStarClick(spId, starEl){
@@ -889,11 +895,36 @@ async function handleSuggestionStarClick(spId, starEl){
   const idx = favorites.findIndex(f=>String(f.stopPointId)===String(spId));
   if(idx>-1){ favorites.splice(idx,1); saveFavorites(); starEl.textContent='☆'; updateFavoritesUI(); return; }
   const stopAreaId = sp.stop_area_id || sp.stopAreaId || sp.parentId || sp.site_id || null;
-  favorites.push({ stopPointId: String(sp.id), name: sp.name || '', stopAreaId: stopAreaId ? String(stopAreaId) : null, lines: '' });
-  saveFavorites();
-  starEl.textContent='⭐';
-  updateFavoritesUI();
+  favorites.push({ stopPointId: String(sp.id), name: sp.name || '', stopAreaId: stopAreaId?String(stopAreaId):null, lines: '' });
+  saveFavorites(); starEl.textContent='⭐'; updateFavoritesUI(); return;
 }
+
+/* Click handler for top star (Plats view) - add/remove favorite */
+stopFavoriteStar.addEventListener('click', async (ev) => {
+  ev.stopPropagation();
+  if(!currentStopPointId) return;
+  await ensureCachesLoaded();
+  const idx = favorites.findIndex(f => String(f.stopPointId) === String(currentStopPointId));
+  if(idx > -1){
+    favorites.splice(idx, 1);
+    saveFavorites();
+    refreshAllStars();
+    updateFavoritesUI();
+    return;
+  }
+  const sp = allStopPoints.find(p => String(p.id) === String(currentStopPointId));
+  const name = sp ? (sp.name || '') : (stopName.textContent || '');
+  const stopAreaId = sp ? (sp.stop_area_id || sp.stopAreaId || sp.parentId || sp.site_id || null) : null;
+  favorites.push({
+    stopPointId: String(currentStopPointId),
+    name: name,
+    stopAreaId: stopAreaId ? String(stopAreaId) : null,
+    lines: ''
+  });
+  saveFavorites();
+  refreshAllStars();
+  updateFavoritesUI();
+});
 
 /* Initial UI state */
 updateFavoritesUI();
@@ -901,3 +932,4 @@ updateFavoritesUI();
 </script>
 </body>
 </html>
+
