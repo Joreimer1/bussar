@@ -116,7 +116,7 @@
 <body>
   <div class="container">
     <div class="card" id="topCard">
-      <h1>SL Avgångar 2</h1>
+      <h1>SL Avgångar 3</h1>
 
       <div class="button-group">
         <button id="locationBtn">📍 Plats</button>
@@ -372,15 +372,48 @@ function stopFavoritesAutoRefresh(){
   favoritesRefreshInterval = null;
 }
 
-// Observera när favoritesCard ändrar style (visas/göms) och starta/stoppa auto-refresh
+// --- START: Robust observer som säkerställer cache innan favorit-uppdatering ---
+async function ensureCachesLoaded(){
+  // Ladda stop-points och sites om de inte redan finns
+  if(!allStopPoints || allStopPoints.length === 0) await loadStopPoints();
+  if(!allSites || allSites.length === 0) await loadSites();
+  // Normalisera favorites: säkerställ att stopPointId finns som sträng
+  if(Array.isArray(favorites)){
+    favorites = favorites.map(f => {
+      const copy = Object.assign({}, f);
+      if(copy.stopPointId !== undefined && copy.stopPointId !== null) copy.stopPointId = String(copy.stopPointId);
+      if(copy.stopAreaId !== undefined && copy.stopAreaId !== null) copy.stopAreaId = String(copy.stopAreaId);
+      return copy;
+    });
+  }
+  saveFavorites(); // uppdatera localStorage om vi normaliserade något
+}
+
 const favObserver = new MutationObserver(()=> {
-  try{
-    const visible = window.getComputedStyle(favoritesCard).display !== 'none';
-    if(visible) startFavoritesAutoRefresh();
-    else stopFavoritesAutoRefresh();
-  }catch(e){ console.error('favObserver', e); }
+  (async () => {
+    try{
+      const visible = window.getComputedStyle(favoritesCard).display !== 'none';
+      if(visible){
+        await ensureCachesLoaded();
+        startFavoritesAutoRefresh();
+      } else {
+        stopFavoritesAutoRefresh();
+      }
+    }catch(e){ console.error('favObserver', e); }
+  })();
 });
 favObserver.observe(favoritesCard, { attributes: true, attributeFilter: ['style'] });
+
+// Om favoriter redan visas vid laddning: ladda cache först
+(async ()=>{
+  try{
+    if(window.getComputedStyle(favoritesCard).display !== 'none'){
+      await ensureCachesLoaded();
+      startFavoritesAutoRefresh();
+    }
+  }catch(e){ console.error('init fav observer', e); }
+})();
+// --- SLUT: Robust observer ---
 
 // Säkerställ att om favoriter redan visas vid laddning så startas refresh
 if(window.getComputedStyle(favoritesCard).display !== 'none'){
