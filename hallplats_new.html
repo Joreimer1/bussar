@@ -116,7 +116,7 @@
 <body>
   <div class="container">
     <div class="card" id="topCard">
-      <h1>SL Avgångar</h1>
+      <h1>SL Avgångar 2</h1>
 
       <div class="button-group">
         <button id="locationBtn">📍 Plats</button>
@@ -184,6 +184,65 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
 
 <script>
+// --- START: Robust fyllning av dep.fromStop innan visning ---
+function resolveFromStopForDepartures(departures){
+  // Hjälpare: hitta stopPoint-objekt i cache
+  function findStopPointById(id){
+    if(!id) return null;
+    if(!allStopPoints || allStopPoints.length===0) return null;
+    return allStopPoints.find(sp => String(sp.id) === String(id) || String(sp.stop_point_id) === String(id));
+  }
+
+  // För varje avgång: om fromStop saknas, försök härleda från dep, site eller favorites
+  departures.forEach(dep => {
+    if(dep.fromStop && String(dep.fromStop).trim() !== '') return;
+
+    // 1) Försök extrahera id från avgången
+    const extractedId = extractStopPointId(dep);
+    if(extractedId){
+      // Försök hitta namn i stop-point-cachen
+      const sp = findStopPointById(extractedId);
+      if(sp && sp.name){
+        dep.fromStop = `${sp.name} ${extractedId}`;
+        return;
+      }
+      // Om ingen namn hittas, använd site/dep.site eller bara id
+      if(dep.site && dep.site.name){
+        dep.fromStop = `${dep.site.name} ${extractedId}`;
+        return;
+      }
+      dep.fromStop = extractedId;
+      return;
+    }
+
+    // 2) Om ingen id i avgången, kolla om dep.site finns
+    if(dep.site && dep.site.name){
+      // Om site innehåller ett stop_area eller id, inkludera det om möjligt
+      const siteId = dep.site.stop_area_id || dep.site.id || dep.site.site_id;
+      if(siteId) dep.fromStop = `${dep.site.name} ${siteId}`;
+      else dep.fromStop = dep.site.name;
+      return;
+    }
+
+    // 3) Fallback: kolla favorites (om någon favorit matchar dep via site/area)
+    if(Array.isArray(favorites) && favorites.length>0){
+      // försök matcha via stopAreaId eller namn
+      const fav = favorites.find(f=>{
+        if(f.stopPointId && departureMatchesStopPoint(dep, f.stopPointId)) return true;
+        if(f.stopAreaId && departureMatchesStopArea(dep, f.stopAreaId)) return true;
+        return false;
+      });
+      if(fav){
+        dep.fromStop = `${fav.name || 'Favorit'} ${fav.stopPointId || fav.stopAreaId || ''}`.trim();
+        return;
+      }
+    }
+
+    // 4) Sista utväg: lämna tomt eller använd befintligt fält (ingen ändring)
+  });
+}
+// --- SLUT: Robust fyllning av dep.fromStop innan visning ---
+  
 /* Fullständig klientlogik + Leaflet-karta */
 const locationBtn = document.getElementById('locationBtn');
 const favoritesBtn = document.getElementById('favoritesBtn');
@@ -586,6 +645,7 @@ function departureMatchesStopArea(dep, stopAreaId){
 
 /* Display departures */
 function displayDepartures(departures){
+  resolveFromStopForDepartures(departures);
   function update(){
     const now = new Date();
     const valid = departures.filter(dep => Math.floor((new Date(dep.expected) - now)/1000) >= 0);
