@@ -271,7 +271,7 @@ async function refreshFavoritesDeparturesOnce(){
               }
             }
             // Sätt från-stop så att UI visar varifrån avgången kommer
-            dep.fromStop = res.stop && res.stop.name ? res.stop.name : site.name;
+            dep.fromStop = getDepFromStopLabel(dep, res.stop && res.stop.name ? res.stop.name : site.name);
             allAggregated.push(dep);
           });
         }catch(e){
@@ -438,6 +438,41 @@ function showError(msg){ error.textContent = msg; error.style.display = 'block';
 function escapeHtml(s){ if(!s) return ''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;'); }
 function debounce(fn, wait=250){ let t=null; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a),wait); }; }
 
+// Hjälpare: extrahera stopPoint-id från en avgång
+function extractStopPointId(dep){
+  if(!dep) return null;
+  const candidates = [
+    dep.stop_point,
+    dep.stopPoint,
+    dep.stopPointId,
+    dep.stop_point_id,
+    dep.stop_point_obj,
+    dep.stopPointObj,
+    dep.stop_point_obj && dep.stop_point_obj.id,
+    dep.stopPointObj && dep.stopPointObj.id
+  ];
+  for(const c of candidates){
+    if(!c) continue;
+    if(typeof c === 'object'){
+      if(c.id) return String(c.id);
+      if(c.stop_point_id) return String(c.stop_point_id);
+      if(c.parentId) return String(c.parentId);
+    } else {
+      return String(c);
+    }
+  }
+  return null;
+}
+
+// Hjälpare: format för "från ... id"
+function getDepFromStopLabel(dep, siteName){
+  const id = extractStopPointId(dep);
+  if(siteName && id) return `${siteName} ${id}`;
+  if(siteName) return siteName;
+  if(id) return id;
+  return '';
+}
+  
 /* Load caches */
 async function loadSites(){
   const cached = localStorage.getItem('sl_sites_cache');
@@ -653,7 +688,7 @@ async function getDeparturesFromSitesWithFiltering(stops, opts={}, force=false){
     showLoading(false);
 
     let allDeps = [];
-    results.forEach(res=>{ if(!res) return; res.departures.forEach(dep=>{ dep.fromStop = res.stop.name;
+    results.forEach(res=>{ if(!res) return; res.departures.forEach(dep=>{ dep.fromStop = getDepFromStopLabel(dep, res.stop && res.stop.name ? res.stop.name : '');
       if(opts && opts.stopPointId){ if(!departureMatchesStopPoint(dep, opts.stopPointId)) return; }
       else if(opts && opts.stopAreaId){ if(!departureMatchesStopArea(dep, opts.stopAreaId)) return; }
       if(opts && opts.favoriteLines){ const allowed = String(opts.favoriteLines).split(',').map(s=>s.trim()).filter(Boolean); if(allowed.length>0){ const designation = dep.line && dep.line.designation ? String(dep.line.designation) : String(dep.designation || ''); if(!allowed.includes(designation)) return; } }
