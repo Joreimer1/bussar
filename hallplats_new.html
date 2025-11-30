@@ -837,19 +837,31 @@ favoritesBtn.addEventListener('click', async ()=>{
 searchBtn.addEventListener('click', ()=>{
   setActiveButton(searchBtn);
   const willShow = !searchContainer.classList.contains('show');
-  searchContainer.classList.toggle('show');
-  favoritesCard.style.display = 'none';
-  suggestions.style.display = 'none';
-  searchInput.focus();
 
-  // Hide favorites UI inside search when search is active
+  // Toggle search UI
+  searchContainer.classList.toggle('show');
+
+  // Always hide the favorites page and departures card when toggling search
+  favoritesCard.style.display = 'none';
+  departuresCard.style.display = 'none';
+  if(countdownInterval){ clearInterval(countdownInterval); countdownInterval = null; }
+
+  // Clear suggestions and map markers so search view is clean
+  suggestions.innerHTML = '';
+  suggestions.style.display = 'none';
+  updateMapForMatches([]); // this hides mapContainer and clears markers via existing function
+  clearMapMarkers(); // extra safety: ensure markers removed
+
+  // Ensure favorites UI inside the search panel is hidden and emptied
+  favoritesInfo.textContent = '';
+  favoritesList.innerHTML = '';
+  favoritesList.style.display = 'none';
+
+  // Focus input if search is now visible
   if(willShow){
-    departuresCard.style.display = 'none';
-    if(countdownInterval){ clearInterval(countdownInterval); countdownInterval = null; }
-    favoritesInfo.style.display = 'none';
-    favoritesList.style.display = 'none';
+    searchInput.focus();
   } else {
-    // when hiding search, restore favorites-info/list visibility (but not necessarily show content)
+    // When closing search, restore favorites-list visibility (content will be repopulated by updateFavoritesUI if needed)
     favoritesInfo.style.display = '';
     favoritesList.style.display = '';
   }
