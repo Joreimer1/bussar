@@ -143,7 +143,7 @@
 <body>
   <div class="container">
     <div class="card" id="topCard">
-      <h1>SL Hållplatsavgångar 1</h1>
+      <h1>SL Hållplatsavgångar</h1>
 
       <div class="button-group">
         <button id="locationBtn">📍 Plats</button>
@@ -716,7 +716,7 @@ function renderFavoritesList(){
     });
   }
 
-  // Bottom favorites list (in favoritesCard) — inkluderar nu inmatning för linjer och knapp för att visa avgångar
+  // Bottom favorites list (in favoritesCard) — endast inmatning för linjer och ta bort (ingen "Visa avgångar")
   favoritesListBottom.innerHTML = '';
   if(!Array.isArray(favorites) || favorites.length===0){
     favoritesListBottom.innerHTML = '<div class="no-departures">Inga favoriter sparade</div>';
@@ -724,7 +724,7 @@ function renderFavoritesList(){
     favorites.forEach((f, idx) => {
       const el = document.createElement('div');
       el.className = 'favorite-item';
-      el.innerHTML = `<div class="favorite-left"><div class="favorite-name">${escapeHtml(f.name || (f.stopPointId || f.stopAreaId || 'Favorit'))}</div><div class="favorite-id">${escapeHtml(f.stopPointId || f.stopAreaId || '')}</div><div class="favorite-lines">${escapeHtml(f.lines || '')}</div></div><div class="fav-actions"><input class="fav-lines-input" data-idx-bottom="${idx}" value="${escapeHtml(f.lines||'')}" placeholder="Linjer, t.ex. 1,2"/><div style="display:flex;flex-direction:column;gap:6px"><button class="remove-small" data-idx-bottom="${idx}">Ta bort</button><button class="show-fav" data-idx-bottom="${idx}" style="background:#4a5568;color:#fff;border-radius:8px;padding:8px 10px;border:0;font-weight:700;cursor:pointer">Visa avgångar</button></div></div>`;
+      el.innerHTML = `<div class="favorite-left"><div class="favorite-name">${escapeHtml(f.name || (f.stopPointId || f.stopAreaId || 'Favorit'))}</div><div class="favorite-id">${escapeHtml(f.stopPointId || f.stopAreaId || '')}</div><div class="favorite-lines">${escapeHtml(f.lines || '')}</div></div><div class="fav-actions"><input class="fav-lines-input" data-idx-bottom="${idx}" value="${escapeHtml(f.lines||'')}" placeholder="Linjer, t.ex. 1,2"/><button class="remove-small" data-idx-bottom="${idx}">Ta bort</button></div>`;
       favoritesListBottom.appendChild(el);
     });
   }
@@ -739,27 +739,6 @@ document.addEventListener('click', (e) => {
       favorites.splice(parseInt(idx,10),1);
       saveFavorites();
       renderFavoritesList();
-    }
-  }
-
-  const showBtn = e.target.closest('.show-fav');
-  if(showBtn){
-    const idx = showBtn.getAttribute('data-idx-bottom');
-    if(idx !== null){
-      const fav = favorites[parseInt(idx,10)];
-      if(!fav) return;
-      // Hämta sites för favorit och visa avgångar med samma pipeline som permanent-funktionen
-      (async ()=>{
-        try{
-          const res = await fetchDeparturesForFavorite(fav);
-          if(!res || !res.sites || res.sites.length===0){
-            showError('Kunde inte hitta site för favorit');
-            return;
-          }
-          // Visa departuresCard och hämta avgångar med filter
-          getDeparturesFromSitesWithFiltering(res.sites, res.opts || {}, true);
-        }catch(err){ console.error(err); showError('Fel vid hämtning av favoritavgångar'); }
-      })();
     }
   }
 });
@@ -818,25 +797,29 @@ locationBtn.addEventListener('click', async () => {
   }
 });
 
+/* När Favoriter-knappen klickas: visa favoriter-listan OCH hämta och blanda alla favoriters avgångar i avgångsflödet */
 favoritesBtn.addEventListener('click', () => {
   setActiveButton(favoritesBtn);
   searchContainer.classList.remove('show');
   suggestions.style.display = 'none';
   searchInput.value = '';
   stopInfo.style.display = 'none';
-  departuresCard.style.display = 'none';
   favoritesCard.style.display = 'block';
   renderFavoritesList();
+  // Hämta och visa alla favoriters avgångar i departuresCard (blandat)
+  getAggregatedFavoritesAndShow();
 });
 
+/* Sök-knappen: visa sökfält men visa INTE favoriter i sökflödet */
 searchBtn.addEventListener('click', () => {
   setActiveButton(searchBtn);
   searchContainer.classList.add('show');
   suggestions.style.display = 'none';
   favoritesCard.style.display = 'none';
   departuresCard.style.display = 'none';
-  // OBS: visa inte favoriter i sökflödet — tidigare fel var att vi kallade renderFavoritesList() här
-  // renderFavoritesList();  <-- borttagen för att inte visa sparade favoriter i sök
+  // Viktigt: visa inte sparade favoriter i sök — töm listan
+  favoritesInfo.textContent = '';
+  favoritesList.innerHTML = '';
 });
 
 clearSearchBtn.addEventListener('click', () => {
@@ -862,7 +845,104 @@ function setActiveButton(btn){
   renderFavoritesList();
 })();
 
-/* ---------- Permanent vit visning för favoriter ---------- */
+/* ---------- Funktion: hämta och blanda alla favoriters avgångar (för svart favoritsida) ---------- */
+async function fetchDeparturesForFavorite(fav){
+  // Samma helper som permanent-funktionen; returnerar sites + opts
+  await loadSites(); await loadStopPoints();
+  if(fav.stopPointId){
+    const sp = allStopPoints.find(p => String(p.id) === String(fav.stopPointId) || String(p.stop_point_id) === String(fav.stopPointId));
+    if(sp){
+      const stopAreaId = sp.stop_area_id || sp.parentId || sp.site_id || null;
+      let matchedSites = [];
+      if(stopAreaId){
+        matchedSites = allSites.filter(s => {
+          const cand = [s.stop_area_id, s.stopAreaId, s.parentId, s.site_id];
+          return cand.some(c => c && String(c) === String(stopAreaId));
+        });
+      }
+      if(matchedSites.length>0) return { sites: matchedSites, opts: { stopPointId: String(fav.stopPointId), favoriteLines: fav.lines || '' } };
+      return { sites: [{ id: sp.site_id || ('sp-'+sp.id), name: sp.name || fav.name || '' }], opts: { stopPointId: String(fav.stopPointId), favoriteLines: fav.lines || '' } };
+    }
+  }
+  if(fav.stopAreaId){
+    const matchedSites = allSites.filter(s => {
+      const cand = [s.stop_area_id, s.stopAreaId, s.parentId, s.site_id];
+      return cand.some(c => c && String(c) === String(fav.stopAreaId));
+    });
+    if(matchedSites.length>0) return { sites: matchedSites, opts: { stopAreaId: String(fav.stopAreaId), favoriteLines: fav.lines || '' } };
+  }
+  if(fav.name){
+    const nm = (fav.name||'').trim().toLowerCase();
+    const matchedSites = allSites.filter(s => s.name && s.name.trim().toLowerCase().startsWith(nm));
+    if(matchedSites.length>0) return { sites: matchedSites, opts: { favoriteLines: fav.lines || '' } };
+  }
+  return null;
+}
+
+async function getAggregatedFavoritesAndShow(){
+  try{
+    showLoading(true);
+    await loadSites(); await loadStopPoints();
+    const tasks = [];
+    for(const fav of (favorites || [])){
+      const res = await fetchDeparturesForFavorite(fav);
+      if(res && res.sites && res.sites.length>0){
+        tasks.push({ fav, sites: res.sites, opts: res.opts || {} });
+      }
+    }
+    if(tasks.length===0){
+      departuresList.innerHTML = '<div class="no-departures">Inga favoriter sparade</div>';
+      departuresCard.style.display = 'block';
+      showLoading(false);
+      return;
+    }
+
+    // Hämta avgångar för alla sites och applicera per-favorit filter, samla allt i allDeps
+    const allDeps = [];
+    for(const t of tasks){
+      for(const s of t.sites){
+        try{
+          const res = await fetchDeparturesForSite(s, true);
+          if(res && res.departures && res.departures.length>0){
+            res.departures.forEach(dep=>{
+              dep.fromStop = dep.fromStop || (res.stop && res.stop.name ? getDepFromStopLabel(dep, res.stop.name) : '');
+              dep.fromStop = dep.fromStop || '';
+              // Per-favorit filter
+              if(t.opts && t.opts.stopPointId){ if(!departureMatchesStopPoint(dep, t.opts.stopPointId)) return; }
+              else if(t.opts && t.opts.stopAreaId){ if(!departureMatchesStopArea(dep, t.opts.stopAreaId)) return; }
+              if(t.opts && t.opts.favoriteLines){
+                const allowed = String(t.opts.favoriteLines).split(',').map(s=>s.trim()).filter(Boolean);
+                if(allowed.length>0){
+                  const designation = dep.line && dep.line.designation ? String(dep.line.designation) : String(dep.designation || '');
+                  if(!allowed.includes(designation)) return;
+                }
+              }
+              allDeps.push(dep);
+            });
+          }
+        }catch(e){ console.error('agg fetch error', e); }
+      }
+    }
+
+    showLoading(false);
+
+    if(allDeps.length===0){
+      departuresList.innerHTML = '<div class="no-departures">Inga avgångar hittades</div>';
+      departuresCard.style.display = 'block';
+      return;
+    }
+
+    // Sortera och visa i samma avgångskort som övrigt
+    allDeps.sort((a,b)=> new Date(a.expected) - new Date(b.expected));
+    displayDepartures(allDeps);
+  }catch(e){
+    showLoading(false);
+    console.error('getAggregatedFavoritesAndShow', e);
+    showError('Fel vid hämtning av favoritavgångar');
+  }
+}
+
+/* ---------- Permanent vit visning för favoriter (oförändrad funktionalitet) ---------- */
 let permanentInterval = null;
 let permanentActive = false;
 
@@ -911,47 +991,6 @@ function exitPermanentView(){
 }
 
 /* Hämta och rendera favoritavgångar i permanent-listan */
-async function fetchDeparturesForFavorite(fav){
-  // Försök hitta matchande site eller stop-point från cache
-  await loadSites(); await loadStopPoints();
-  // Om favorit har stopPointId, hitta stop-point och matchande site
-  if(fav.stopPointId){
-    const sp = allStopPoints.find(p => String(p.id) === String(fav.stopPointId) || String(p.stop_point_id) === String(fav.stopPointId));
-    if(sp){
-      // försök hitta site som matchar stop_area eller namn
-      const stopAreaId = sp.stop_area_id || sp.parentId || sp.site_id || null;
-      let matchedSites = [];
-      if(stopAreaId){
-        matchedSites = allSites.filter(s => {
-          const cand = [s.stop_area_id, s.stopAreaId, s.parentId, s.site_id];
-          return cand.some(c => c && String(c) === String(stopAreaId));
-        });
-      }
-      if(matchedSites.length>0) return { sites: matchedSites, opts: { stopPointId: String(fav.stopPointId), favoriteLines: fav.lines || '' } };
-      // fallback: skapa ett site-liknande objekt
-      return { sites: [{ id: sp.site_id || ('sp-'+sp.id), name: sp.name || fav.name || '' }], opts: { stopPointId: String(fav.stopPointId), favoriteLines: fav.lines || '' } };
-    }
-  }
-
-  // Om favorit har stopAreaId, hitta sites direkt
-  if(fav.stopAreaId){
-    const matchedSites = allSites.filter(s => {
-      const cand = [s.stop_area_id, s.stopAreaId, s.parentId, s.site_id];
-      return cand.some(c => c && String(c) === String(fav.stopAreaId));
-    });
-    if(matchedSites.length>0) return { sites: matchedSites, opts: { stopAreaId: String(fav.stopAreaId), favoriteLines: fav.lines || '' } };
-  }
-
-  // Fallback: försök matcha via namn
-  if(fav.name){
-    const nm = (fav.name||'').trim().toLowerCase();
-    const matchedSites = allSites.filter(s => s.name && s.name.trim().toLowerCase().startsWith(nm));
-    if(matchedSites.length>0) return { sites: matchedSites, opts: { favoriteLines: fav.lines || '' } };
-  }
-
-  return null;
-}
-
 async function gatherFavoriteStopsForPermanent(){
   const tasks = [];
   for(const fav of (favorites || [])){
@@ -965,10 +1004,8 @@ async function gatherFavoriteStopsForPermanent(){
 
 /* Render-funktion för permanent vy (egen, så vi inte rör befintlig displayDepartures) */
 function renderPermanentDepartures(allDeps){
-  // Samma formattering som displayDepartures men renderar i permanentDeparturesList
   const container = document.getElementById('permanentDeparturesList');
   if(!container) return;
-  // Filtrera framtida avgångar
   const now = new Date();
   const valid = allDeps.filter(dep => Math.floor((new Date(dep.expected) - now)/1000) >= 0);
   if(valid.length===0){
@@ -990,7 +1027,7 @@ function renderPermanentDepartures(allDeps){
   container.innerHTML = out;
 }
 
-/* Hämta avgångar för alla favorit-stops och rendera */
+/* Hämta avgångar för alla favorit-stops och rendera (permanent) */
 async function updatePermanentFavoritesOnce(){
   try{
     const tasks = await gatherFavoriteStopsForPermanent();
@@ -999,14 +1036,12 @@ async function updatePermanentFavoritesOnce(){
       return;
     }
 
-    // Parallellt hämta avgångar för varje task (sites-array)
     const allDeps = [];
     for(const t of tasks){
       for(const s of t.sites){
         try{
           const res = await fetchDeparturesForSite(s, true);
           if(res && res.departures && res.departures.length>0){
-            // filtrera enligt opts (stopPointId / stopAreaId / favoriteLines)
             res.departures.forEach(dep=>{
               dep.fromStop = dep.fromStop || (res.stop && res.stop.name ? getDepFromStopLabel(dep, res.stop.name) : '');
               dep.fromStop = dep.fromStop || '';
@@ -1031,7 +1066,6 @@ async function updatePermanentFavoritesOnce(){
       return;
     }
 
-    // Försök fylla fromStop för bättre visning (samma helper som övriga)
     resolveFromStopForDepartures(allDeps);
     renderPermanentDepartures(allDeps);
   }catch(e){
@@ -1041,12 +1075,11 @@ async function updatePermanentFavoritesOnce(){
 }
 
 function startPermanentFavoritesLoop(){
-  // Kör en gång direkt och sedan var 20 sekunder (samma TTL som övrigt)
   updatePermanentFavoritesOnce();
   stopPermanentFavoritesLoop();
   permanentInterval = setInterval(() => {
     updatePermanentFavoritesOnce();
-  }, Math.max(5000, DEPARTURES_TTL)); // använd DEPARTURES_TTL eller minst 5s
+  }, Math.max(5000, DEPARTURES_TTL));
 }
 
 function stopPermanentFavoritesLoop(){
