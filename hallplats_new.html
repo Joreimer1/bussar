@@ -841,29 +841,35 @@ searchBtn.addEventListener('click', ()=>{
   // Toggle search UI
   searchContainer.classList.toggle('show');
 
-  // Always hide the favorites page and departures card when toggling search
+  // Dölj andra vyer alltid
   favoritesCard.style.display = 'none';
   departuresCard.style.display = 'none';
   if(countdownInterval){ clearInterval(countdownInterval); countdownInterval = null; }
 
-  // Clear suggestions and map markers so search view is clean
-  suggestions.innerHTML = '';
+  // Rensa sökresultat och karta helt
+  lastSearchResults = '';               // tvinga bort eventuell cache
+  suggestions.innerHTML = '';           // ta bort DOM-innehåll
   suggestions.style.display = 'none';
-  updateMapForMatches([]); // this hides mapContainer and clears markers via existing function
-  clearMapMarkers(); // extra safety: ensure markers removed
+  updateMapForMatches([]);              // tar bort markörer och döljer mapContainer
+  clearMapMarkers();                    // extra säkerhet
 
-  // Ensure favorites UI inside the search panel is hidden and emptied
+  // Dölj favoriter-sektionen i sökpanelen så inga favoriter syns där
   favoritesInfo.textContent = '';
   favoritesList.innerHTML = '';
   favoritesList.style.display = 'none';
 
-  // Focus input if search is now visible
+  // Rensa sökfältets värde så inget gammalt kvarstår (valfritt)
+  // searchInput.value = '';
+
+  // Fokusera input om vi öppnar sök
   if(willShow){
     searchInput.focus();
   } else {
-    // When closing search, restore favorites-list visibility (content will be repopulated by updateFavoritesUI if needed)
+    // När sök stängs: återställ synlighet för favorites-list i sökpanelen
     favoritesInfo.style.display = '';
     favoritesList.style.display = '';
+    // Återskapa innehåll om det behövs
+    updateFavoritesUI();
   }
 });
 
