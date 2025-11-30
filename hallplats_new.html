@@ -249,6 +249,10 @@ const topSupport = document.getElementById('topSupport');
 const clearSearchBtn = document.getElementById('clearSearchBtn');
 const mapContainer = document.getElementById('mapContainer');
 const resultsMapEl = document.getElementById('resultsMap');
+const permanentViewLink = document.getElementById('permanentViewLink');
+const permanentDeparturesContainer = document.getElementById('permanentDeparturesContainer');
+const permanentDeparturesList = document.getElementById('permanentDeparturesList');
+const exitPermanentLink = document.getElementById('exitPermanentLink');
 
 let allSites = [];
 let allStopPoints = [];
@@ -942,15 +946,15 @@ async function getAggregatedFavoritesAndShow(){
   }
 }
 
-/* ---------- Permanent vit visning för favoriter (oförändrad funktionalitet) ---------- */
+/* ---------- Permanent vit visning för favoriter ---------- */
 let permanentInterval = null;
 let permanentActive = false;
 
-document.getElementById('permanentViewLink').addEventListener('click', (e) => {
+permanentViewLink.addEventListener('click', (e) => {
   e.preventDefault();
   enterPermanentView();
 });
-document.getElementById('exitPermanentLink').addEventListener('click', (e) => {
+exitPermanentLink.addEventListener('click', (e) => {
   e.preventDefault();
   exitPermanentView();
 });
@@ -965,9 +969,16 @@ function enterPermanentView(){
   // Dölj övriga svarta-kort (men ändra inte deras innehåll)
   document.getElementById('topCard').style.display = 'none';
   document.getElementById('departuresCard').style.display = 'none';
+
   // Visa favoriter-kortet och permanent-container
-  document.getElementById('favoritesCard').style.display = 'block';
-  document.getElementById('permanentDeparturesContainer').style.display = 'block';
+  favoritesCard.style.display = 'block';
+  permanentDeparturesContainer.style.display = 'block';
+
+  // Dölja länken "Byt till permanent visning" i permanent läge
+  permanentViewLink.style.display = 'none';
+
+  // Dölj bottom-favoritlistan (vi visar endast permanent-listan i vitt läge)
+  favoritesListBottom.style.display = 'none';
 
   // Starta hämtning och uppdatering av favoritavgångar
   startPermanentFavoritesLoop();
@@ -983,8 +994,12 @@ function exitPermanentView(){
   // Återställ visningar till ursprungligt läge (svarar mot befintlig UI-logik)
   document.getElementById('topCard').style.display = ''; // låt originallogik styra visning framöver
   document.getElementById('departuresCard').style.display = 'none';
-  document.getElementById('favoritesCard').style.display = 'none';
-  document.getElementById('permanentDeparturesContainer').style.display = 'none';
+  favoritesCard.style.display = 'none';
+  permanentDeparturesContainer.style.display = 'none';
+
+  // Återställ visning av länken och bottom-listan
+  permanentViewLink.style.display = '';
+  favoritesListBottom.style.display = '';
 
   // Stoppa permanent uppdateringsloop
   stopPermanentFavoritesLoop();
@@ -1004,7 +1019,7 @@ async function gatherFavoriteStopsForPermanent(){
 
 /* Render-funktion för permanent vy (egen, så vi inte rör befintlig displayDepartures) */
 function renderPermanentDepartures(allDeps){
-  const container = document.getElementById('permanentDeparturesList');
+  const container = permanentDeparturesList;
   if(!container) return;
   const now = new Date();
   const valid = allDeps.filter(dep => Math.floor((new Date(dep.expected) - now)/1000) >= 0);
@@ -1032,7 +1047,7 @@ async function updatePermanentFavoritesOnce(){
   try{
     const tasks = await gatherFavoriteStopsForPermanent();
     if(!tasks || tasks.length===0){
-      document.getElementById('permanentDeparturesList').innerHTML = '<div class="no-departures">Inga favoriter sparade</div>';
+      permanentDeparturesList.innerHTML = '<div class="no-departures">Inga favoriter sparade</div>';
       return;
     }
 
@@ -1062,7 +1077,7 @@ async function updatePermanentFavoritesOnce(){
     }
 
     if(allDeps.length===0){
-      document.getElementById('permanentDeparturesList').innerHTML = '<div class="no-departures">Inga avgångar hittades</div>';
+      permanentDeparturesList.innerHTML = '<div class="no-departures">Inga avgångar hittades</div>';
       return;
     }
 
@@ -1070,7 +1085,7 @@ async function updatePermanentFavoritesOnce(){
     renderPermanentDepartures(allDeps);
   }catch(e){
     console.error('updatePermanentFavoritesOnce', e);
-    document.getElementById('permanentDeparturesList').innerHTML = '<div class="no-departures">Fel vid hämtning</div>';
+    permanentDeparturesList.innerHTML = '<div class="no-departures">Fel vid hämtning</div>';
   }
 }
 
