@@ -143,7 +143,7 @@
 <body>
   <div class="container">
     <div class="card" id="topCard">
-      <h1>SL Hållplatsavgångar</h1>
+      <h1>SL Hållplatsavgångar 1</h1>
 
       <div class="button-group">
         <button id="locationBtn">📍 Plats</button>
@@ -716,7 +716,7 @@ function renderFavoritesList(){
     });
   }
 
-  // Bottom favorites list (in favoritesCard)
+  // Bottom favorites list (in favoritesCard) — inkluderar nu inmatning för linjer och knapp för att visa avgångar
   favoritesListBottom.innerHTML = '';
   if(!Array.isArray(favorites) || favorites.length===0){
     favoritesListBottom.innerHTML = '<div class="no-departures">Inga favoriter sparade</div>';
@@ -724,7 +724,7 @@ function renderFavoritesList(){
     favorites.forEach((f, idx) => {
       const el = document.createElement('div');
       el.className = 'favorite-item';
-      el.innerHTML = `<div class="favorite-left"><div class="favorite-name">${escapeHtml(f.name || (f.stopPointId || f.stopAreaId || 'Favorit'))}</div><div class="favorite-id">${escapeHtml(f.stopPointId || f.stopAreaId || '')}</div><div class="favorite-lines">${escapeHtml(f.lines || '')}</div></div><div class="fav-actions"><button class="remove-small" data-idx="${idx}">Ta bort</button></div>`;
+      el.innerHTML = `<div class="favorite-left"><div class="favorite-name">${escapeHtml(f.name || (f.stopPointId || f.stopAreaId || 'Favorit'))}</div><div class="favorite-id">${escapeHtml(f.stopPointId || f.stopAreaId || '')}</div><div class="favorite-lines">${escapeHtml(f.lines || '')}</div></div><div class="fav-actions"><input class="fav-lines-input" data-idx-bottom="${idx}" value="${escapeHtml(f.lines||'')}" placeholder="Linjer, t.ex. 1,2"/><div style="display:flex;flex-direction:column;gap:6px"><button class="remove-small" data-idx-bottom="${idx}">Ta bort</button><button class="show-fav" data-idx-bottom="${idx}" style="background:#4a5568;color:#fff;border-radius:8px;padding:8px 10px;border:0;font-weight:700;cursor:pointer">Visa avgångar</button></div></div>`;
       favoritesListBottom.appendChild(el);
     });
   }
@@ -734,18 +734,39 @@ function renderFavoritesList(){
 document.addEventListener('click', (e) => {
   const rem = e.target.closest('.remove-small');
   if(rem){
-    const idx = rem.getAttribute('data-idx');
+    const idx = rem.getAttribute('data-idx') ?? rem.getAttribute('data-idx-bottom');
     if(idx !== null){
       favorites.splice(parseInt(idx,10),1);
       saveFavorites();
       renderFavoritesList();
     }
   }
+
+  const showBtn = e.target.closest('.show-fav');
+  if(showBtn){
+    const idx = showBtn.getAttribute('data-idx-bottom');
+    if(idx !== null){
+      const fav = favorites[parseInt(idx,10)];
+      if(!fav) return;
+      // Hämta sites för favorit och visa avgångar med samma pipeline som permanent-funktionen
+      (async ()=>{
+        try{
+          const res = await fetchDeparturesForFavorite(fav);
+          if(!res || !res.sites || res.sites.length===0){
+            showError('Kunde inte hitta site för favorit');
+            return;
+          }
+          // Visa departuresCard och hämta avgångar med filter
+          getDeparturesFromSitesWithFiltering(res.sites, res.opts || {}, true);
+        }catch(err){ console.error(err); showError('Fel vid hämtning av favoritavgångar'); }
+      })();
+    }
+  }
 });
 document.addEventListener('change', (e) => {
   const inp = e.target.closest('.fav-lines-input');
   if(inp){
-    const idx = inp.getAttribute('data-idx');
+    const idx = inp.getAttribute('data-idx') ?? inp.getAttribute('data-idx-bottom');
     if(idx !== null){
       favorites[parseInt(idx,10)].lines = inp.value || '';
       saveFavorites();
@@ -814,7 +835,8 @@ searchBtn.addEventListener('click', () => {
   suggestions.style.display = 'none';
   favoritesCard.style.display = 'none';
   departuresCard.style.display = 'none';
-  renderFavoritesList();
+  // OBS: visa inte favoriter i sökflödet — tidigare fel var att vi kallade renderFavoritesList() här
+  // renderFavoritesList();  <-- borttagen för att inte visa sparade favoriter i sök
 });
 
 clearSearchBtn.addEventListener('click', () => {
