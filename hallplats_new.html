@@ -139,9 +139,6 @@
 
         <div class="suggestions" id="suggestions"></div>
 
-        <div class="favorites-info" id="favoritesInfo"></div>
-        <div class="favorites-list" id="favoritesList"></div>
-
         <div class="map-container" id="mapContainer">
           <div id="resultsMap" aria-hidden="true"></div>
         </div>
@@ -211,7 +208,7 @@ const error = document.getElementById('error');
 const departuresCard = document.getElementById('departuresCard');
 const departuresList = document.getElementById('departuresList');
 const favoritesInfo = document.getElementById('favoritesInfo');
-const favoritesList = document.getElementById('favoritesList');
+const favoritesList = document.getElementById('favoritesList'); // kept for legacy but not used in search UI
 const favoritesCard = document.getElementById('favoritesCard');
 const favoritesListBottom = document.getElementById('favoritesListBottom');
 const stopFavoriteStar = document.getElementById('stopFavoriteStar');
@@ -629,7 +626,7 @@ async function getDeparturesFromSitesWithFiltering(stops, opts={}, force=false){
 let lastSearchResults = '';
 const doSearch = debounce(async (qRaw) => {
   const q = (qRaw||'').trim().toLowerCase();
-  if(q.length < 2){ suggestions.style.display='none'; favoritesInfo.textContent=''; favoritesList.innerHTML=''; updateMapForMatches([]); return; }
+  if(q.length < 2){ suggestions.style.display='none'; updateMapForMatches([]); return; }
   await loadStopPoints();
   const matches = allStopPoints.filter(pt=>{
     const n = (pt.name||'').toLowerCase(); const note = (pt.place||pt.town||'').toLowerCase();
@@ -649,39 +646,6 @@ const doSearch = debounce(async (qRaw) => {
 });
 
 /* Favorites rendering */
-function renderFavoritesList(){
-  favoritesList.innerHTML = '';
-  if(!favorites || favorites.length===0){ favoritesList.innerHTML = '<div class="no-departures">Inga favoriter</div>'; return; }
-  favorites.forEach((f, idx)=>{
-    const name = escapeHtml(f.name || '');
-    const id = escapeHtml(f.stopPointId || f.stopAreaId || '');
-    const lines = escapeHtml(f.lines || '');
-    const html = `<div class="favorite-item" data-idx="${idx}"><div class="favorite-left"><div class="favorite-name">${name}</div><div class="favorite-id">${id}</div><div class="favorite-lines">${lines}</div></div><div class="fav-actions"><button class="remove-small" data-idx="${idx}">Ta bort</button></div></div>`;
-    favoritesList.insertAdjacentHTML('beforeend', html);
-  });
-  // attach handlers
-  favoritesList.querySelectorAll('.favorite-item').forEach(el=>{
-    el.addEventListener('click', (e)=>{
-      const idx = el.getAttribute('data-idx');
-      const f = favorites[Number(idx)];
-      if(f){
-        if(f.stopPointId) selectStopPointById(f.stopPointId);
-        else if(f.stopAreaId) getDeparturesFromSitesWithFiltering(allSites.filter(s=> String(s.stop_area_id)===String(f.stopAreaId) || String(s.site_id)===String(f.stopAreaId)), { stopAreaId: f.stopAreaId }, true);
-      }
-    });
-  });
-  favoritesList.querySelectorAll('.remove-small').forEach(btn=>{
-    btn.addEventListener('click', (e)=>{
-      e.stopPropagation();
-      const idx = Number(btn.getAttribute('data-idx'));
-      favorites.splice(idx,1);
-      saveFavorites();
-      renderFavoritesList();
-      renderFavoritesListBottom();
-    });
-  });
-}
-
 function renderFavoritesListBottom(){
   favoritesListBottom.innerHTML = '';
   if(!favorites || favorites.length===0){ favoritesListBottom.innerHTML = '<div class="no-departures">Inga favoriter</div>'; return; }
@@ -708,7 +672,6 @@ function renderFavoritesListBottom(){
       const idx = Number(btn.getAttribute('data-idx'));
       favorites.splice(idx,1);
       saveFavorites();
-      renderFavoritesList();
       renderFavoritesListBottom();
     });
   });
@@ -716,7 +679,6 @@ function renderFavoritesListBottom(){
 
 /* Star handling for stopInfo */
 function refreshAllStars(){
-  // stopFavoriteStar for current stop
   if(!stopFavoriteStar) return;
   const isFav = favorites.some(f => (f.stopPointId && currentStopPointId && String(f.stopPointId)===String(currentStopPointId)) || (f.stopAreaId && currentStopAreaId && String(f.stopAreaId)===String(currentStopAreaId)));
   stopFavoriteStar.textContent = isFav ? '★' : '☆';
@@ -737,7 +699,6 @@ if(stopFavoriteStar){
       favorites.push({ name, stopPointId: spId, stopAreaId: saId, lines: '' });
     }
     saveFavorites();
-    renderFavoritesList();
     renderFavoritesListBottom();
     refreshAllStars();
   });
@@ -771,29 +732,116 @@ function exitPermanentView(){
 }
 
 /* Hook up permanent links */
+/* Important: when switching to permanent view from favorites, always load first favorite's departures */
 if(switchPermanentLink){
-  switchPermanentLink.addEventListener('click', (e)=>{
+  switchPermanentLink.addEventListener('click', async (e)=>{
     e.preventDefault();
-    // If there are departures already shown, enter permanent view directly.
-    // Otherwise, if there are favorites, show first favorite's departures then enter permanent view.
-    if(departuresList && departuresList.innerHTML && departuresList.innerHTML.trim() !== ''){
-      enterPermanentView();
-      return;
+    // If we are on favorites page and have favorites, load first favorite's departures
+    if(currentMode === 'favorites' && favorites && favorites.length>0){
+      const f = favorites[0];
+      // Hide UI while loading
+      showLoading(true);
+      await loadSites();
+      if(f.stopPointId){
+        // Try to find matching site(s) for the stopPointId
+        await loadStopPoints();
+        // find stopPoint -> site mapping
+        const sp = allStopPoints.find(p=> String(p.id)===String(f.stopPointId) || String(p.stop_point_id)===String(f.stopPointId));
+        let sitesToQuery = [];
+        if(sp){
+          const areaId = sp.stop_area_id || sp.parentId || sp.site_id || null;
+          if(areaId){
+            sitesToQuery = allSites.filter(s=> {
+              const cand = [s.stop_area_id,s.stopAreaId,s.parentId,s.site_id];
+              return cand.some(c=> c && String(c)===String(areaId));
+            });
+          }
+        }
+        if(sitesToQuery.length===0){
+          // fallback: try to use site id stored in favorite (if any)
+          sitesToQuery = allSites.filter(s=> String(s.id)===String(f.stopPointId) || String(s.site_id)===String(f.stopPointId));
+        }
+        if(sitesToQuery.length===0 && sp){
+          // fallback to a synthetic site object using stopPoint
+          sitesToQuery = [{ id: sp.site_id || ('sp-'+sp.id), name: sp.name }];
+        }
+        if(sitesToQuery.length===0){
+          showLoading(false);
+          showError('Kunde inte hitta site för favorit');
+          return;
+        }
+        await getDeparturesFromSitesWithFiltering(sitesToQuery, { stopPointId: f.stopPointId }, true);
+        showLoading(false);
+        enterPermanentView();
+        return;
+      } else if(f.stopAreaId){
+        await loadSites();
+        const sitesToQuery = allSites.filter(s=> String(s.stop_area_id)===String(f.stopAreaId) || String(s.site_id)===String(f.stopAreaId));
+        if(sitesToQuery.length===0){
+          showLoading(false);
+          showError('Kunde inte hitta site för favorit');
+          return;
+        }
+        await getDeparturesFromSitesWithFiltering(sitesToQuery, { stopAreaId: f.stopAreaId }, true);
+        showLoading(false);
+        enterPermanentView();
+        return;
+      } else {
+        // No ids: just enter permanent view with current departures (if any)
+        showLoading(false);
+        enterPermanentView();
+        return;
+      }
     }
+
+    // Otherwise (not on favorites page) fallback: if favorites exist, load first favorite then enter
     if(favorites && favorites.length>0){
       const f = favorites[0];
+      showLoading(true);
+      await loadSites();
       if(f.stopPointId){
-        selectStopPointById(f.stopPointId);
-        setTimeout(()=> enterPermanentView(), 300);
-      } else if(f.stopAreaId){
-        getDeparturesFromSitesWithFiltering(allSites.filter(s=> String(s.stop_area_id)===String(f.stopAreaId) || String(s.site_id)===String(f.stopAreaId)), { stopAreaId: f.stopAreaId }, true);
-        setTimeout(()=> enterPermanentView(), 300);
-      } else {
+        await loadStopPoints();
+        const sp = allStopPoints.find(p=> String(p.id)===String(f.stopPointId) || String(p.stop_point_id)===String(f.stopPointId));
+        let sitesToQuery = [];
+        if(sp){
+          const areaId = sp.stop_area_id || sp.parentId || sp.site_id || null;
+          if(areaId){
+            sitesToQuery = allSites.filter(s=> {
+              const cand = [s.stop_area_id,s.stopAreaId,s.parentId,s.site_id];
+              return cand.some(c=> c && String(c)===String(areaId));
+            });
+          }
+        }
+        if(sitesToQuery.length===0){
+          sitesToQuery = allSites.filter(s=> String(s.id)===String(f.stopPointId) || String(s.site_id)===String(f.stopPointId));
+        }
+        if(sitesToQuery.length===0 && sp){
+          sitesToQuery = [{ id: sp.site_id || ('sp-'+sp.id), name: sp.name }];
+        }
+        if(sitesToQuery.length>0){
+          await getDeparturesFromSitesWithFiltering(sitesToQuery, { stopPointId: f.stopPointId }, true);
+        }
+        showLoading(false);
         enterPermanentView();
+        return;
+      } else if(f.stopAreaId){
+        await loadSites();
+        const sitesToQuery = allSites.filter(s=> String(s.stop_area_id)===String(f.stopAreaId) || String(s.site_id)===String(f.stopAreaId));
+        if(sitesToQuery.length>0){
+          await getDeparturesFromSitesWithFiltering(sitesToQuery, { stopAreaId: f.stopAreaId }, true);
+        }
+        showLoading(false);
+        enterPermanentView();
+        return;
+      } else {
+        showLoading(false);
+        enterPermanentView();
+        return;
       }
-    } else {
-      enterPermanentView();
     }
+
+    // If no favorites, just enter permanent view (will show whatever departures are currently loaded)
+    enterPermanentView();
   });
 }
 if(exitPermanentLink){
@@ -838,7 +886,9 @@ favoritesBtn.addEventListener('click', async ()=>{
   searchContainer.classList.remove('show');
   departuresCard.style.display = 'none';
   favoritesCard.style.display = 'block';
-  renderFavoritesList();
+  // When showing favorites, hide stop-info and support (no "närmast" ska synas)
+  stopInfo.style.display = 'none';
+  topSupport.style.display = 'none';
   renderFavoritesListBottom();
 });
 
@@ -867,7 +917,6 @@ suggestions.addEventListener('click', (e)=>{
 });
 
 /* Initial render */
-renderFavoritesList();
 renderFavoritesListBottom();
 refreshAllStars();
 
@@ -875,7 +924,6 @@ refreshAllStars();
 window.addEventListener('storage', (e)=>{
   if(e.key === 'sl_favorites_sp'){
     favorites = JSON.parse(localStorage.getItem('sl_favorites_sp') || '[]');
-    renderFavoritesList();
     renderFavoritesListBottom();
     refreshAllStars();
   }
