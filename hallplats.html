@@ -221,6 +221,93 @@ const departuresCache = {};
 const DEPARTURES_TTL = 20_000;
 let countdownInterval = null;
 
+// --- START: Auto-refresh för Favoriter varannan minut ---
+let favoritesRefreshInterval = null;
+
+async function refreshFavoritesDeparturesOnce(){
+  try{
+    // Ladda caches om behövs
+    await loadStopPoints();
+    await loadSites();
+
+    // Samla unika sites för alla favoriter
+    const siteMap = new Map();
+    favorites.forEach(f=>{
+      if(f.stopAreaId){
+        allSites.forEach(s=>{
+          const cand = [s.stop_area_id, s.stopAreaId, s.parentId, s.site_id];
+          if(cand.some(c=>c && String(c)===String(f.stopAreaId))){
+            siteMap.set(String(s.id), s);
+          }
+        });
+      }
+      // Fallback: matcha på namn om ingen site hittades
+      if(!f.stopAreaId && f.name){
+        const nm = (f.name||'').trim().toLowerCase();
+        allSites.forEach(s=>{
+          if(s.name && s.name.trim().toLowerCase().startsWith(nm)){
+            siteMap.set(String(s.id), s);
+          }
+        });
+      }
+      // Om fortfarande ingen site hittades, skapa en enkel plats-objekt så att pipeline kan hantera det
+      if(!f.stopAreaId && !f.name){
+        // skip
+      }
+    });
+
+    const sites = Array.from(siteMap.values());
+    if(sites.length === 0){
+      // Om inga sites hittades, försök att använda stopAreaId från favoriter som "site" objekt
+      favorites.forEach(f=>{
+        if(f.stopAreaId){
+          sites.push({ id: f.stopAreaId, name: f.name || ('Favorit ' + f.stopPointId) });
+        } else {
+          sites.push({ id: ('sp-'+f.stopPointId), name: f.name || ('Favorit ' + f.stopPointId) });
+        }
+      });
+    }
+
+    if(sites.length > 0){
+      // Hämta avgångar för alla favoritsiter; filtrering per stopPoint sker i pipeline om möjligt
+      await getDeparturesFromSitesWithFiltering(sites, {}, true);
+    }
+  }catch(e){
+    console.error('refreshFavoritesDeparturesOnce', e);
+  }
+}
+
+function startFavoritesAutoRefresh(){
+  if(favoritesRefreshInterval) return;
+  // Kör en gång direkt och sedan var 2:e minut
+  refreshFavoritesDeparturesOnce();
+  favoritesRefreshInterval = setInterval(()=> {
+    refreshFavoritesDeparturesOnce();
+  }, 120000); // 120000 ms = 2 minuter
+}
+
+function stopFavoritesAutoRefresh(){
+  if(!favoritesRefreshInterval) return;
+  clearInterval(favoritesRefreshInterval);
+  favoritesRefreshInterval = null;
+}
+
+// Observera när favoritesCard ändrar style (visas/göms) och starta/stoppa auto-refresh
+const favObserver = new MutationObserver(()=> {
+  try{
+    const visible = window.getComputedStyle(favoritesCard).display !== 'none';
+    if(visible) startFavoritesAutoRefresh();
+    else stopFavoritesAutoRefresh();
+  }catch(e){ console.error('favObserver', e); }
+});
+favObserver.observe(favoritesCard, { attributes: true, attributeFilter: ['style'] });
+
+// Säkerställ att om favoriter redan visas vid laddning så startas refresh
+if(window.getComputedStyle(favoritesCard).display !== 'none'){
+  startFavoritesAutoRefresh();
+}
+// --- SLUT: Auto-refresh för Favoriter varannan minut ---
+  
 /* Leaflet map state */
 let map = null;
 let markersLayer = null;
