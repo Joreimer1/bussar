@@ -46,7 +46,6 @@
   .favorite-lines{font-size:13px;color:var(--muted)}
   .fav-actions{display:flex;flex-direction:column;gap:8px;align-items:center;justify-content:center;flex:0 0 30%}
   .fav-lines-input{width:120px;padding:8px;border-radius:8px;border:1px solid var(--input-border);background:var(--input-bg);color:#e6f0f8;text-align:center}
-  .fav-save-btn{padding:8px 10px;border-radius:8px;border:0;background:#2b6cb0;color:#fff;font-weight:700;cursor:pointer}
   .remove-small{background:linear-gradient(180deg,var(--remove-1),var(--remove-2));color:var(--white);border:0;padding:8px 10px;border-radius:8px;font-weight:700}
 
   .map-container{margin-top:10px;border-radius:10px;overflow:hidden;border:1px solid #23343d;display:none}
@@ -75,40 +74,6 @@
   .loading-text{color:var(--muted);font-size:14px}
 
   .no-departures{text-align:center;color:var(--muted);padding:16px}
-
-  /* Permanent vitt tema */
-  .permanent-theme body{ background: #ffffff !important; color: #0f1724 !important; }
-  .permanent-theme .container{ max-width:520px; margin:0 auto; }
-  .permanent-theme .card{
-    background: #ffffff !important;
-    color: #0f1724 !important;
-    border: 1px solid #e6eef8;
-    box-shadow: none;
-  }
-  .permanent-theme h1{ color: #0f1724 !important; }
-  .permanent-theme .departures-title{ color: #0f1724 !important; }
-  .permanent-theme .departure-item{
-    background: #ffffff !important;
-    border-left-color: #e6eef8 !important;
-    border:1px solid #eef2f7 !important;
-  }
-  .permanent-theme .departure-line{ color: #0f1724 !important; }
-  .permanent-theme .departure-destination{ color: #475569 !important; }
-  .permanent-theme .departure-from{ color: #64748b !important; }
-  .permanent-theme .departure-time.short{ color: #e53e3e !important; }
-
-  /* Länk-stil längst ner */
-  .permanent-toggle-link {
-    display:block;
-    text-align:center;
-    margin-top:12px;
-    padding:8px 0;
-    color: #0f62fe;
-    font-weight:700;
-    cursor:pointer;
-    text-decoration:underline;
-  }
-
   @media(max-width:420px){
     .search-input{margin-left:8px;font-size:14px}
     .action-col{flex-basis:34%}
@@ -116,6 +81,62 @@
     .fav-lines-input{width:100px}
     .fav-actions{flex-basis:36%}
     #resultsMap{height:240px}
+  }
+
+  /* Permanent vitt tema (scope: body.permanent-white) */
+  body.permanent-white {
+    background: #ffffff;
+    color: #0b1220;
+  }
+  body.permanent-white .card {
+    background: #ffffff;
+    color: #0b1220;
+    border: 1px solid #e6e6e6;
+    box-shadow: none;
+  }
+  body.permanent-white h1,
+  body.permanent-white .departures-title,
+  body.permanent-white .stop-name {
+    color: #0b1220;
+  }
+  body.permanent-white .suggestions,
+  body.permanent-white .favorites-list,
+  body.permanent-white .support,
+  body.permanent-white .loading,
+  body.permanent-white .stop-info {
+    background: #ffffff;
+    color: #0b1220;
+    border-color: #e6e6e6;
+  }
+  body.permanent-white .departure-item {
+    background: #fff;
+    border-left-color: #e6e6e6;
+    border: 1px solid #f0f0f0;
+  }
+  body.permanent-white .departure-line,
+  body.permanent-white .departure-destination,
+  body.permanent-white .departure-from {
+    color: #0b1220;
+  }
+  body.permanent-white .departure-time {
+    color: #0b1220;
+  }
+  /* Röd tid för < 3 min i permanent vy */
+  body.permanent-white .departure-time.urgent {
+    color: #e53e3e;
+    font-weight: 900;
+  }
+  /* Återgå-länk i permanent vy */
+  #permanentFooter {
+    text-align: center;
+    margin-top: 12px;
+    padding-top: 8px;
+    border-top: 1px solid #eee;
+  }
+  #permanentFooter a {
+    color: #0b1220;
+    text-decoration: underline;
+    font-weight: 700;
   }
 </style>
 </head>
@@ -139,6 +160,9 @@
         </div>
 
         <div class="suggestions" id="suggestions"></div>
+
+        <div class="favorites-info" id="favoritesInfo"></div>
+        <div class="favorites-list" id="favoritesList"></div>
 
         <div class="map-container" id="mapContainer">
           <div id="resultsMap" aria-hidden="true"></div>
@@ -176,16 +200,24 @@
     <div class="card" id="departuresCard" style="display:none">
       <div class="departures-title">Nästa avgångar</div>
       <div id="departuresList"></div>
-      <div style="text-align:center;margin-top:12px">
-        <a id="exitPermanentLink" class="permanent-toggle-link" style="display:none">Återgå</a>
-      </div>
     </div>
 
     <div class="card" id="favoritesCard" style="display:none">
       <div class="departures-title">Mina favorithållplatser</div>
       <div id="favoritesListBottom"></div>
-      <div style="text-align:center;margin-top:8px">
-        <a id="switchPermanentLink" class="permanent-toggle-link">Byt till permanent visning</a>
+
+      <!-- Länk för att byta till permanent visning -->
+      <div style="margin-top:12px;text-align:center">
+        <a id="permanentViewLink" href="#" style="color:#ffd76a;font-weight:800;text-decoration:none">Byt till permanent visning</a>
+      </div>
+
+      <!-- Container för permanent visningens avgångar (visas endast i permanent läge) -->
+      <div id="permanentDeparturesContainer" style="display:none;margin-top:12px">
+        <div class="departures-title">Favoritavgångar (permanent visning)</div>
+        <div id="permanentDeparturesList"></div>
+        <div id="permanentFooter">
+          <a id="exitPermanentLink" href="#">Återgå</a>
+        </div>
       </div>
     </div>
   </div>
@@ -208,6 +240,8 @@ const stopAreaEl = document.getElementById('stopArea');
 const error = document.getElementById('error');
 const departuresCard = document.getElementById('departuresCard');
 const departuresList = document.getElementById('departuresList');
+const favoritesInfo = document.getElementById('favoritesInfo');
+const favoritesList = document.getElementById('favoritesList');
 const favoritesCard = document.getElementById('favoritesCard');
 const favoritesListBottom = document.getElementById('favoritesListBottom');
 const stopFavoriteStar = document.getElementById('stopFavoriteStar');
@@ -215,9 +249,6 @@ const topSupport = document.getElementById('topSupport');
 const clearSearchBtn = document.getElementById('clearSearchBtn');
 const mapContainer = document.getElementById('mapContainer');
 const resultsMapEl = document.getElementById('resultsMap');
-const switchPermanentLink = document.getElementById('switchPermanentLink');
-const exitPermanentLink = document.getElementById('exitPermanentLink');
-const topCard = document.getElementById('topCard');
 
 let allSites = [];
 let allStopPoints = [];
@@ -230,7 +261,6 @@ let currentUserPos = null;
 const departuresCache = {};
 const DEPARTURES_TTL = 20_000;
 let countdownInterval = null;
-let permanentView = false;
 
 /* Utilities */
 function showLoading(v){ loading.style.display = v ? 'block' : 'none'; }
@@ -510,8 +540,7 @@ function displayDepartures(departures){
       const clock = expected.toLocaleTimeString('sv-SE',{hour:'2-digit',minute:'2-digit'});
       let arrow=''; if(dep.direction_code===1) arrow='⬆️'; else if(dep.direction_code===2) arrow='⬇️';
       const transport = (dep.line && dep.line.transport_mode) ? dep.line.transport_mode : dep.transport_mode || '';
-      const timeClass = (permanentView && totalSeconds < 180) ? 'departure-time short' : 'departure-time';
-      return `<div class="departure-item"><div style="min-width:28px;text-align:center">${arrow}</div><div style="flex:1"><div class="departure-line">${dep.line && dep.line.designation?escapeHtml(dep.line.designation):''} ${escapeHtml(transport)}</div><div class="departure-destination">${escapeHtml(dep.destination||'')}</div><div class="departure-from">från ${escapeHtml(dep.fromStop||'')}</div></div><div style="text-align:right"><div class="${timeClass}">${escapeHtml(timeDisplay)}</div><div style="font-size:11px;color:var(--muted)">${escapeHtml(clock)}</div></div></div>`;
+      return `<div class="departure-item"><div style="min-width:28px;text-align:center">${arrow}</div><div style="flex:1"><div class="departure-line">${dep.line && dep.line.designation?dep.line.designation:''} ${transport}</div><div class="departure-destination">${escapeHtml(dep.destination||'')}</div><div class="departure-from">från ${escapeHtml(dep.fromStop||'')}</div></div><div style="text-align:right"><div class="departure-time">${timeDisplay}</div><div style="font-size:11px;color:var(--muted)">${clock}</div></div></div>`;
     }).join('');
     departuresList.innerHTML = out;
   }
@@ -625,7 +654,7 @@ async function getDeparturesFromSitesWithFiltering(stops, opts={}, force=false){
 let lastSearchResults = '';
 const doSearch = debounce(async (qRaw) => {
   const q = (qRaw||'').trim().toLowerCase();
-  if(q.length < 2){ suggestions.style.display='none'; updateMapForMatches([]); return; }
+  if(q.length < 2){ suggestions.style.display='none'; favoritesInfo.textContent=''; favoritesList.innerHTML=''; updateMapForMatches([]); return; }
   await loadStopPoints();
   const matches = allStopPoints.filter(pt=>{
     const n = (pt.name||'').toLowerCase(); const note = (pt.place||pt.town||'').toLowerCase();
@@ -638,317 +667,372 @@ const doSearch = debounce(async (qRaw) => {
   suggestions.innerHTML = matches.slice(0,12).map(m=>{
     const name = escapeHtml(m.name || ''); const note = m.place? `<div class="suggestion-note">${escapeHtml(m.place)}</div>` : '';
     const favStar = favorites.some(f=>String(f.stopPointId)===String(m.id)) ? '⭐' : '☆';
-    return `<div class="suggestion-item" data-id="${escapeHtml(m.id)}"><div class="suggestion-left"><div class="suggestion-name">${name}</div>${note}</div><div style="align-self:center">${favStar}</div></div>`;
+    return `<div class="suggestion-item" data-id="${escapeHtml(m.id)}" data-lat="${escapeHtml(m.lat||'')}" data-lon="${escapeHtml(m.lon||'')}"><div class="suggestion-left"><div class="suggestion-name">${name}</div><div class="suggestion-id">StopPoint: ${escapeHtml(m.id)}</div>${note}</div><div class="favorite-star" data-id="${escapeHtml(m.id)}">${favStar}</div></div>`;
   }).join('');
   suggestions.style.display = 'block';
-  updateMapForMatches(matches);
+  updateMapForMatches(matches.slice(0,12));
 });
 
-/* Favorites rendering (bottom) with lines editing */
-function renderFavoritesListBottom(){
+/* Suggestion click handling */
+suggestions.addEventListener('click', (e) => {
+  const item = e.target.closest('.suggestion-item');
+  if(!item) return;
+  const id = item.getAttribute('data-id');
+  if(!id) return;
+  selectStopPointById(id);
+});
+
+/* Favorite star in suggestions */
+suggestions.addEventListener('click', (e) => {
+  const star = e.target.closest('.favorite-star');
+  if(!star) return;
+  e.stopPropagation();
+  const id = star.getAttribute('data-id');
+  if(!id) return;
+  const existing = favorites.find(f => String(f.stopPointId) === String(id));
+  if(existing){
+    favorites = favorites.filter(f => String(f.stopPointId) !== String(id));
+  } else {
+    favorites.push({ name: '', stopPointId: String(id), stopAreaId: '', lines: '' });
+  }
+  saveFavorites();
+  renderFavoritesList();
+  doSearch(searchInput.value);
+});
+
+/* Favorites rendering (left column and bottom) */
+function renderFavoritesList(){
+  // Top favorites list (in search container)
+  favoritesList.innerHTML = '';
+  if(!Array.isArray(favorites) || favorites.length===0){
+    favoritesInfo.textContent = '';
+  } else {
+    favoritesInfo.textContent = `Sparade favoriter: ${favorites.length}`;
+    favorites.forEach((f, idx) => {
+      const el = document.createElement('div');
+      el.className = 'favorite-item';
+      el.innerHTML = `<div class="favorite-left"><div class="favorite-name">${escapeHtml(f.name || (f.stopPointId || f.stopAreaId || 'Favorit'))}</div><div class="favorite-id">${escapeHtml(f.stopPointId || f.stopAreaId || '')}</div><div class="favorite-lines">${escapeHtml(f.lines || '')}</div></div><div class="fav-actions"><input class="fav-lines-input" data-idx="${idx}" value="${escapeHtml(f.lines||'')}" placeholder="Linjer, t.ex. 1,2"/><button class="remove-small" data-idx="${idx}">Ta bort</button></div>`;
+      favoritesList.appendChild(el);
+    });
+  }
+
+  // Bottom favorites list (in favoritesCard)
   favoritesListBottom.innerHTML = '';
-  if(!favorites || favorites.length===0){ favoritesListBottom.innerHTML = '<div class="no-departures">Inga favoriter</div>'; return; }
-  favorites.forEach((f, idx)=>{
-    const name = escapeHtml(f.name || '');
-    const id = escapeHtml(f.stopPointId || f.stopAreaId || '');
-    const lines = escapeHtml(f.lines || '');
-    const html = `<div class="favorite-item" data-idx="${idx}">
-      <div class="favorite-left">
-        <div class="favorite-name">${name}</div>
-        <div class="favorite-id">${id}</div>
-        <div style="display:flex;gap:8px;align-items:center;margin-top:6px">
-          <input class="fav-lines-input" data-idx="${idx}" value="${lines}" placeholder="Linjer (t.ex. 1,2,3)" />
-          <button class="fav-save-btn" data-idx="${idx}">Spara</button>
-        </div>
-      </div>
-      <div class="fav-actions">
-        <button class="remove-small" data-idx="${idx}">Ta bort</button>
-        <button class="fav-show-btn" data-idx="${idx}" style="margin-top:8px;background:#38a169;color:#fff;border:0;padding:8px 10px;border-radius:8px;cursor:pointer">Visa</button>
-      </div>
-    </div>`;
-    favoritesListBottom.insertAdjacentHTML('beforeend', html);
-  });
-
-  // click to open favorite (on the whole item)
-  favoritesListBottom.querySelectorAll('.favorite-item').forEach(el=>{
-    el.addEventListener('click', (e)=>{
-      // ignore clicks on buttons/inputs (they have their own handlers)
-      if(e.target.closest('button') || e.target.closest('input')) return;
-      const idx = el.getAttribute('data-idx');
-      const f = favorites[Number(idx)];
-      if(f){
-        openFavoriteDepartures(f);
-      }
+  if(!Array.isArray(favorites) || favorites.length===0){
+    favoritesListBottom.innerHTML = '<div class="no-departures">Inga favoriter sparade</div>';
+  } else {
+    favorites.forEach((f, idx) => {
+      const el = document.createElement('div');
+      el.className = 'favorite-item';
+      el.innerHTML = `<div class="favorite-left"><div class="favorite-name">${escapeHtml(f.name || (f.stopPointId || f.stopAreaId || 'Favorit'))}</div><div class="favorite-id">${escapeHtml(f.stopPointId || f.stopAreaId || '')}</div><div class="favorite-lines">${escapeHtml(f.lines || '')}</div></div><div class="fav-actions"><button class="remove-small" data-idx="${idx}">Ta bort</button></div>`;
+      favoritesListBottom.appendChild(el);
     });
-  });
-
-  // remove handlers
-  favoritesListBottom.querySelectorAll('.remove-small').forEach(btn=>{
-    btn.addEventListener('click', (e)=>{
-      e.stopPropagation();
-      const idx = Number(btn.getAttribute('data-idx'));
-      favorites.splice(idx,1);
-      saveFavorites();
-      renderFavoritesListBottom();
-    });
-  });
-
-  // save lines handlers
-  favoritesListBottom.querySelectorAll('.fav-save-btn').forEach(btn=>{
-    btn.addEventListener('click', (e)=>{
-      e.stopPropagation();
-      const idx = Number(btn.getAttribute('data-idx'));
-      const input = document.querySelector(`.fav-lines-input[data-idx="${idx}"]`);
-      if(!input) return;
-      favorites[idx].lines = input.value.trim();
-      saveFavorites();
-      renderFavoritesListBottom();
-    });
-  });
-
-  // show button handlers (open departures for that favorite)
-  favoritesListBottom.querySelectorAll('.fav-show-btn').forEach(btn=>{
-    btn.addEventListener('click', (e)=>{
-      e.stopPropagation();
-      const idx = Number(btn.getAttribute('data-idx'));
-      const f = favorites[idx];
-      if(f) openFavoriteDepartures(f);
-    });
-  });
+  }
 }
 
-/* Open departures for a favorite object */
-async function openFavoriteDepartures(fav){
-  if(!fav) return;
-  await loadSites();
-  await loadStopPoints();
-  // prefer stopPointId if present
-  if(fav.stopPointId){
-    // try to find stopPoint object
-    const sp = allStopPoints.find(p=> String(p.id)===String(fav.stopPointId) || String(p.stop_point_id)===String(fav.stopPointId));
-    let sitesToQuery = [];
-    if(sp){
-      const areaId = sp.stop_area_id || sp.parentId || sp.site_id || null;
-      if(areaId){
-        sitesToQuery = allSites.filter(s=> {
-          const cand = [s.stop_area_id,s.stopAreaId,s.parentId,s.site_id];
-          return cand.some(c=> c && String(c)===String(areaId));
-        });
-      }
+/* Handle clicks in favorites lists (remove, edit lines) */
+document.addEventListener('click', (e) => {
+  const rem = e.target.closest('.remove-small');
+  if(rem){
+    const idx = rem.getAttribute('data-idx');
+    if(idx !== null){
+      favorites.splice(parseInt(idx,10),1);
+      saveFavorites();
+      renderFavoritesList();
     }
-    if(sitesToQuery.length===0){
-      sitesToQuery = allSites.filter(s=> String(s.id)===String(fav.stopPointId) || String(s.site_id)===String(fav.stopPointId));
-    }
-    if(sitesToQuery.length===0 && sp){
-      sitesToQuery = [{ id: sp.site_id || ('sp-'+sp.id), name: sp.name }];
-    }
-    if(sitesToQuery.length===0){
-      showError('Kunde inte hitta site för favorit');
-      return;
-    }
-    // apply favorite lines filter if present
-    const opts = { stopPointId: fav.stopPointId };
-    if(fav.lines && String(fav.lines).trim() !== '') opts.favoriteLines = fav.lines;
-    await getDeparturesFromSitesWithFiltering(sitesToQuery, opts, true);
-    // set UI state
-    currentMode = 'favorites';
-    setActiveButton(favoritesBtn);
-    // show departures card
-    departuresCard.style.display = 'block';
-    favoritesCard.style.display = 'none';
-    stopInfo.style.display = 'none';
-    topSupport.style.display = 'none';
-    return;
   }
-
-  // fallback: stopAreaId
-  if(fav.stopAreaId){
-    await loadSites();
-    const sitesToQuery = allSites.filter(s=> String(s.stop_area_id)===String(fav.stopAreaId) || String(s.site_id)===String(fav.stopAreaId));
-    if(sitesToQuery.length===0){
-      showError('Kunde inte hitta site för favorit');
-      return;
+});
+document.addEventListener('change', (e) => {
+  const inp = e.target.closest('.fav-lines-input');
+  if(inp){
+    const idx = inp.getAttribute('data-idx');
+    if(idx !== null){
+      favorites[parseInt(idx,10)].lines = inp.value || '';
+      saveFavorites();
+      renderFavoritesList();
     }
-    const opts = { stopAreaId: fav.stopAreaId };
-    if(fav.lines && String(fav.lines).trim() !== '') opts.favoriteLines = fav.lines;
-    await getDeparturesFromSitesWithFiltering(sitesToQuery, opts, true);
-    currentMode = 'favorites';
-    setActiveButton(favoritesBtn);
-    departuresCard.style.display = 'block';
-    favoritesCard.style.display = 'none';
-    stopInfo.style.display = 'none';
-    topSupport.style.display = 'none';
-    return;
   }
+});
 
-  showError('Favoriten saknar id');
-}
-
-/* Star handling for stopInfo */
+/* Refresh star icons for current stop */
 function refreshAllStars(){
-  if(!stopFavoriteStar) return;
-  const isFav = favorites.some(f => (f.stopPointId && currentStopPointId && String(f.stopPointId)===String(currentStopPointId)) || (f.stopAreaId && currentStopAreaId && String(f.stopAreaId)===String(currentStopAreaId)));
-  stopFavoriteStar.textContent = isFav ? '★' : '☆';
+  // Update stopFavoriteStar
+  if(!currentStopPointId && !currentStopAreaId){
+    stopFavoriteStar.textContent = '☆';
+    return;
+  }
+  const found = favorites.some(f => (f.stopPointId && String(f.stopPointId)===String(currentStopPointId)) || (f.stopAreaId && String(f.stopAreaId)===String(currentStopAreaId)));
+  stopFavoriteStar.textContent = found ? '⭐' : '☆';
 }
 
-/* Toggle favorite from stopInfo */
-if(stopFavoriteStar){
-  stopFavoriteStar.addEventListener('click', (e)=>{
-    e.preventDefault();
-    if(!currentStop) return;
-    const name = currentStop.name || stopName.textContent || 'Favorit';
-    const spId = currentStopPointId ? String(currentStopPointId) : null;
-    const saId = currentStopAreaId ? String(currentStopAreaId) : null;
-    const existingIndex = favorites.findIndex(f => (spId && f.stopPointId && String(f.stopPointId)===String(spId)) || (saId && f.stopAreaId && String(f.stopAreaId)===String(saId)));
-    if(existingIndex !== -1){
-      favorites.splice(existingIndex,1);
-    } else {
-      favorites.push({ name, stopPointId: spId, stopAreaId: saId, lines: '' });
-    }
-    saveFavorites();
-    renderFavoritesListBottom();
-    refreshAllStars();
-  });
-}
+/* Toggle favorite from stop info */
+stopFavoriteStar.addEventListener('click', () => {
+  if(!currentStopPointId && !currentStopAreaId) return;
+  const foundIdx = favorites.findIndex(f => (f.stopPointId && String(f.stopPointId)===String(currentStopPointId)) || (f.stopAreaId && String(f.stopAreaId)===String(currentStopAreaId)));
+  if(foundIdx >= 0){
+    favorites.splice(foundIdx,1);
+  } else {
+    favorites.push({ name: stopName.textContent || '', stopPointId: currentStopPointId || '', stopAreaId: currentStopAreaId || '', lines: '' });
+  }
+  saveFavorites();
+  renderFavoritesList();
+});
 
-/* Permanent view toggles */
-function enterPermanentView(){
-  permanentView = true;
-  document.documentElement.classList.add('permanent-theme');
-  topCard.style.display = 'none';
-  searchContainer.classList.remove('show');
-  favoritesCard.style.display = 'none';
-  favoritesListBottom.innerHTML = '';
-  departuresCard.style.display = 'block';
-  if(exitPermanentLink) exitPermanentLink.style.display = 'inline-block';
-  stopInfo.style.display = 'none';
-  topSupport.style.display = 'none';
-  if(map) { try{ map.invalidateSize(); }catch(e){} }
-}
-
-function exitPermanentView(){
-  permanentView = false;
-  document.documentElement.classList.remove('permanent-theme');
-  topCard.style.display = 'block';
-  favoritesCard.style.display = 'block';
-  departuresCard.style.display = 'none';
-  if(exitPermanentLink) exitPermanentLink.style.display = 'none';
-  topSupport.style.display = 'flex';
-  stopInfo.style.display = currentStop ? 'block' : 'none';
-  renderFavoritesListBottom();
-}
-
-/* Hook up permanent links */
-/* When switching to permanent view from favorites, always load first favorite's departures if none currently loaded */
-if(switchPermanentLink){
-  switchPermanentLink.addEventListener('click', async (e)=>{
-    e.preventDefault();
-    // If currently on favorites and a favorite is selected (we may have loaded departures already), just enter permanent
-    if(currentMode === 'favorites' && departuresList && departuresList.innerHTML && departuresList.innerHTML.trim() !== ''){
-      enterPermanentView();
-      return;
-    }
-    // If favorites exist, open first favorite then enter permanent
-    if(favorites && favorites.length>0){
-      const f = favorites[0];
-      await openFavoriteDepartures(f);
-      enterPermanentView();
-      return;
-    }
-    // otherwise just enter permanent view with whatever is loaded
-    enterPermanentView();
-  });
-}
-if(exitPermanentLink){
-  exitPermanentLink.addEventListener('click', (e)=>{
-    e.preventDefault();
-    exitPermanentView();
-  });
-}
-
-/* UI helpers */
-function setActiveButton(btn){
-  [locationBtn, favoritesBtn, searchBtn].forEach(b=>b.classList.remove('active'));
-  if(btn) btn.classList.add('active');
-}
-
-/* Basic button wiring */
-locationBtn.addEventListener('click', async ()=>{
+/* Initial UI wiring */
+locationBtn.addEventListener('click', async () => {
   setActiveButton(locationBtn);
-  currentMode='location';
-  searchContainer.classList.remove('show');
-  favoritesCard.style.display = 'none';
-  departuresCard.style.display = 'none';
-  // Try geolocation
+  // Try to get geolocation
   if(navigator.geolocation){
     showLoading(true);
-    navigator.geolocation.getCurrentPosition((pos)=>{
-      showLoading(false);
+    navigator.geolocation.getCurrentPosition(async (pos) => {
       currentUserPos = { lat: pos.coords.latitude, lon: pos.coords.longitude };
-      findNearestStop(pos.coords.latitude, pos.coords.longitude);
-    }, (err)=>{
+      await findNearestStop(pos.coords.latitude, pos.coords.longitude);
+      showLoading(false);
+    }, async (err) => {
       showLoading(false);
       showError('Kunde inte hämta din plats');
     }, { timeout: 8000 });
   } else {
-    showError('Geolocation inte tillgängligt');
+    showError('Geolocation stöds inte i din webbläsare');
   }
 });
 
-favoritesBtn.addEventListener('click', async ()=>{
+favoritesBtn.addEventListener('click', () => {
   setActiveButton(favoritesBtn);
-  currentMode='favorites';
   searchContainer.classList.remove('show');
+  suggestions.style.display = 'none';
+  searchInput.value = '';
+  stopInfo.style.display = 'none';
   departuresCard.style.display = 'none';
   favoritesCard.style.display = 'block';
-  // When showing favorites, hide stop-info and support (ingen "närmast")
-  stopInfo.style.display = 'none';
-  topSupport.style.display = 'none';
-  renderFavoritesListBottom();
+  renderFavoritesList();
 });
 
-searchBtn.addEventListener('click', ()=>{
+searchBtn.addEventListener('click', () => {
   setActiveButton(searchBtn);
-  currentMode='search';
-  searchContainer.classList.toggle('show');
+  searchContainer.classList.add('show');
   suggestions.style.display = 'none';
-  searchInput.focus();
+  favoritesCard.style.display = 'none';
+  departuresCard.style.display = 'none';
+  renderFavoritesList();
 });
 
-/* Search input */
-searchInput.addEventListener('input', (e)=> doSearch(e.target.value));
-clearSearchBtn.addEventListener('click', ()=>{
+clearSearchBtn.addEventListener('click', () => {
   searchInput.value = '';
   suggestions.style.display = 'none';
   updateMapForMatches([]);
 });
 
-/* Click on suggestion */
-suggestions.addEventListener('click', (e)=>{
-  const item = e.target.closest('.suggestion-item');
-  if(!item) return;
-  const id = item.getAttribute('data-id');
-  if(id) selectStopPointById(id);
+searchInput.addEventListener('input', (e) => {
+  doSearch(e.target.value);
 });
 
-/* Initial render */
-renderFavoritesListBottom();
-refreshAllStars();
+/* Active button styling */
+function setActiveButton(btn){
+  [locationBtn, favoritesBtn, searchBtn].forEach(b => b.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+}
 
-/* Small safety: refresh favorites from storage if changed elsewhere */
-window.addEventListener('storage', (e)=>{
-  if(e.key === 'sl_favorites_sp'){
-    favorites = JSON.parse(localStorage.getItem('sl_favorites_sp') || '[]');
-    renderFavoritesListBottom();
-    refreshAllStars();
-  }
-});
-
-/* On load: try to load caches in background */
-(async function initCaches(){
-  try{ await loadStopPoints(); await loadSites(); }catch(e){}
+/* On load */
+(async function init(){
+  await loadSites();
+  await loadStopPoints();
+  renderFavoritesList();
 })();
 
+/* ---------- Permanent vit visning för favoriter ---------- */
+let permanentInterval = null;
+let permanentActive = false;
+
+document.getElementById('permanentViewLink').addEventListener('click', (e) => {
+  e.preventDefault();
+  enterPermanentView();
+});
+document.getElementById('exitPermanentLink').addEventListener('click', (e) => {
+  e.preventDefault();
+  exitPermanentView();
+});
+
+function enterPermanentView(){
+  if(permanentActive) return;
+  permanentActive = true;
+
+  // Applicera vitt tema (scoped)
+  document.body.classList.add('permanent-white');
+
+  // Dölj övriga svarta-kort (men ändra inte deras innehåll)
+  document.getElementById('topCard').style.display = 'none';
+  document.getElementById('departuresCard').style.display = 'none';
+  // Visa favoriter-kortet och permanent-container
+  document.getElementById('favoritesCard').style.display = 'block';
+  document.getElementById('permanentDeparturesContainer').style.display = 'block';
+
+  // Starta hämtning och uppdatering av favoritavgångar
+  startPermanentFavoritesLoop();
+}
+
+function exitPermanentView(){
+  if(!permanentActive) return;
+  permanentActive = false;
+
+  // Ta bort vitt tema
+  document.body.classList.remove('permanent-white');
+
+  // Återställ visningar till ursprungligt läge (svarar mot befintlig UI-logik)
+  document.getElementById('topCard').style.display = ''; // låt originallogik styra visning framöver
+  document.getElementById('departuresCard').style.display = 'none';
+  document.getElementById('favoritesCard').style.display = 'none';
+  document.getElementById('permanentDeparturesContainer').style.display = 'none';
+
+  // Stoppa permanent uppdateringsloop
+  stopPermanentFavoritesLoop();
+}
+
+/* Hämta och rendera favoritavgångar i permanent-listan */
+async function fetchDeparturesForFavorite(fav){
+  // Försök hitta matchande site eller stop-point från cache
+  await loadSites(); await loadStopPoints();
+  // Om favorit har stopPointId, hitta stop-point och matchande site
+  if(fav.stopPointId){
+    const sp = allStopPoints.find(p => String(p.id) === String(fav.stopPointId) || String(p.stop_point_id) === String(fav.stopPointId));
+    if(sp){
+      // försök hitta site som matchar stop_area eller namn
+      const stopAreaId = sp.stop_area_id || sp.parentId || sp.site_id || null;
+      let matchedSites = [];
+      if(stopAreaId){
+        matchedSites = allSites.filter(s => {
+          const cand = [s.stop_area_id, s.stopAreaId, s.parentId, s.site_id];
+          return cand.some(c => c && String(c) === String(stopAreaId));
+        });
+      }
+      if(matchedSites.length>0) return { sites: matchedSites, opts: { stopPointId: String(fav.stopPointId), favoriteLines: fav.lines || '' } };
+      // fallback: skapa ett site-liknande objekt
+      return { sites: [{ id: sp.site_id || ('sp-'+sp.id), name: sp.name || fav.name || '' }], opts: { stopPointId: String(fav.stopPointId), favoriteLines: fav.lines || '' } };
+    }
+  }
+
+  // Om favorit har stopAreaId, hitta sites direkt
+  if(fav.stopAreaId){
+    const matchedSites = allSites.filter(s => {
+      const cand = [s.stop_area_id, s.stopAreaId, s.parentId, s.site_id];
+      return cand.some(c => c && String(c) === String(fav.stopAreaId));
+    });
+    if(matchedSites.length>0) return { sites: matchedSites, opts: { stopAreaId: String(fav.stopAreaId), favoriteLines: fav.lines || '' } };
+  }
+
+  // Fallback: försök matcha via namn
+  if(fav.name){
+    const nm = (fav.name||'').trim().toLowerCase();
+    const matchedSites = allSites.filter(s => s.name && s.name.trim().toLowerCase().startsWith(nm));
+    if(matchedSites.length>0) return { sites: matchedSites, opts: { favoriteLines: fav.lines || '' } };
+  }
+
+  return null;
+}
+
+async function gatherFavoriteStopsForPermanent(){
+  const tasks = [];
+  for(const fav of (favorites || [])){
+    const res = await fetchDeparturesForFavorite(fav);
+    if(res && res.sites && res.sites.length>0){
+      tasks.push({ sites: res.sites, opts: res.opts || {} });
+    }
+  }
+  return tasks;
+}
+
+/* Render-funktion för permanent vy (egen, så vi inte rör befintlig displayDepartures) */
+function renderPermanentDepartures(allDeps){
+  // Samma formattering som displayDepartures men renderar i permanentDeparturesList
+  const container = document.getElementById('permanentDeparturesList');
+  if(!container) return;
+  // Filtrera framtida avgångar
+  const now = new Date();
+  const valid = allDeps.filter(dep => Math.floor((new Date(dep.expected) - now)/1000) >= 0);
+  if(valid.length===0){
+    container.innerHTML = '<div class="no-departures">Inga fler avgångar</div>';
+    return;
+  }
+  valid.sort((a,b)=> new Date(a.expected) - new Date(b.expected));
+  const out = valid.slice(0,40).map(dep=>{
+    const expected = new Date(dep.expected);
+    const totalSeconds = Math.max(0, Math.floor((expected - new Date())/1000));
+    const min = Math.floor(totalSeconds/60); const sec = totalSeconds%60;
+    const timeDisplay = totalSeconds<60?`${totalSeconds}s`:(min===1?`1 min ${sec}s`:`${min} min ${sec}s`);
+    const clock = expected.toLocaleTimeString('sv-SE',{hour:'2-digit',minute:'2-digit'});
+    let arrow=''; if(dep.direction_code===1) arrow='⬆️'; else if(dep.direction_code===2) arrow='⬇️';
+    const transport = (dep.line && dep.line.transport_mode) ? dep.line.transport_mode : dep.transport_mode || '';
+    const urgentClass = totalSeconds < 180 ? 'urgent' : '';
+    return `<div class="departure-item"><div style="min-width:28px;text-align:center">${arrow}</div><div style="flex:1"><div class="departure-line">${dep.line && dep.line.designation?dep.line.designation:''} ${transport}</div><div class="departure-destination">${escapeHtml(dep.destination||'')}</div><div class="departure-from">från ${escapeHtml(dep.fromStop||'')}</div></div><div style="text-align:right"><div class="departure-time ${urgentClass}">${timeDisplay}</div><div style="font-size:11px;color:var(--muted)">${clock}</div></div></div>`;
+  }).join('');
+  container.innerHTML = out;
+}
+
+/* Hämta avgångar för alla favorit-stops och rendera */
+async function updatePermanentFavoritesOnce(){
+  try{
+    const tasks = await gatherFavoriteStopsForPermanent();
+    if(!tasks || tasks.length===0){
+      document.getElementById('permanentDeparturesList').innerHTML = '<div class="no-departures">Inga favoriter sparade</div>';
+      return;
+    }
+
+    // Parallellt hämta avgångar för varje task (sites-array)
+    const allDeps = [];
+    for(const t of tasks){
+      for(const s of t.sites){
+        try{
+          const res = await fetchDeparturesForSite(s, true);
+          if(res && res.departures && res.departures.length>0){
+            // filtrera enligt opts (stopPointId / stopAreaId / favoriteLines)
+            res.departures.forEach(dep=>{
+              dep.fromStop = dep.fromStop || (res.stop && res.stop.name ? getDepFromStopLabel(dep, res.stop.name) : '');
+              dep.fromStop = dep.fromStop || '';
+              if(t.opts && t.opts.stopPointId){ if(!departureMatchesStopPoint(dep, t.opts.stopPointId)) return; }
+              else if(t.opts && t.opts.stopAreaId){ if(!departureMatchesStopArea(dep, t.opts.stopAreaId)) return; }
+              if(t.opts && t.opts.favoriteLines){
+                const allowed = String(t.opts.favoriteLines).split(',').map(s=>s.trim()).filter(Boolean);
+                if(allowed.length>0){
+                  const designation = dep.line && dep.line.designation ? String(dep.line.designation) : String(dep.designation || '');
+                  if(!allowed.includes(designation)) return;
+                }
+              }
+              allDeps.push(dep);
+            });
+          }
+        }catch(e){ console.error('perm fetch error', e); }
+      }
+    }
+
+    if(allDeps.length===0){
+      document.getElementById('permanentDeparturesList').innerHTML = '<div class="no-departures">Inga avgångar hittades</div>';
+      return;
+    }
+
+    // Försök fylla fromStop för bättre visning (samma helper som övriga)
+    resolveFromStopForDepartures(allDeps);
+    renderPermanentDepartures(allDeps);
+  }catch(e){
+    console.error('updatePermanentFavoritesOnce', e);
+    document.getElementById('permanentDeparturesList').innerHTML = '<div class="no-departures">Fel vid hämtning</div>';
+  }
+}
+
+function startPermanentFavoritesLoop(){
+  // Kör en gång direkt och sedan var 20 sekunder (samma TTL som övrigt)
+  updatePermanentFavoritesOnce();
+  stopPermanentFavoritesLoop();
+  permanentInterval = setInterval(() => {
+    updatePermanentFavoritesOnce();
+  }, Math.max(5000, DEPARTURES_TTL)); // använd DEPARTURES_TTL eller minst 5s
+}
+
+function stopPermanentFavoritesLoop(){
+  if(permanentInterval){
+    clearInterval(permanentInterval);
+    permanentInterval = null;
+  }
+}
 </script>
 </body>
 </html>
