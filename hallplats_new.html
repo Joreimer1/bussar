@@ -810,7 +810,8 @@ favoritesBtn.addEventListener('click', () => {
   stopInfo.style.display = 'none';
   favoritesCard.style.display = 'block';
   renderFavoritesList();
-  // Hämta och visa alla favoriters avgångar i departuresCard (blandat)
+  // Sätt mode och hämta/visa alla favoriters avgångar i departuresCard (blandat)
+  currentMode = 'favorites';
   getAggregatedFavoritesAndShow();
 });
 
@@ -938,6 +939,9 @@ async function getAggregatedFavoritesAndShow(){
 
     // Sortera och visa i samma avgångskort som övrigt
     allDeps.sort((a,b)=> new Date(a.expected) - new Date(b.expected));
+    // Se till att stop-info är dold så att användaren ser avgångsflödet
+    stopInfo.style.display = 'none';
+    departuresCard.style.display = 'block';
     displayDepartures(allDeps);
   }catch(e){
     showLoading(false);
@@ -980,7 +984,8 @@ function enterPermanentView(){
   // Dölj bottom-favoritlistan (vi visar endast permanent-listan i vitt läge)
   favoritesListBottom.style.display = 'none';
 
-  // Starta hämtning och uppdatering av favoritavgångar
+  // Visa loading och starta hämtning och uppdatering av favoritavgångar
+  showLoading(true);
   startPermanentFavoritesLoop();
 }
 
@@ -1048,6 +1053,7 @@ async function updatePermanentFavoritesOnce(){
     const tasks = await gatherFavoriteStopsForPermanent();
     if(!tasks || tasks.length===0){
       permanentDeparturesList.innerHTML = '<div class="no-departures">Inga favoriter sparade</div>';
+      showLoading(false);
       return;
     }
 
@@ -1078,14 +1084,17 @@ async function updatePermanentFavoritesOnce(){
 
     if(allDeps.length===0){
       permanentDeparturesList.innerHTML = '<div class="no-departures">Inga avgångar hittades</div>';
+      showLoading(false);
       return;
     }
 
     resolveFromStopForDepartures(allDeps);
     renderPermanentDepartures(allDeps);
+    showLoading(false);
   }catch(e){
     console.error('updatePermanentFavoritesOnce', e);
     permanentDeparturesList.innerHTML = '<div class="no-departures">Fel vid hämtning</div>';
+    showLoading(false);
   }
 }
 
