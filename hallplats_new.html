@@ -8,19 +8,10 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
 
 <style>
-  /* Bas */
   *{box-sizing:border-box;margin:0;padding:0}
   :root{
-    --bg:#2d3748;
-    --card:#1a202c;
-    --muted:#9fb0c8;
-    --muted-2:#a8b9c8;
-    --accent:#4a5568;
-    --input-bg:#162029;
-    --input-border:#355269;
-    --remove-1:#ff6b6b;
-    --remove-2:#e94b4b;
-    --white:#ffffff;
+    --bg:#2d3748;--card:#1a202c;--muted:#9fb0c8;--muted-2:#a8b9c8;--accent:#4a5568;
+    --input-bg:#162029;--input-border:#355269;--remove-1:#ff6b6b;--remove-2:#e94b4b;--white:#ffffff;
   }
   body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;background:var(--bg);color:#e2e8f0;padding:12px;min-height:100vh}
   .container{max-width:520px;margin:0 auto}
@@ -29,27 +20,16 @@
   .button-group{display:flex;gap:10px;margin-bottom:12px}
   button{flex:1;background:var(--accent);border:0;color:#e2e8f0;padding:10px;border-radius:10px;cursor:pointer;font-weight:600}
   button.secondary{background:var(--accent)}
-  /* Active button: white frame */
   button.active{outline:3px solid #ffffff;outline-offset:2px;border-radius:10px}
 
-  /* Search row */
   .search-container{display:none;margin-bottom:12px}
   .search-container.show{display:block}
   .search-row{display:flex;gap:10px;align-items:center;padding:6px 0}
-  .search-input{
-    flex:1 1 68%;
-    margin-left:12px;
-    padding:12px 14px;border-radius:10px;border:1px solid #324957;background:#1f2b33;color:var(--white);
-    box-shadow:0 6px 18px rgba(0,0,0,0.32);font-size:15px;outline:none;
-  }
+  .search-input{flex:1 1 68%;margin-left:12px;padding:12px 14px;border-radius:10px;border:1px solid #324957;background:#1f2b33;color:var(--white);box-shadow:0 6px 18px rgba(0,0,0,0.32);font-size:15px;outline:none}
   .search-input::placeholder{color:var(--muted);opacity:.95}
   .action-col{flex:0 0 28%;display:flex;align-items:center;justify-content:center}
-  .remove-btn{
-    min-width:110px;background:linear-gradient(180deg,var(--remove-1),var(--remove-2));color:var(--white);
-    border:0;padding:10px 12px;border-radius:10px;font-weight:800;box-shadow:0 8px 18px rgba(233,75,75,0.22);
-  }
+  .remove-btn{min-width:110px;background:linear-gradient(180deg,var(--remove-1),var(--remove-2));color:var(--white);border:0;padding:10px 12px;border-radius:10px;font-weight:800;box-shadow:0 8px 18px rgba(233,75,75,0.22)}
 
-  /* Suggestions / favorites layout */
   .suggestions{margin-top:10px;max-height:160px;overflow:auto;border:1px solid #2f3b46;background:#142026;border-radius:10px;display:none}
   .suggestion-item{padding:12px;border-bottom:1px solid #22313a;display:flex;gap:12px;align-items:flex-start;cursor:pointer}
   .suggestion-left{flex:1;display:flex;flex-direction:column;gap:6px}
@@ -58,7 +38,6 @@
   .suggestion-note{font-size:13px;color:var(--muted)}
   .favorite-star{font-size:20px;cursor:pointer;padding:6px;color:#ffd76a}
 
-  /* Favorite list */
   .favorites-list{display:flex;flex-direction:column;gap:10px;margin-top:10px}
   .favorite-item{display:flex;padding:12px;border-radius:10px;background:#101820;border:1px solid #24333d;align-items:flex-start;gap:12px}
   .favorite-left{flex:1;display:flex;flex-direction:column;gap:6px}
@@ -69,11 +48,9 @@
   .fav-lines-input{width:120px;padding:8px;border-radius:8px;border:1px solid var(--input-border);background:var(--input-bg);color:#e6f0f8;text-align:center}
   .remove-small{background:linear-gradient(180deg,var(--remove-1),var(--remove-2));color:var(--white);border:0;padding:8px 10px;border-radius:8px;font-weight:700}
 
-  /* Map container inside search */
   .map-container{margin-top:10px;border-radius:10px;overflow:hidden;border:1px solid #23343d;display:none}
   #resultsMap{width:100%;height:240px;background:#0b1a20}
 
-  /* Departure list */
   .departures-title{font-size:18px;text-align:center;margin-bottom:12px}
   .departure-item{display:flex;gap:12px;align-items:center;padding:10px;border-radius:10px;background:#0f1a20;border-left:4px solid #334b59;margin-bottom:8px}
   .departure-line{font-weight:800}
@@ -81,27 +58,21 @@
   .departure-from{color:#718096;font-size:12px}
   .departure-time{font-weight:800;text-align:right}
 
-  /* Top stop info */
   .stop-info{display:none;padding:12px;border-radius:10px;background:#0f232b;border:1px solid #21333a;margin-bottom:12px}
   .stop-row{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
   .stop-name{font-weight:800;color:#eaf4ff}
   .stop-distance{color:var(--muted);font-size:13px}
   .stop-area{color:var(--muted);font-size:13px;margin-top:6px}
 
-  /* Support link */
   .support{display:none;justify-content:center;gap:8px;margin-top:8px}
   .support a,.support .support-text{color:var(--white)!important;text-decoration:none;font-weight:700}
 
-  /* Loading (spinner) */
   .loading{display:none;margin-top:8px}
   .loading-inner{display:flex;align-items:center;gap:10px;justify-content:center}
-  .spinner{
-    width:28px;height:28px;border-radius:50%;border:3px solid rgba(255,255,255,0.1);border-top-color:#ffffff;animation:spin 1s linear infinite;
-  }
+  .spinner{width:28px;height:28px;border-radius:50%;border:3px solid rgba(255,255,255,0.1);border-top-color:#ffffff;animation:spin 1s linear infinite;}
   @keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}
   .loading-text{color:var(--muted);font-size:14px}
 
-  /* Utilities */
   .no-departures{text-align:center;color:var(--muted);padding:16px}
   @media(max-width:420px){
     .search-input{margin-left:8px;font-size:14px}
@@ -116,7 +87,7 @@
 <body>
   <div class="container">
     <div class="card" id="topCard">
-      <h1>SL Avgångar 4</h1>
+      <h1>SL Avgångar 5</h1>
 
       <div class="button-group">
         <button id="locationBtn">📍 Plats</button>
@@ -184,7 +155,7 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
 
 <script>
-/* Fullständig klientlogik + Leaflet-karta */
+/* Klientlogik + Leaflet-karta */
 const locationBtn = document.getElementById('locationBtn');
 const favoritesBtn = document.getElementById('favoritesBtn');
 const searchBtn = document.getElementById('searchBtn');
@@ -207,11 +178,10 @@ const stopFavoriteStar = document.getElementById('stopFavoriteStar');
 const topSupport = document.getElementById('topSupport');
 const clearSearchBtn = document.getElementById('clearSearchBtn');
 const mapContainer = document.getElementById('mapContainer');
-const resultsMapEl = document.getElementById('resultsMap');
 
 let allSites = [];
 let allStopPoints = [];
-let favorites = JSON.parse(localStorage.getItem('sl_favorites_sp') || '[]'); // { stopPointId,name,stopAreaId,lines }
+let favorites = JSON.parse(localStorage.getItem('sl_favorites_sp') || '[]');
 let currentMode = 'none';
 let currentStop = null;
 let currentStopPointId = null;
@@ -257,35 +227,24 @@ function saveFavorites(){
   refreshAllStars();
 }
 
-/* Leaflet map state */
+/* Leaflet map */
 let map = null;
 let markersLayer = null;
-
 function initMapIfNeeded(){
   if(map) return;
   try{
     map = L.map('resultsMap', { attributionControl:false, zoomControl:true }).setView([59.33,18.07], 12);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19
-    }).addTo(map);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
     markersLayer = L.layerGroup().addTo(map);
-  }catch(e){
-    console.error('initMapIfNeeded', e);
-  }
+  }catch(e){ console.error('initMapIfNeeded', e); }
 }
+function clearMapMarkers(){ if(!markersLayer) return; markersLayer.clearLayers(); }
 
-function clearMapMarkers(){
-  if(!markersLayer) return;
-  markersLayer.clearLayers();
-}
-
-/* Update map with matches, create markers, fit bounds and ensure tiles render */
+/* Update map with matches */
 function updateMapForMatches(matches){
   if(!matches || matches.length===0){ mapContainer.style.display='none'; clearMapMarkers(); return; }
-  // Filter valid coords
   const withCoords = matches.map(m=>{
-    const lat = parseFloat(m.lat);
-    const lon = parseFloat(m.lon);
+    const lat = parseFloat(m.lat); const lon = parseFloat(m.lon);
     if(!isFinite(lat) || !isFinite(lon)) return null;
     return { id: m.id, name: m.name || '', lat, lon };
   }).filter(Boolean);
@@ -311,12 +270,7 @@ function updateMapForMatches(matches){
   if(currentUserPos && map){
     try {
       const userMarker = L.circleMarker([currentUserPos.lat, currentUserPos.lon], {
-        radius: 8,
-        fillColor: '#3182ce',
-        color: '#ffffff',
-        weight: 2,
-        opacity: 1,
-        fillOpacity: 1
+        radius: 8, fillColor: '#3182ce', color: '#ffffff', weight: 2, opacity: 1, fillOpacity: 1
       });
       userMarker.bindPopup('<strong>Din plats</strong>');
       userMarker.addTo(markersLayer);
@@ -324,17 +278,8 @@ function updateMapForMatches(matches){
     } catch(e) { console.error('User pos marker error', e); }
   }
 
-  if(bounds.length===1){
-    map.setView(bounds[0], 17);
-    setTimeout(()=>{ if(map) map.invalidateSize(); }, 80);
-  } else {
-    try{
-      map.fitBounds(bounds, { padding: [30,30] });
-    }catch(e){
-      map.setView(bounds[0], 13);
-    }
-    setTimeout(()=>{ if(map) map.invalidateSize(); }, 80);
-  }
+  if(bounds.length===1){ map.setView(bounds[0], 17); setTimeout(()=>{ if(map) map.invalidateSize(); }, 80); }
+  else { try{ map.fitBounds(bounds, { padding: [30,30] }); }catch(e){ map.setView(bounds[0], 13); } setTimeout(()=>{ if(map) map.invalidateSize(); }, 80); }
 
   mapContainer.style.display = 'block';
 }
@@ -345,27 +290,19 @@ async function loadSites(){
   const cacheTime = localStorage.getItem('sl_sites_cache_time');
   const now = Date.now();
   if(cached && cacheTime && (now - parseInt(cacheTime)) < 24*60*60*1000){ allSites = JSON.parse(cached); return; }
-  try{
-    const r = await fetch('https://transport.integration.sl.se/v1/sites?expand=true');
-    allSites = await r.json();
-    localStorage.setItem('sl_sites_cache', JSON.stringify(allSites));
-    localStorage.setItem('sl_sites_cache_time', String(Date.now()));
-  }catch(e){ console.error('loadSites',e); }
+  try{ const r = await fetch('https://transport.integration.sl.se/v1/sites?expand=true'); allSites = await r.json(); localStorage.setItem('sl_sites_cache', JSON.stringify(allSites)); localStorage.setItem('sl_sites_cache_time', String(Date.now())); }
+  catch(e){ console.error('loadSites',e); }
 }
 async function loadStopPoints(){
   const cached = localStorage.getItem('sl_stoppoints_cache');
   const cacheTime = localStorage.getItem('sl_stoppoints_cache_time');
   const now = Date.now();
   if(cached && cacheTime && (now - parseInt(cacheTime)) < 24*60*60*1000){ allStopPoints = JSON.parse(cached); return; }
-  try{
-    const r = await fetch('https://transport.integration.sl.se/v1/stop-points');
-    allStopPoints = await r.json();
-    localStorage.setItem('sl_stoppoints_cache', JSON.stringify(allStopPoints));
-    localStorage.setItem('sl_stoppoints_cache_time', String(Date.now()));
-  }catch(e){ console.error('loadStopPoints',e); }
+  try{ const r = await fetch('https://transport.integration.sl.se/v1/stop-points'); allStopPoints = await r.json(); localStorage.setItem('sl_stoppoints_cache', JSON.stringify(allStopPoints)); localStorage.setItem('sl_stoppoints_cache_time', String(Date.now())); }
+  catch(e){ console.error('loadStopPoints',e); }
 }
 
-/* Utility: distance */
+/* Distance */
 function calculateDistance(lat1,lon1,lat2,lon2){
   const R=6371; const dLat=(lat2-lat1)*Math.PI/180; const dLon=(lon2-lon1)*Math.PI/180;
   const a=Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
@@ -373,7 +310,7 @@ function calculateDistance(lat1,lon1,lat2,lon2){
   return R*c;
 }
 
-/* Departures fetching (cached) */
+/* Fetch departures (cached) */
 async function fetchDeparturesForSite(site, force=false){
   const siteId = site.id;
   const cached = departuresCache[siteId];
@@ -426,7 +363,7 @@ function departureMatchesStopArea(dep, stopAreaId){
   return false;
 }
 
-/* Robust extrahering av stopPoint-id från en avgång */
+/* Robust extrahering av stopPoint-id */
 function extractStopPointId(dep){
   if(!dep) return null;
   const direct = ['stop_point','stopPoint','stopPointId','stop_point_id','stop_pointId','stop_pointid'];
@@ -542,15 +479,12 @@ function displayDepartures(departures){
   countdownInterval = setInterval(update,1000);
 }
 
-/* Shared selection logic when a stoppoint is chosen (from list or map) */
+/* Select stoppoint */
 async function selectStopPointById(spId){
   if(!spId) return;
   await loadStopPoints(); await loadSites();
   const sp = allStopPoints.find(p=>String(p.id)===String(spId));
-  if(!sp){
-    showError('Hittade inte vald stop-point');
-    return;
-  }
+  if(!sp){ showError('Hittade inte vald stop-point'); return; }
   currentStopPointId = sp.id;
   currentStopAreaId = sp.stop_area_id || sp.stopAreaId || sp.parentId || sp.site_id || null;
   let matchedSites = [];
@@ -571,25 +505,17 @@ async function selectStopPointById(spId){
   refreshAllStars();
 
   if(map && sp.lat && sp.lon){
-    const lat = parseFloat(sp.lat);
-    const lon = parseFloat(sp.lon);
-    if(isFinite(lat) && isFinite(lon)){
-      map.setView([lat, lon], 17);
-      setTimeout(()=>{ if(map) map.invalidateSize(); }, 80);
-    }
+    const lat = parseFloat(sp.lat); const lon = parseFloat(sp.lon);
+    if(isFinite(lat) && isFinite(lon)){ map.setView([lat, lon], 17); setTimeout(()=>{ if(map) map.invalidateSize(); }, 80); }
   }
 
   if(matchedSites.length>0) getDeparturesFromSitesWithFiltering(matchedSites, { stopPointId: currentStopPointId }, true);
   else getDeparturesFromSitesWithFiltering([currentStop], { stopPointId: currentStopPointId }, true);
 
-  setTimeout(()=>{
-    searchContainer.classList.remove('show');
-    suggestions.style.display='none';
-    searchInput.value='';
-  }, 160);
+  setTimeout(()=>{ searchContainer.classList.remove('show'); suggestions.style.display='none'; searchInput.value=''; }, 160);
 }
 
-/* Find nearest stop-point and map to sites */
+/* Nearest stop */
 async function findNearestStop(userLat,userLon){
   try{
     showLoading(true);
@@ -639,7 +565,10 @@ async function getDeparturesFromSitesWithFiltering(stops, opts={}, force=false){
     showLoading(false);
 
     let allDeps = [];
-    results.forEach(res=>{ if(!res) return; res.departures.forEach(dep=>{ dep.fromStop = dep.fromStop || (res.stop && res.stop.name ? getDepFromStopLabel(dep, res.stop.name) : ''); dep.fromStop = dep.fromStop || ''; // ensure field exists
+    results.forEach(res=>{ if(!res) return; res.departures.forEach(dep=>{
+      // Ensure dep.fromStop exists using site name if possible
+      dep.fromStop = dep.fromStop || (res.stop && res.stop.name ? getDepFromStopLabel(dep, res.stop.name) : '');
+      dep.fromStop = dep.fromStop || '';
       if(opts && opts.stopPointId){ if(!departureMatchesStopPoint(dep, opts.stopPointId)) return; }
       else if(opts && opts.stopAreaId){ if(!departureMatchesStopArea(dep, opts.stopAreaId)) return; }
       if(opts && opts.favoriteLines){ const allowed = String(opts.favoriteLines).split(',').map(s=>s.trim()).filter(Boolean); if(allowed.length>0){ const designation = dep.line && dep.line.designation ? String(dep.line.designation) : String(dep.designation || ''); if(!allowed.includes(designation)) return; } }
@@ -662,10 +591,7 @@ const doSearch = debounce(async (qRaw) => {
     return n.includes(q) || note.includes(q);
   }).slice(0,40);
   const newHash = JSON.stringify(matches.map(m=>m.id));
-  if(newHash === lastSearchResults){
-    updateMapForMatches(matches);
-    return;
-  }
+  if(newHash === lastSearchResults){ updateMapForMatches(matches); return; }
   lastSearchResults = newHash;
   if(matches.length === 0){ suggestions.innerHTML = '<div class="suggestion-item">Inga resultat</div>'; suggestions.style.display = 'block'; updateMapForMatches([]); return; }
   suggestions.innerHTML = matches.slice(0,12).map(m=>{
@@ -701,20 +627,21 @@ suggestions.addEventListener('click', async (ev)=>{
   }
 });
 
-/* Favorites UI */
+/* Favorites UI: same editable markup for both lists */
 function updateFavoritesUI(){
   if(favorites.length>0){
     favoritesInfo.textContent = `Favoriter (${favorites.length})`;
-    favoritesList.innerHTML = favorites.map(f=>{
+    const html = favorites.map(f=>{
       const linesText = f.lines && f.lines.trim()!=='' ? escapeHtml(f.lines) : 'Alla';
       return `<div class="favorite-item" data-id="${escapeHtml(f.stopPointId)}"><div class="favorite-left"><div class="favorite-name">⭐ ${escapeHtml(f.name||'')}</div><div class="favorite-id">Hållplats nr: ${escapeHtml(f.stopPointId)}</div><div class="favorite-lines">Valda linjer: ${linesText}</div></div><div class="fav-actions"><input class="fav-lines-input" data-id="${escapeHtml(f.stopPointId)}" placeholder="T.ex 2,57" value="${escapeHtml(f.lines||'')}" /><button class="remove-small" data-id="${escapeHtml(f.stopPointId)}">Ta bort</button></div></div>`;
     }).join('');
+    favoritesList.innerHTML = html;
+    favoritesListBottom.innerHTML = html;
   } else {
     favoritesInfo.textContent = 'Inga favoriter';
     favoritesList.innerHTML = '';
+    favoritesListBottom.innerHTML = '';
   }
-  // Bottom list (full page)
-  favoritesListBottom.innerHTML = favorites.map(f=>`<div style="padding:8px;border-bottom:1px solid #22313a">⭐ ${escapeHtml(f.name||'')} — ${escapeHtml(f.stopPointId||'')}</div>`).join('');
   refreshAllStars();
 }
 
@@ -736,7 +663,25 @@ favoritesList.addEventListener('input', (ev)=>{
   }
 });
 
-/* Utility: ensure suggestions stars and top star sync */
+/* Same handlers for bottom list so editing works in favorites view */
+favoritesListBottom.addEventListener('click', (ev)=>{
+  const rem = ev.target.closest('.remove-small');
+  if(rem){
+    const id = rem.dataset.id;
+    const idx = favorites.findIndex(f=>String(f.stopPointId)===String(id));
+    if(idx>-1){ favorites.splice(idx,1); saveFavorites(); updateFavoritesUI(); }
+  }
+});
+favoritesListBottom.addEventListener('input', (ev)=>{
+  const inp = ev.target.closest('.fav-lines-input');
+  if(inp){
+    const id = inp.dataset.id;
+    const idx = favorites.findIndex(f=>String(f.stopPointId)===String(id));
+    if(idx>-1){ favorites[idx].lines = inp.value || ''; saveFavorites(); }
+  }
+});
+
+/* Sync stars */
 function refreshAllStars(){
   document.querySelectorAll('.suggestion-item .favorite-star').forEach(el=>{
     const id = el.dataset.id;
@@ -749,11 +694,8 @@ function refreshAllStars(){
   }
 }
 
-/* Start/stop favorites view and auto-refresh handling */
-function setActiveButton(btn){
-  [locationBtn, favoritesBtn, searchBtn].forEach(b=>b.classList.remove('active'));
-  if(btn) btn.classList.add('active');
-}
+/* Buttons and view control */
+function setActiveButton(btn){ [locationBtn, favoritesBtn, searchBtn].forEach(b=>b.classList.remove('active')); if(btn) btn.classList.add('active'); }
 
 /* Ensure caches loaded and normalize favorites */
 async function ensureCachesLoaded(){
@@ -773,7 +715,7 @@ async function ensureCachesLoaded(){
   refreshAllStars();
 }
 
-/* Auto-refresh for favorites (2 min) */
+/* Auto-refresh favorites */
 let favoritesRefreshInterval = null;
 
 async function refreshFavoritesDeparturesOnce(){
@@ -816,9 +758,7 @@ async function refreshFavoritesDeparturesOnce(){
             dep.fromStop = getDepFromStopLabel(dep, (res.stop && res.stop.name) ? res.stop.name : site.name, f.stopPointId);
             allAggregated.push(dep);
           });
-        }catch(e){
-          console.error('refreshFavoritesDeparturesOnce - fetchDeparturesForSite error', e);
-        }
+        }catch(e){ console.error('refreshFavoritesDeparturesOnce - fetchDeparturesForSite error', e); }
       }
     }
 
@@ -834,53 +774,31 @@ async function refreshFavoritesDeparturesOnce(){
     allAggregated.sort((a,b)=> new Date(a.expected) - new Date(b.expected));
     displayDepartures(allAggregated);
     showLoading(false);
-  }catch(e){
-    showLoading(false);
-    console.error('refreshFavoritesDeparturesOnce', e);
-  }
+  }catch(e){ showLoading(false); console.error('refreshFavoritesDeparturesOnce', e); }
 }
 
 function startFavoritesAutoRefresh(){
   if(favoritesRefreshInterval) return;
   refreshFavoritesDeparturesOnce();
-  favoritesRefreshInterval = setInterval(()=> {
-    refreshFavoritesDeparturesOnce();
-  }, 120000);
+  favoritesRefreshInterval = setInterval(()=> { refreshFavoritesDeparturesOnce(); }, 120000);
 }
-function stopFavoritesAutoRefresh(){
-  if(!favoritesRefreshInterval) return;
-  clearInterval(favoritesRefreshInterval);
-  favoritesRefreshInterval = null;
-}
+function stopFavoritesAutoRefresh(){ if(!favoritesRefreshInterval) return; clearInterval(favoritesRefreshInterval); favoritesRefreshInterval = null; }
 
 /* Observe favoritesCard visibility and ensure caches before starting refresh */
 const favObserver = new MutationObserver(()=> {
   (async () => {
     try{
       const visible = window.getComputedStyle(favoritesCard).display !== 'none';
-      if(visible){
-        await ensureCachesLoaded();
-        startFavoritesAutoRefresh();
-      } else {
-        stopFavoritesAutoRefresh();
-      }
+      if(visible){ await ensureCachesLoaded(); startFavoritesAutoRefresh(); } else { stopFavoritesAutoRefresh(); }
     }catch(e){ console.error('favObserver', e); }
   })();
 });
 favObserver.observe(favoritesCard, { attributes: true, attributeFilter: ['style'] });
 
-(async ()=>{
-  try{
-    if(window.getComputedStyle(favoritesCard).display !== 'none'){
-      await ensureCachesLoaded();
-      startFavoritesAutoRefresh();
-    }
-  }catch(e){ console.error('init fav observer', e); }
-})();
+(async ()=>{ try{ if(window.getComputedStyle(favoritesCard).display !== 'none'){ await ensureCachesLoaded(); startFavoritesAutoRefresh(); } }catch(e){ console.error('init fav observer', e); } })();
 
 /* Button handlers */
 locationBtn.addEventListener('click', async ()=>{
-  // Try to get geolocation and find nearest stop
   setActiveButton(locationBtn);
   searchContainer.classList.remove('show');
   favoritesCard.style.display = 'none';
@@ -895,9 +813,7 @@ locationBtn.addEventListener('click', async ()=>{
         showLoading(false);
         showError('Kunde inte hämta din plats');
       }, { timeout: 8000 });
-    } else {
-      showError('Geolocation ej tillgängligt');
-    }
+    } else { showError('Geolocation ej tillgängligt'); }
   }catch(e){ showError('Fel vid platsförfrågan'); console.error(e); }
 });
 
@@ -912,39 +828,29 @@ favoritesBtn.addEventListener('click', async ()=>{
 
 searchBtn.addEventListener('click', ()=>{
   setActiveButton(searchBtn);
+  const willShow = !searchContainer.classList.contains('show');
   searchContainer.classList.toggle('show');
   favoritesCard.style.display = 'none';
   suggestions.style.display = 'none';
   searchInput.focus();
+  if(willShow){
+    departuresCard.style.display = 'none';
+    if(countdownInterval){ clearInterval(countdownInterval); countdownInterval = null; }
+  }
 });
 
 /* Clear search */
-clearSearchBtn.addEventListener('click', ()=>{
-  searchInput.value = '';
-  suggestions.style.display = 'none';
-  updateMapForMatches([]);
-});
+clearSearchBtn.addEventListener('click', ()=>{ searchInput.value = ''; suggestions.style.display = 'none'; updateMapForMatches([]); });
 
-/* Suggestion star handler helper (kept for clarity) */
+/* Suggestion star helper (kept for clarity) */
 async function handleSuggestionStarClick(spId, starEl){
   await loadStopPoints();
   const sp = allStopPoints.find(p=>String(p.id)===String(spId));
   if(!sp) return;
   const idx = favorites.findIndex(f=>String(f.stopPointId)===String(spId));
-  if(idx>-1){
-    favorites.splice(idx,1);
-    saveFavorites();
-    starEl.textContent='☆';
-    updateFavoritesUI();
-    return;
-  }
+  if(idx>-1){ favorites.splice(idx,1); saveFavorites(); starEl.textContent='☆'; updateFavoritesUI(); return; }
   const stopAreaId = sp.stop_area_id || sp.stopAreaId || sp.parentId || sp.site_id || null;
-  favorites.push({
-    stopPointId: String(sp.id),
-    name: sp.name || '',
-    stopAreaId: stopAreaId ? String(stopAreaId) : null,
-    lines: ''
-  });
+  favorites.push({ stopPointId: String(sp.id), name: sp.name || '', stopAreaId: stopAreaId ? String(stopAreaId) : null, lines: '' });
   saveFavorites();
   starEl.textContent='⭐';
   updateFavoritesUI();
