@@ -13,7 +13,7 @@
 <script>
 /* KONFIGURATION: byt dessa två */
 const API_KEY = "bdbc0530-408c-4ac0-8ad4-bcda19d40d6e";
-const WORKER_URL = "https://gentle-unit-77d4.johan-oestberg.workers.dev";
+const WORKER_URL = "https://gentle-unit-77d4.johan-oestberg.workers.dev"; // utan trailing slash
 const BASE = "https://openparking.stockholm.se/LTF-Tolken/v1";
 
 /* Initiera karta */
@@ -23,49 +23,42 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   attribution: '&copy; OpenStreetMap'
 }).addTo(map);
 
-/* Hjälp: logga och bygg proxied URL */
+/* Hjälp: bygg proxylänk säkert */
 function proxyUrl(target) {
-  const u = `${WORKER_URL}/?target=${encodeURIComponent(target)}`;
-  console.log("Proxy fetch:", u);
-  return u;
+  const base = WORKER_URL.replace(/\/+$/, "");
+  return `${base}/?target=${encodeURIComponent(target)}`;
 }
 
-/* Rita geometri och bind popup */
-function addGeometry(item) {
-  const geom = item?.Geometry?.WGS84;
-  if (!geom) return;
-  const name = item.StreetName || "Okänd gata";
-
-  if (geom.type === "LineString") {
-    const latlngs = geom.coordinates.map(c => [c[1], c[0]]);
-    const layer = L.polyline(latlngs, { color: "#2b7cff", weight: 4 }).addTo(map);
-    attachPopup(layer, name);
-  } else if (geom.type === "MultiLineString") {
-    geom.coordinates.forEach(line => {
-      const latlngs = line.map(c => [c[1], c[0]]);
-      const seg = L.polyline(latlngs, { color: "#2b7cff", weight: 4 }).addTo(map);
-      attachPopup(seg, name);
+/* Ladda lokal GeoJSON med geometrier (streets.geojson) */
+function loadLocalGeoJSON() {
+  fetch('streets.geojson')
+    .then(r => {
+      if (!r.ok) throw new Error('Kunde inte ladda streets.geojson');
+      return r.json();
+    })
+    .then(geojson => {
+      L.geoJSON(geojson, {
+        style: { color: '#2b7cff', weight: 4 },
+        onEachFeature: (feature, layer) => {
+          const name = feature.properties?.StreetName || feature.properties?.name || "Okänd gata";
+          layer.bindPopup(`<strong>${name}</strong><br/>Klick för servicedagar`);
+          layer.on('click', () => fetchStreetData(name, layer));
+        }
+      }).addTo(map);
+    })
+    .catch(err => {
+      console.error(err);
+      alert('Kunde inte ladda lokala geometrier. Lägg streets.geojson i samma repo.');
     });
-  } else if (geom.type === "Point") {
-    const [lon, lat] = geom.coordinates;
-    const marker = L.marker([lat, lon]).addTo(map);
-    attachPopup(marker, name);
-  }
 }
 
-function attachPopup(layer, streetName) {
-  layer.bindPopup(`<strong>${streetName}</strong><br/>Klick för servicedagar`);
-  layer.on("click", () => fetchStreetData(streetName, layer));
-}
-
-/* Hämta servicedagar för en gata via Worker, med enkel caching i sessionStorage */
+/* Hämta servicedagar för en gata via Worker, med enkel caching */
 function fetchStreetData(streetName, layer) {
   const cacheKey = `sd:${streetName}`;
   const cached = sessionStorage.getItem(cacheKey);
   if (cached) {
     try {
       const parsed = JSON.parse(cached);
-      // cache i 10 minuter
       if (Date.now() - parsed.ts < 10 * 60 * 1000) {
         showStreetPopup(streetName, parsed.data, layer);
         return;
@@ -74,8 +67,12 @@ function fetchStreetData(streetName, layer) {
   }
 
   const targetUrl = `${BASE}/servicedagar/street/${encodeURIComponent(streetName)}?outputFormat=json&apiKey=${API_KEY}`;
-  fetch(proxyUrl(targetUrl), { method: "GET", headers: { "Accept": "application/json" } })
+  const url = proxyUrl(targetUrl);
+  console.log('Proxy fetch:', url);
+
+  fetch(url, { method: 'GET', headers: { 'Accept': 'application/json' } })
     .then(res => {
+      console.log('Worker status:', res.status);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       return res.json();
     })
@@ -84,7 +81,7 @@ function fetchStreetData(streetName, layer) {
       showStreetPopup(streetName, data, layer);
     })
     .catch(err => {
-      console.error("fetchStreetData error:", err);
+      console.error('fetchStreetData error:', err);
       layer.setPopupContent(`<strong>${streetName}</strong><br/>Kunde inte hämta servicedagar`).openPopup();
     });
 }
@@ -104,27 +101,8 @@ function showStreetPopup(streetName, streetData, layer) {
   layer.setPopupContent(html).openPopup();
 }
 
-/* Hämta och rita alla geometrier (servicedagar listan innehåller geometri) */
-function loadAll() {
-  const targetUrl = `${BASE}/servicedagar?outputFormat=json&apiKey=${API_KEY}`;
-  fetch(proxyUrl(targetUrl), { method: "GET", headers: { "Accept": "application/json" } })
-    .then(res => {
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      return res.json();
-    })
-    .then(data => {
-      if (!Array.isArray(data)) throw new Error("Oväntat svar: inte en array");
-      data.forEach(addGeometry);
-    })
-    .catch(err => {
-      console.error("Fel vid hämtning av servicedagar:", err);
-      alert("Kunde inte ladda servicedagar. Kolla konsolen för detaljer.");
-    });
-}
-
-/* Starta */
-loadAll();
+/* Starta: ladda lokala geometrier */
+loadLocalGeoJSON();
 </script>
 </body>
 </html>
-
