@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8" />
+  <title>Servicedagar – klicka på gata</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <style>html, body, #map { height: 100%; margin: 0; }</style>
+</head>
+<body>
+<div id="map"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const API_KEY = "bdbc0530-408c-4ac0-8ad4-bcda19d40d6e"; // byt till din riktiga nyckel
+
+// Initiera kartan
+const map = L.map('map').setView([59.33, 18.06], 12);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  maxZoom: 19,
+  attribution: '&copy; OpenStreetMap'
+}).addTo(map);
+
+// Hjälpfunktion: lägg till geometri och klickhändelse
+function addGeometry(item) {
+  const geom = item.Geometry.WGS84;
+  if (!geom) return;
+
+  let layer;
+  if (geom.type === "LineString") {
+    const latlngs = geom.coordinates.map(c => [c[1], c[0]]);
+    layer = L.polyline(latlngs, { color: "blue" }).addTo(map);
+  } else if (geom.type === "MultiLineString") {
+    const latlngs = geom.coordinates.map(line => line.map(c => [c[1], c[0]]));
+    layer = L.multiPolyline(latlngs, { color: "blue" }).addTo(map);
+  } else if (geom.type === "Point") {
+    const [lon, lat] = geom.coordinates;
+    layer = L.marker([lat, lon]).addTo(map);
+  }
+
+  if (layer) {
+    layer.bindPopup(`<strong>${item.StreetName}</strong><br/>Klick för att hämta servicedagar`);
+    layer.on("click", () => fetchStreetData(item.StreetName, layer));
+  }
+}
+
+// Hjälpfunktion: hämta servicedagar för en gata
+function fetchStreetData(streetName, layer) {
+  const street = encodeURIComponent(streetName);
+  fetch(`https://openparking.stockholm.se/LTF-Tolken/v1/servicedagar/street/${street}?outputFormat=json&apiKey=${API_KEY}`)
+    .then(res => res.json())
+    .then(streetData => {
+      let html = `<strong>${streetName}</strong><br/>`;
+      streetData.forEach(sd => {
+        html += `Dag: ${sd.Weekday} <br/>Tid: ${sd.StartTime}–${sd.EndTime}<br/><br/>`;
+      });
+      layer.setPopupContent(html).openPopup();
+    })
+    .catch(err => {
+      layer.setPopupContent("Kunde inte hämta servicedagar");
+      console.error(err);
+    });
+}
+
+// Ladda alla servicedagar
+fetch(`https://openparking.stockholm.se/LTF-Tolken/v1/servicedagar?outputFormat=json&apiKey=${API_KEY}`)
+  .then(res => res.json())
+  .then(data => {
+    data.forEach(addGeometry);
+  })
+  .catch(err => console.error("Fel vid hämtning av servicedagar:", err));
+</script>
+</body>
+</html>
