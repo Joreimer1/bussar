@@ -2,76 +2,128 @@
 <html lang="sv">
 <head>
   <meta charset="utf-8" />
-  <title>Servicedagar – klicka på gata</title>
+  <title>Servicedagar karta</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
   <style>html, body, #map { height: 100%; margin: 0; }</style>
 </head>
 <body>
-  test1
 <div id="map"></div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-const API_KEY = "bdbc0530-408c-4ac0-8ad4-bcda19d40d6e"; // byt till din riktiga nyckel
-const WORKER_URL = "gentle-unit-77d4.johan-oestberg.workers.dev"; // byt till din Worker‑URL
+/* KONFIGURATION: byt dessa två */
+const API_KEY = "bdbc0530-408c-4ac0-8ad4-bcda19d40d6e";
+const WORKER_URL = "https://gentle-unit-77d4.johan-oestberg.workers.dev/";
 const BASE = "https://openparking.stockholm.se/LTF-Tolken/v1";
 
-// Initiera kartan
+/* Initiera karta */
 const map = L.map('map').setView([59.33, 18.06], 12);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   maxZoom: 19,
   attribution: '&copy; OpenStreetMap'
 }).addTo(map);
 
-// Hjälpfunktion: lägg till geometri och klickhändelse
-function addGeometry(item) {
-  const geom = item.Geometry?.WGS84;
-  if (!geom) return;
+/* Hjälp: logga och bygg proxied URL */
+function proxyUrl(target) {
+  const u = `${WORKER_URL}/?target=${encodeURIComponent(target)}`;
+  console.log("Proxy fetch:", u);
+  return u;
+}
 
-  let layer;
+/* Rita geometri och bind popup */
+function addGeometry(item) {
+  const geom = item?.Geometry?.WGS84;
+  if (!geom) return;
+  const name = item.StreetName || "Okänd gata";
+
   if (geom.type === "LineString") {
     const latlngs = geom.coordinates.map(c => [c[1], c[0]]);
-    layer = L.polyline(latlngs, { color: "blue" }).addTo(map);
+    const layer = L.polyline(latlngs, { color: "#2b7cff", weight: 4 }).addTo(map);
+    attachPopup(layer, name);
   } else if (geom.type === "MultiLineString") {
-    const latlngs = geom.coordinates.map(line => line.map(c => [c[1], c[0]]));
-    layer = L.multiPolyline(latlngs, { color: "blue" }).addTo(map);
+    geom.coordinates.forEach(line => {
+      const latlngs = line.map(c => [c[1], c[0]]);
+      const seg = L.polyline(latlngs, { color: "#2b7cff", weight: 4 }).addTo(map);
+      attachPopup(seg, name);
+    });
   } else if (geom.type === "Point") {
     const [lon, lat] = geom.coordinates;
-    layer = L.marker([lat, lon]).addTo(map);
-  }
-
-  if (layer) {
-    layer.bindPopup(`<strong>${item.StreetName}</strong><br/>Klick för att hämta servicedagar`);
-    layer.on("click", () => fetchStreetData(item.StreetName, layer));
+    const marker = L.marker([lat, lon]).addTo(map);
+    attachPopup(marker, name);
   }
 }
 
-// Hjälpfunktion: hämta servicedagar för en gata via Worker
+function attachPopup(layer, streetName) {
+  layer.bindPopup(`<strong>${streetName}</strong><br/>Klick för servicedagar`);
+  layer.on("click", () => fetchStreetData(streetName, layer));
+}
+
+/* Hämta servicedagar för en gata via Worker, med enkel caching i sessionStorage */
 function fetchStreetData(streetName, layer) {
+  const cacheKey = `sd:${streetName}`;
+  const cached = sessionStorage.getItem(cacheKey);
+  if (cached) {
+    try {
+      const parsed = JSON.parse(cached);
+      // cache i 10 minuter
+      if (Date.now() - parsed.ts < 10 * 60 * 1000) {
+        showStreetPopup(streetName, parsed.data, layer);
+        return;
+      }
+    } catch {}
+  }
+
   const targetUrl = `${BASE}/servicedagar/street/${encodeURIComponent(streetName)}?outputFormat=json&apiKey=${API_KEY}`;
-  fetch(`${WORKER_URL}/?target=${encodeURIComponent(targetUrl)}`)
-    .then(res => res.json())
-    .then(streetData => {
-      let html = `<strong>${streetName}</strong><br/>`;
-      streetData.forEach(sd => {
-        html += `Dag: ${sd.Weekday}<br/>Tid: ${sd.StartTime}–${sd.EndTime}<br/><br/>`;
-      });
-      layer.setPopupContent(html).openPopup();
+  fetch(proxyUrl(targetUrl), { method: "GET", headers: { "Accept": "application/json" } })
+    .then(res => {
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return res.json();
+    })
+    .then(data => {
+      sessionStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now(), data }));
+      showStreetPopup(streetName, data, layer);
     })
     .catch(err => {
-      layer.setPopupContent("Kunde inte hämta servicedagar");
-      console.error(err);
+      console.error("fetchStreetData error:", err);
+      layer.setPopupContent(`<strong>${streetName}</strong><br/>Kunde inte hämta servicedagar`).openPopup();
     });
 }
 
-// Hämta alla servicedagar via Worker
-const allUrl = `${BASE}/servicedagar?outputFormat=json&apiKey=${API_KEY}`;
-fetch(`${WORKER_URL}/?target=${encodeURIComponent(allUrl)}`)
-  .then(res => res.json())
-  .then(data => {
-    data.forEach(addGeometry);
-  })
-  .catch(err => console.error("Fel vid hämtning av servicedagar:", err));
+function showStreetPopup(streetName, streetData, layer) {
+  if (!Array.isArray(streetData) || streetData.length === 0) {
+    layer.setPopupContent(`<strong>${streetName}</strong><br/>Inga servicedagar hittades`).openPopup();
+    return;
+  }
+  let html = `<strong>${streetName}</strong><br/>`;
+  streetData.forEach(sd => {
+    const day = sd.Weekday ?? "";
+    const start = sd.StartTime ?? "";
+    const end = sd.EndTime ?? "";
+    html += `Dag: ${day}<br/>Tid: ${start}–${end}<br/><br/>`;
+  });
+  layer.setPopupContent(html).openPopup();
+}
+
+/* Hämta och rita alla geometrier (servicedagar listan innehåller geometri) */
+function loadAll() {
+  const targetUrl = `${BASE}/servicedagar?outputFormat=json&apiKey=${API_KEY}`;
+  fetch(proxyUrl(targetUrl), { method: "GET", headers: { "Accept": "application/json" } })
+    .then(res => {
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return res.json();
+    })
+    .then(data => {
+      if (!Array.isArray(data)) throw new Error("Oväntat svar: inte en array");
+      data.forEach(addGeometry);
+    })
+    .catch(err => {
+      console.error("Fel vid hämtning av servicedagar:", err);
+      alert("Kunde inte ladda servicedagar. Kolla konsolen för detaljer.");
+    });
+}
+
+/* Starta */
+loadAll();
 </script>
 </body>
 </html>
