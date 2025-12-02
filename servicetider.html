@@ -2,7 +2,7 @@
 <html lang="sv">
 <head>
   <meta charset="utf-8" />
-  <title>Servicedagar via OSM klick</title>
+  <title>Servicedagar — klick och närmaste segment</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
   <style>html, body, #map { height: 100%; margin: 0; }</style>
 </head>
@@ -29,82 +29,172 @@ function proxyUrl(target) {
   return `${base}/?target=${encodeURIComponent(target)}`;
 }
 
-/* Enkel cache för servicedagar per gatunamn */
-const streetCache = new Map();
+/* Haversine avstånd i meter */
+function haversine(lat1, lon1, lat2, lon2) {
+  const R = 6371000;
+  const toRad = v => v * Math.PI / 180;
+  const dLat = toRad(lat2 - lat1), dLon = toRad(lon2 - lon1);
+  const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2;
+  return 2*R*Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
 
-/* Debounce för klick */
-let clickTimeout = null;
-const CLICK_DEBOUNCE_MS = 300;
+/* Hitta närmaste feature i allData (kollar varje vertex i LineString/MultiLineString/Point) */
+function findNearestFeature(allData, lat, lon, maxDist = 80) {
+  let best = null, bestDist = Infinity;
+  if (!Array.isArray(allData)) return null;
 
-map.on('click', (e) => {
-  if (clickTimeout) clearTimeout(clickTimeout);
-  clickTimeout = setTimeout(() => handleMapClick(e.latlng), CLICK_DEBOUNCE_MS);
-});
+  allData.forEach(item => {
+    // datasetets struktur kan variera: försök flera vanliga platser för geometri
+    const geom = item.geometry || item.Geometry || item.properties?.geometry || item.Geometry?.WGS84;
+    if (!geom) {
+      // ibland ligger geometri i item.Geometry.WGS84 som WKT eller objekt — hantera enklare fall senare
+      return;
+    }
 
-async function handleMapClick(latlng) {
-  const { lat, lng } = latlng;
-  const popup = L.popup().setLatLng([lat, lng]).setContent("Hämtar gatunamn...").openOn(map);
+    // Normalisera representation: vi förväntar oss GeoJSON-liknande { type, coordinates }
+    const type = geom.type;
+    if (type === 'Point') {
+      const [lon2, lat2] = geom.coordinates;
+      const d = haversine(lat, lon, lat2, lon2);
+      if (d < bestDist) { bestDist = d; best = item; }
+    } else if (type === 'LineString') {
+      for (const c of geom.coordinates) {
+        const [lon2, lat2] = c;
+        const d = haversine(lat, lon, lat2, lon2);
+        if (d < bestDist) { bestDist = d; best = item; }
+      }
+    } else if (type === 'MultiLineString') {
+      for (const line of geom.coordinates) {
+        for (const c of line) {
+          const [lon2, lat2] = c;
+          const d = haversine(lat, lon, lat2, lon2);
+          if (d < bestDist) { bestDist = d; best = item; }
+        }
+      }
+    } else {
+      // okänt format — försök ignorera
+    }
+  });
+
+  return bestDist <= maxDist ? { feature: best, distance: bestDist } : null;
+}
+
+/* Ladda hela servicedagar-datasetet via Worker och cachea i sessionStorage */
+async function loadAllData() {
+  const cached = sessionStorage.getItem('allServicedagar');
+  if (cached) {
+    try {
+      const parsed = JSON.parse(cached);
+      // enkel TTL: 30 min
+      if (Date.now() - parsed.ts < 30 * 60 * 1000) {
+        console.log('Using cached allData');
+        return parsed.data;
+      }
+    } catch {}
+  }
+
+  const target = `${BASE}/servicedagar?outputFormat=json&apiKey=${API_KEY}`;
+  const url = proxyUrl(target);
+  console.log('Fetching allData via', url);
+  const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+  if (!res.ok) {
+    const txt = await res.text();
+    throw new Error(`Failed to load allData: HTTP ${res.status} ${txt.slice(0,200)}`);
+  }
+  const data = await res.json();
+  sessionStorage.setItem('allServicedagar', JSON.stringify({ ts: Date.now(), data }));
+  return data;
+}
+
+/* Visa popup med servicedagar från en feature (anpassa efter fältnamn i ditt dataset) */
+function showFeaturePopup(feature, latlng) {
+  const props = feature.properties || feature;
+  const street = props.StreetName || props.STREET_NAME || props.streetName || 'Okänd gata';
+  const address = props.ADDRESS || props.Address || '';
+  let html = `<strong>${street}</strong><br/>${address}<br/><br/>`;
+
+  // Försök hitta relevanta fält — anpassa efter datasetets fältnamn
+  const weekday = props.START_WEEKDAY || props.Weekday || props.WeekdayName || props.STARTDAY;
+  const start = props.START_TIME || props.StartTime || props.START_TIME;
+  const end = props.END_TIME || props.EndTime || props.END_TIME;
+  if (weekday || start || end) {
+    html += `Dag: ${weekday || ''}<br/>Tid: ${start || ''}–${end || ''}<br/><br/>`;
+  }
+
+  // Visa metadata om beslut etc
+  if (props.CITATION) html += `Beslut: ${props.CITATION}<br/>`;
+  if (props.VALID_FROM) html += `Giltig från: ${props.VALID_FROM}<br/>`;
+
+  L.popup().setLatLng(latlng).setContent(html).openOn(map);
+}
+
+/* Klickhanterare: reverse geocode (valfritt) + hitta närmaste feature och visa */
+let allDataCache = null;
+map.on('click', async (e) => {
+  const lat = e.latlng.lat, lon = e.latlng.lng;
+  const temp = L.popup().setLatLng([lat, lon]).setContent('Söker servicedagar...').openOn(map);
 
   try {
-    // Reverse geocode via Nominatim
-    const nomUrl = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lng)}&addressdetails=1`;
-    const nomRes = await fetch(nomUrl, {
-      headers: { "Accept": "application/json", "User-Agent": "github.com/yourrepo - contact" }
-    });
-    if (!nomRes.ok) throw new Error(`Nominatim HTTP ${nomRes.status}`);
+    if (!allDataCache) {
+      allDataCache = await loadAllData();
+    }
+
+    // Hitta närmaste feature
+    const nearest = findNearestFeature(allDataCache, lat, lon, 80); // 80 m tröskel
+    if (nearest) {
+      console.log('Nearest feature distance (m):', Math.round(nearest.distance));
+      showFeaturePopup(nearest.feature, [lat, lon]);
+      return;
+    }
+
+    // Om ingen närliggande feature hittades, fallback: reverse geocode för gatnamn och försök API per gatunamn
+    const nomUrl = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}&addressdetails=1`;
+    const nomRes = await fetch(nomUrl, { headers: { 'Accept': 'application/json', 'User-Agent': 'github.com/yourrepo - contact' } });
+    if (!nomRes.ok) {
+      temp.setContent('Kunde inte hitta gatunamn eller servicedagar nära denna punkt');
+      return;
+    }
     const nomJson = await nomRes.json();
     const addr = nomJson.address || {};
     const streetName = addr.road || addr.pedestrian || addr.cycleway || addr.footway || addr.residential || addr.street || addr.suburb;
     if (!streetName) {
-      popup.setContent("Kunde inte hitta gatunamn här");
+      temp.setContent('Kunde inte hitta gatunamn här');
       return;
     }
 
-    popup.setContent(`<strong>${streetName}</strong><br/>Hämtar servicedagar...`);
-
-    // Cache check
-    if (streetCache.has(streetName)) {
-      showStreetPopup(streetName, streetCache.get(streetName), popup);
-      return;
-    }
-
-    // Bygg target och anropa Worker
+    temp.setContent(`<strong>${streetName}</strong><br/>Hämtar servicedagar för gatan...`);
+    // Försök anropa servicedagar/street/<streetName> via Worker
     const targetUrl = `${BASE}/servicedagar/street/${encodeURIComponent(streetName)}?outputFormat=json&apiKey=${API_KEY}`;
     const workerUrl = proxyUrl(targetUrl);
-    console.log("Proxy fetch:", workerUrl);
-
-    const res = await fetch(workerUrl, { method: "GET", headers: { "Accept": "application/json" } });
-    console.log("Worker status:", res.status);
+    console.log('Proxy fetch fallback:', workerUrl);
+    const res = await fetch(workerUrl, { headers: { 'Accept': 'application/json' } });
     if (!res.ok) {
-      const text = await res.text();
-      console.error("Upstream error:", res.status, text);
-      popup.setContent(`<strong>${streetName}</strong><br/>Kunde inte hämta servicedagar (HTTP ${res.status})`);
+      const txt = await res.text();
+      console.error('Fallback HTTP', res.status, txt);
+      temp.setContent(`<strong>${streetName}</strong><br/>Kunde inte hämta servicedagar (HTTP ${res.status})`);
       return;
     }
-
     const data = await res.json();
-    streetCache.set(streetName, data);
-    showStreetPopup(streetName, data, popup);
+    if (!Array.isArray(data) || data.length === 0) {
+      temp.setContent(`<strong>${streetName}</strong><br/>Inga servicedagar hittades för gatan`);
+      return;
+    }
+    // Visa första posten eller slå ihop flera
+    const first = data[0];
+    const props = first.properties || first;
+    let html = `<strong>${streetName}</strong><br/>`;
+    if (props.ADDRESS) html += `${props.ADDRESS}<br/>`;
+    if (props.START_WEEKDAY || props.Weekday) html += `Dag: ${props.START_WEEKDAY || props.Weekday}<br/>Tid: ${props.START_TIME || props.StartTime || props.END_TIME || ''}<br/>`;
+    temp.setContent(html);
   } catch (err) {
-    console.error("handleMapClick error:", err);
-    popup.setContent("Fel vid hämtning av gatunamn eller servicedagar");
+    console.error('Click handler error:', err);
+    L.popup().setLatLng([lat, lon]).setContent('Fel vid sökning efter servicedagar').openOn(map);
   }
-}
+});
 
-function showStreetPopup(streetName, streetData, popup) {
-  if (!Array.isArray(streetData) || streetData.length === 0) {
-    popup.setContent(`<strong>${streetName}</strong><br/>Inga servicedagar hittades`).openOn(map);
-    return;
-  }
-  let html = `<strong>${streetName}</strong><br/>`;
-  streetData.forEach(sd => {
-    const day = sd.Weekday ?? "";
-    const start = sd.StartTime ?? "";
-    const end = sd.EndTime ?? "";
-    html += `Dag: ${day}<br/>Tid: ${start}–${end}<br/><br/>`;
-  });
-  popup.setContent(html).openOn(map);
-}
+/* Ladda allData i bakgrunden så det finns när användaren klickar */
+loadAllData().then(d => { allDataCache = d; console.log('allData loaded, features:', Array.isArray(d) ? d.length : 'unknown'); })
+  .catch(e => console.warn('Could not preload allData:', e));
 </script>
 </body>
 </html>
