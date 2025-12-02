@@ -2,7 +2,7 @@
 <html lang="sv">
 <head>
   <meta charset="utf-8" />
-  <title>Servicedagar karta</title>
+  <title>Servicedagar via OSM klick</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
   <style>html, body, #map { height: 100%; margin: 0; }</style>
 </head>
@@ -17,7 +17,7 @@ const WORKER_URL = "https://gentle-unit-77d4.johan-oestberg.workers.dev"; // uta
 const BASE = "https://openparking.stockholm.se/LTF-Tolken/v1";
 
 /* Initiera karta */
-const map = L.map('map').setView([59.33, 18.06], 12);
+const map = L.map('map').setView([59.33, 18.06], 13);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   maxZoom: 19,
   attribution: '&copy; OpenStreetMap'
@@ -29,66 +29,75 @@ function proxyUrl(target) {
   return `${base}/?target=${encodeURIComponent(target)}`;
 }
 
-/* Ladda lokal GeoJSON med geometrier (streets.geojson) */
-function loadLocalGeoJSON() {
-  fetch('streets.geojson')
-    .then(r => {
-      if (!r.ok) throw new Error('Kunde inte ladda streets.geojson');
-      return r.json();
-    })
-    .then(geojson => {
-      L.geoJSON(geojson, {
-        style: { color: '#2b7cff', weight: 4 },
-        onEachFeature: (feature, layer) => {
-          const name = feature.properties?.StreetName || feature.properties?.name || "Okänd gata";
-          layer.bindPopup(`<strong>${name}</strong><br/>Klick för servicedagar`);
-          layer.on('click', () => fetchStreetData(name, layer));
-        }
-      }).addTo(map);
-    })
-    .catch(err => {
-      console.error(err);
-      alert('Kunde inte ladda lokala geometrier. Lägg streets.geojson i samma repo.');
-    });
-}
+/* Enkel in‑memory cache för servicedagar per gata */
+const streetCache = new Map();
 
-/* Hämta servicedagar för en gata via Worker, med enkel caching */
-function fetchStreetData(streetName, layer) {
-  const cacheKey = `sd:${streetName}`;
-  const cached = sessionStorage.getItem(cacheKey);
-  if (cached) {
-    try {
-      const parsed = JSON.parse(cached);
-      if (Date.now() - parsed.ts < 10 * 60 * 1000) {
-        showStreetPopup(streetName, parsed.data, layer);
-        return;
-      }
-    } catch {}
+/* Debounce för klick så vi inte gör flera reverse geocode-anrop snabbt */
+let clickTimeout = null;
+const CLICK_DEBOUNCE_MS = 400;
+
+/* Klickhanterare: reverse geocode via Nominatim för att få gatunamn */
+map.on('click', (e) => {
+  if (clickTimeout) clearTimeout(clickTimeout);
+  clickTimeout = setTimeout(() => handleMapClick(e.latlng), CLICK_DEBOUNCE_MS);
+});
+
+async function handleMapClick(latlng) {
+  const { lat, lng } = latlng;
+  // Visa temporär popup medan vi jobbar
+  const temp = L.popup().setLatLng([lat, lng]).setContent("Hämtar gatunamn...").openOn(map);
+
+  try {
+    // Nominatim reverse geocode (väg: road eller pedestrian etc)
+    const nomUrl = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lng)}&addressdetails=1`;
+    const nomRes = await fetch(nomUrl, { headers: { "Accept": "application/json", "User-Agent": "github.com/yourrepo - contact" } });
+    if (!nomRes.ok) throw new Error(`Nominatim HTTP ${nomRes.status}`);
+    const nomJson = await nomRes.json();
+
+    // Försök hitta bästa gatunamn i address
+    const addr = nomJson.address || {};
+    const streetName = addr.road || addr.pedestrian || addr.cycleway || addr.footway || addr.residential || addr.street || addr.suburb;
+    if (!streetName) {
+      temp.setContent("Kunde inte hitta gatunamn här");
+      return;
+    }
+
+    temp.setContent(`<strong>${streetName}</strong><br/>Hämtar servicedagar...`);
+
+    // Kolla cache
+    if (streetCache.has(streetName)) {
+      const cached = streetCache.get(streetName);
+      showStreetPopup(streetName, cached, temp);
+      return;
+    }
+
+    // Bygg target och anropa Worker
+    const targetUrl = `${BASE}/servicedagar/street/${encodeURIComponent(streetName)}?outputFormat=json&apiKey=${API_KEY}`;
+    const workerUrl = proxyUrl(targetUrl);
+    console.log("Proxy fetch:", workerUrl);
+
+    const res = await fetch(workerUrl, { method: "GET", headers: { "Accept": "application/json" } });
+    console.log("Worker status:", res.status);
+    if (!res.ok) {
+      const text = await res.text();
+      console.error("Upstream error:", res.status, text);
+      temp.setContent(`<strong>${streetName}</strong><br/>Kunde inte hämta servicedagar (HTTP ${res.status})`);
+      return;
+    }
+
+    const data = await res.json();
+    streetCache.set(streetName, data);
+    showStreetPopup(streetName, data, temp);
+  } catch (err) {
+    console.error("handleMapClick error:", err);
+    temp.setContent("Fel vid hämtning av gatunamn eller servicedagar");
   }
-
-  const targetUrl = `${BASE}/servicedagar/street/${encodeURIComponent(streetName)}?outputFormat=json&apiKey=${API_KEY}`;
-  const url = proxyUrl(targetUrl);
-  console.log('Proxy fetch:', url);
-
-  fetch(url, { method: 'GET', headers: { 'Accept': 'application/json' } })
-    .then(res => {
-      console.log('Worker status:', res.status);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      return res.json();
-    })
-    .then(data => {
-      sessionStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now(), data }));
-      showStreetPopup(streetName, data, layer);
-    })
-    .catch(err => {
-      console.error('fetchStreetData error:', err);
-      layer.setPopupContent(`<strong>${streetName}</strong><br/>Kunde inte hämta servicedagar`).openPopup();
-    });
 }
 
-function showStreetPopup(streetName, streetData, layer) {
+/* Visa popup med servicedagar */
+function showStreetPopup(streetName, streetData, popup) {
   if (!Array.isArray(streetData) || streetData.length === 0) {
-    layer.setPopupContent(`<strong>${streetName}</strong><br/>Inga servicedagar hittades`).openPopup();
+    popup.setContent(`<strong>${streetName}</strong><br/>Inga servicedagar hittades`).openOn(map);
     return;
   }
   let html = `<strong>${streetName}</strong><br/>`;
@@ -98,11 +107,8 @@ function showStreetPopup(streetName, streetData, layer) {
     const end = sd.EndTime ?? "";
     html += `Dag: ${day}<br/>Tid: ${start}–${end}<br/><br/>`;
   });
-  layer.setPopupContent(html).openPopup();
+  popup.setContent(html).openOn(map);
 }
-
-/* Starta: ladda lokala geometrier */
-loadLocalGeoJSON();
 </script>
 </body>
 </html>
