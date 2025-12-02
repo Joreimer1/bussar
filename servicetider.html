@@ -29,14 +29,13 @@ function proxyUrl(target) {
   return `${base}/?target=${encodeURIComponent(target)}`;
 }
 
-/* Enkel in‑memory cache för servicedagar per gata */
+/* Enkel cache för servicedagar per gatunamn */
 const streetCache = new Map();
 
-/* Debounce för klick så vi inte gör flera reverse geocode-anrop snabbt */
+/* Debounce för klick */
 let clickTimeout = null;
-const CLICK_DEBOUNCE_MS = 400;
+const CLICK_DEBOUNCE_MS = 300;
 
-/* Klickhanterare: reverse geocode via Nominatim för att få gatunamn */
 map.on('click', (e) => {
   if (clickTimeout) clearTimeout(clickTimeout);
   clickTimeout = setTimeout(() => handleMapClick(e.latlng), CLICK_DEBOUNCE_MS);
@@ -44,30 +43,28 @@ map.on('click', (e) => {
 
 async function handleMapClick(latlng) {
   const { lat, lng } = latlng;
-  // Visa temporär popup medan vi jobbar
-  const temp = L.popup().setLatLng([lat, lng]).setContent("Hämtar gatunamn...").openOn(map);
+  const popup = L.popup().setLatLng([lat, lng]).setContent("Hämtar gatunamn...").openOn(map);
 
   try {
-    // Nominatim reverse geocode (väg: road eller pedestrian etc)
+    // Reverse geocode via Nominatim
     const nomUrl = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lng)}&addressdetails=1`;
-    const nomRes = await fetch(nomUrl, { headers: { "Accept": "application/json", "User-Agent": "github.com/yourrepo - contact" } });
+    const nomRes = await fetch(nomUrl, {
+      headers: { "Accept": "application/json", "User-Agent": "github.com/yourrepo - contact" }
+    });
     if (!nomRes.ok) throw new Error(`Nominatim HTTP ${nomRes.status}`);
     const nomJson = await nomRes.json();
-
-    // Försök hitta bästa gatunamn i address
     const addr = nomJson.address || {};
     const streetName = addr.road || addr.pedestrian || addr.cycleway || addr.footway || addr.residential || addr.street || addr.suburb;
     if (!streetName) {
-      temp.setContent("Kunde inte hitta gatunamn här");
+      popup.setContent("Kunde inte hitta gatunamn här");
       return;
     }
 
-    temp.setContent(`<strong>${streetName}</strong><br/>Hämtar servicedagar...`);
+    popup.setContent(`<strong>${streetName}</strong><br/>Hämtar servicedagar...`);
 
-    // Kolla cache
+    // Cache check
     if (streetCache.has(streetName)) {
-      const cached = streetCache.get(streetName);
-      showStreetPopup(streetName, cached, temp);
+      showStreetPopup(streetName, streetCache.get(streetName), popup);
       return;
     }
 
@@ -81,20 +78,19 @@ async function handleMapClick(latlng) {
     if (!res.ok) {
       const text = await res.text();
       console.error("Upstream error:", res.status, text);
-      temp.setContent(`<strong>${streetName}</strong><br/>Kunde inte hämta servicedagar (HTTP ${res.status})`);
+      popup.setContent(`<strong>${streetName}</strong><br/>Kunde inte hämta servicedagar (HTTP ${res.status})`);
       return;
     }
 
     const data = await res.json();
     streetCache.set(streetName, data);
-    showStreetPopup(streetName, data, temp);
+    showStreetPopup(streetName, data, popup);
   } catch (err) {
     console.error("handleMapClick error:", err);
-    temp.setContent("Fel vid hämtning av gatunamn eller servicedagar");
+    popup.setContent("Fel vid hämtning av gatunamn eller servicedagar");
   }
 }
 
-/* Visa popup med servicedagar */
 function showStreetPopup(streetName, streetData, popup) {
   if (!Array.isArray(streetData) || streetData.length === 0) {
     popup.setContent(`<strong>${streetName}</strong><br/>Inga servicedagar hittades`).openOn(map);
