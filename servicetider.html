@@ -11,7 +11,9 @@
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-const API_KEY = "bdbc0530-408c-4ac0-8ad4-bcda19d40d6e"; // byt till din riktiga nyckel
+const API_KEY = "bdbc0530-408c-4ac0-8ad4-bcda19d40d6e";
+const PROXY = "https://corsproxy.io/?";
+const BASE = "https://openparking.stockholm.se/LTF-Tolken/v1";
 
 // Initiera kartan
 const map = L.map('map').setView([59.33, 18.06], 12);
@@ -20,9 +22,9 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   attribution: '&copy; OpenStreetMap'
 }).addTo(map);
 
-// Hjälpfunktion: lägg till geometri och klickhändelse
+// Lägg till geometri och klickhändelse
 function addGeometry(item) {
-  const geom = item.Geometry.WGS84;
+  const geom = item.Geometry?.WGS84;
   if (!geom) return;
 
   let layer;
@@ -31,7 +33,7 @@ function addGeometry(item) {
     layer = L.polyline(latlngs, { color: "blue" }).addTo(map);
   } else if (geom.type === "MultiLineString") {
     const latlngs = geom.coordinates.map(line => line.map(c => [c[1], c[0]]));
-    layer = L.multiPolyline(latlngs, { color: "blue" }).addTo(map);
+    layer = L.polyline(latlngs.flat(), { color: "blue" }).addTo(map);
   } else if (geom.type === "Point") {
     const [lon, lat] = geom.coordinates;
     layer = L.marker([lat, lon]).addTo(map);
@@ -43,15 +45,15 @@ function addGeometry(item) {
   }
 }
 
-// Hjälpfunktion: hämta servicedagar för en gata
+// Hämta servicedagar för en gata
 function fetchStreetData(streetName, layer) {
-  const street = encodeURIComponent(streetName);
-  fetch(`https://openparking.stockholm.se/LTF-Tolken/v1/servicedagar/street/${street}?outputFormat=json&apiKey=${API_KEY}`)
+  const url = `${BASE}/servicedagar/street/${encodeURIComponent(streetName)}?outputFormat=json&apiKey=${API_KEY}`;
+  fetch(PROXY + encodeURIComponent(url))
     .then(res => res.json())
-    .then(streetData => {
+    .then(data => {
       let html = `<strong>${streetName}</strong><br/>`;
-      streetData.forEach(sd => {
-        html += `Dag: ${sd.Weekday} <br/>Tid: ${sd.StartTime}–${sd.EndTime}<br/><br/>`;
+      data.forEach(sd => {
+        html += `Dag: ${sd.Weekday}<br/>Tid: ${sd.StartTime}–${sd.EndTime}<br/><br/>`;
       });
       layer.setPopupContent(html).openPopup();
     })
@@ -61,8 +63,9 @@ function fetchStreetData(streetName, layer) {
     });
 }
 
-// Ladda alla servicedagar
-fetch(`https://openparking.stockholm.se/LTF-Tolken/v1/servicedagar?outputFormat=json&apiKey=${API_KEY}`)
+// Hämta alla servicedagar
+const allUrl = `${BASE}/servicedagar?outputFormat=json&apiKey=${API_KEY}`;
+fetch(PROXY + encodeURIComponent(allUrl))
   .then(res => res.json())
   .then(data => {
     data.forEach(addGeometry);
