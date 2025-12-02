@@ -7,12 +7,13 @@
   <style>html, body, #map { height: 100%; margin: 0; }</style>
 </head>
 <body>
+  test1
 <div id="map"></div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 const API_KEY = "bdbc0530-408c-4ac0-8ad4-bcda19d40d6e"; // byt till din riktiga nyckel
-const PROXY = "https://corsproxy.io/?";
+const WORKER_URL = "gentle-unit-77d4.johan-oestberg.workers.dev"; // byt till din Worker‑URL
 const BASE = "https://openparking.stockholm.se/LTF-Tolken/v1";
 
 // Initiera kartan
@@ -45,10 +46,10 @@ function addGeometry(item) {
   }
 }
 
-// Hjälpfunktion: hämta servicedagar för en gata
+// Hjälpfunktion: hämta servicedagar för en gata via Worker
 function fetchStreetData(streetName, layer) {
-  const url = `${BASE}/servicedagar/street/${encodeURIComponent(streetName)}?outputFormat=json&apiKey=${API_KEY}`;
-  fetch(PROXY + encodeURIComponent(url))
+  const targetUrl = `${BASE}/servicedagar/street/${encodeURIComponent(streetName)}?outputFormat=json&apiKey=${API_KEY}`;
+  fetch(`${WORKER_URL}/?target=${encodeURIComponent(targetUrl)}`)
     .then(res => res.json())
     .then(streetData => {
       let html = `<strong>${streetName}</strong><br/>`;
@@ -63,9 +64,9 @@ function fetchStreetData(streetName, layer) {
     });
 }
 
-// Hämta alla servicedagar
+// Hämta alla servicedagar via Worker
 const allUrl = `${BASE}/servicedagar?outputFormat=json&apiKey=${API_KEY}`;
-fetch(PROXY + encodeURIComponent(allUrl))
+fetch(`${WORKER_URL}/?target=${encodeURIComponent(allUrl)}`)
   .then(res => res.json())
   .then(data => {
     data.forEach(addGeometry);
