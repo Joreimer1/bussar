@@ -88,7 +88,7 @@
 <body>
   <div class="container">
     <div class="card" id="topCard">
-      <h1>SL Hållplatsavgångar</h1>
+      <h1>SL Hållplatsavgångar h</h1>
 
       <div class="button-group">
         <button id="locationBtn">📍 Plats</button>
@@ -665,199 +665,126 @@ const doSearch = debounce(async (qRaw) => {
   updateMapForMatches(matches.slice(0,40));
 });
 
-/* ---------- NY: Hämta och visa avgångar för en favorit ---------- */
-async function fetchAndShowDeparturesForFavorite(fav){
-  try{
-    showLoading(true);
-    await loadStopPoints();
-    await loadSites();
-
-    // Hitta stop-point objekt om möjligt
-    let sp = null;
-    if(fav.stopPointId){
-      sp = allStopPoints.find(p => String(p.id) === String(fav.stopPointId) || String(p.stop_point_id) === String(fav.stopPointId));
-    }
-    // Bestäm sites att fråga
-    let sitesToQuery = [];
-    if(sp){
-      const areaId = sp.stop_area_id || sp.parentId || sp.site_id || null;
-      if(areaId){
-        sitesToQuery = allSites.filter(s => [s.stop_area_id,s.stopAreaId,s.parentId,s.site_id,s.id].some(c => c && String(c)===String(areaId)));
-      }
-      if(sitesToQuery.length===0 && sp.name){
-        const nm = (sp.name||'').trim().toLowerCase();
-        sitesToQuery = allSites.filter(s => s.name && s.name.trim().toLowerCase().startsWith(nm));
-      }
-      if(sitesToQuery.length===0) sitesToQuery = [{ id: sp.site_id || ('sp-'+sp.id), name: sp.name }];
-    } else {
-      if(fav.stopAreaId){
-        sitesToQuery = allSites.filter(s => [s.stop_area_id,s.stopAreaId,s.parentId,s.site_id,s.id].some(c => c && String(c)===String(fav.stopAreaId)));
-      }
-      if(sitesToQuery.length===0 && fav.name){
-        const nm = (fav.name||'').trim().toLowerCase();
-        sitesToQuery = allSites.filter(s => s.name && s.name.trim().toLowerCase().startsWith(nm));
-      }
-      if(sitesToQuery.length===0) sitesToQuery = [{ id: fav.stopAreaId || fav.stopPointId || ('fav-'+Math.random()), name: fav.name || 'Favorit' }];
-    }
-
-    // Hämta avgångar och filtrera
-    let allDeps = [];
-    for(const site of sitesToQuery){
-      const res = await fetchDeparturesForSite(site, true);
-      (res.departures || []).forEach(dep => {
-        if(fav.stopPointId && !departureMatchesStopPoint(dep, fav.stopPointId)) return;
-        if(fav.stopAreaId && !departureMatchesStopArea(dep, fav.stopAreaId)) return;
-        if(fav.lines && String(fav.lines).trim() !== ''){
-          const allowed = String(fav.lines).split(',').map(s=>s.trim()).filter(Boolean);
-          if(allowed.length>0){
-            const designation = dep.line && dep.line.designation ? String(dep.line.designation) : String(dep.designation || '');
-            if(!allowed.includes(designation)) return;
-          }
-        }
-        if(!dep.fromStop || String(dep.fromStop).trim()===''){
-          dep.fromStop = fav.name ? `${fav.name} ${fav.stopPointId || fav.stopAreaId || ''}`.trim() : (fav.stopPointId || fav.stopAreaId || '');
-        }
-        allDeps.push(dep);
-      });
-    }
-
-    if(allDeps.length === 0){
-      departuresList.innerHTML = '<div class="no-departures">Inga avgångar hittades för denna favorit</div>';
-      departuresCard.style.display = 'block';
-    } else {
-      allDeps.sort((a,b)=> new Date(a.expected) - new Date(b.expected));
-      displayDepartures(allDeps);
-    }
-  }catch(e){
-    console.error('fetchAndShowDeparturesForFavorite', e);
-    showError('Kunde inte hämta avgångar för favoriten');
-  } finally {
-    showLoading(false);
-  }
-}
-/* ---------- SLUT NY FUNKTION ---------- */
-
-/* Render favorites list (both top and bottom) with line input restored and "Visa avgångar" */
-function renderFavoritesList(){
-  favoritesList.innerHTML = '';
-  favoritesListBottom.innerHTML = '';
+/* Visa samlat avgångsflöde för alla favoriter */
+async function showFavoritesDepartures(showMap = false){
+  await loadStopPoints();
+  await loadSites();
   if(!Array.isArray(favorites) || favorites.length===0){
-    favoritesListBottom.innerHTML = '<div class="no-departures">Inga favoriter sparade</div>';
+    departuresList.innerHTML = '<div class="no-departures">Inga favoriter sparade</div>';
+    departuresCard.style.display = 'block';
+    if(!showMap){ mapContainer.style.display = 'none'; clearMapMarkers(); }
     return;
   }
-  favorites.forEach((f, i)=>{
-    const name = escapeHtml(f.name || '');
-    const id = escapeHtml(f.stopPointId || f.stopAreaId || '');
-    const linesVal = escapeHtml(f.lines || '');
 
-    // Bottom list item (editable)
-    const item = document.createElement('div');
-    item.className = 'favorite-item';
-    item.innerHTML = `<div class="favorite-left"><div class="favorite-name">${name}</div><div class="favorite-id">${id}</div><div class="favorite-lines">Linjer: <input class="fav-lines-input" data-idx="${i}" value="${linesVal}" placeholder="t.ex. 1,2,3" /></div></div><div class="fav-actions"><button class="seeall-btn show-deps" data-idx="${i}">Visa avgångar</button><button class="remove-small" data-idx="${i}">Ta bort</button></div>`;
-    favoritesListBottom.appendChild(item);
+  showLoading(true);
+  departuresCard.style.display = 'none';
+  clearMapMarkers();
 
-    // Top list clone (for compact view)
-    const itemTop = item.cloneNode(true);
-    favoritesList.appendChild(itemTop);
-  });
+  const allDeps = [];
+  const mapMatches = [];
 
-  // Attach listeners for bottom list
-  favoritesListBottom.querySelectorAll('.remove-small').forEach(btn=>{
-    btn.addEventListener('click', (e)=>{
-      const idx = parseInt(btn.getAttribute('data-idx'));
-      if(!isNaN(idx)) { favorites.splice(idx,1); saveFavorites(); renderFavoritesList(); }
-    });
-  });
-  favoritesListBottom.querySelectorAll('.fav-lines-input').forEach(inp=>{
-    inp.addEventListener('change', (e)=>{
-      const idx = parseInt(inp.getAttribute('data-idx'));
-      if(!isNaN(idx)){
-        favorites[idx].lines = inp.value || '';
-        saveFavorites();
+  const favs = favorites.slice();
+  const concurrency = 4;
+  let i = 0;
+  const runners = new Array(concurrency).fill(0).map(async ()=>{
+    while(i < favs.length){
+      const idx = i++;
+      const fav = favs[idx];
+      try{
+        let sp = null;
+        if(fav.stopPointId){
+          sp = allStopPoints.find(p => String(p.id) === String(fav.stopPointId) || String(p.stop_point_id) === String(fav.stopPointId));
+        }
+        if(!sp && fav.stopAreaId){
+          sp = allStopPoints.find(p => String(p.stop_area_id) === String(fav.stopAreaId) || String(p.parentId) === String(fav.stopAreaId) || String(p.site_id) === String(fav.stopAreaId));
+        }
+        if(sp && sp.lat && sp.lon){
+          mapMatches.push({ id: String(sp.id), name: sp.name || fav.name || '', lat: sp.lat, lon: sp.lon });
+        } else {
+          const site = allSites.find(s => (fav.stopAreaId && (String(s.stop_area_id)===String(fav.stopAreaId) || String(s.id)===String(fav.stopAreaId))) || (fav.stopPointId && (String(s.site_id)===String(fav.stopPointId) || String(s.parentId)===String(fav.stopPointId))));
+          if(site && site.lat && site.lon){
+            mapMatches.push({ id: String(site.id), name: site.name || fav.name || '', lat: site.lat, lon: site.lon });
+          }
+        }
+
+        let sitesToQuery = [];
+        if(sp){
+          const areaId = sp.stop_area_id || sp.parentId || sp.site_id || null;
+          if(areaId){
+            sitesToQuery = allSites.filter(s => {
+              const cand = [s.stop_area_id, s.stopAreaId, s.parentId, s.site_id, s.id];
+              return cand.some(c => c && String(c) === String(areaId));
+            });
+          }
+          if(sitesToQuery.length === 0 && sp.name){
+            const nm = (sp.name||'').trim().toLowerCase();
+            sitesToQuery = allSites.filter(s => s.name && s.name.trim().toLowerCase().startsWith(nm));
+          }
+          if(sitesToQuery.length === 0){
+            sitesToQuery = [{ id: sp.site_id || ('sp-'+sp.id), name: sp.name }];
+          }
+        } else {
+          let siteCandidates = [];
+          if(fav.stopAreaId){
+            siteCandidates = allSites.filter(s => {
+              const cand = [s.stop_area_id, s.stopAreaId, s.parentId, s.site_id, s.id];
+              return cand.some(c => c && String(c) === String(fav.stopAreaId));
+            });
+          }
+          if(siteCandidates.length === 0 && fav.name){
+            const qn = (fav.name||'').trim().toLowerCase();
+            siteCandidates = allSites.filter(s => s.name && s.name.trim().toLowerCase().startsWith(qn));
+          }
+          if(siteCandidates.length > 0) sitesToQuery = siteCandidates;
+        }
+
+        for(const site of sitesToQuery){
+          const res = await fetchDeparturesForSite(site, true);
+          const deps = res.departures || [];
+          deps.forEach(dep => {
+            if(fav.stopPointId && !departureMatchesStopPoint(dep, fav.stopPointId)) return;
+            if(fav.stopAreaId && !departureMatchesStopArea(dep, fav.stopAreaId)) return;
+            if(fav.lines && String(fav.lines).trim() !== ''){
+              const allowed = String(fav.lines).split(',').map(s=>s.trim()).filter(Boolean);
+              if(allowed.length>0){
+                const designation = dep.line && dep.line.designation ? String(dep.line.designation) : String(dep.designation || '');
+                if(!allowed.includes(designation)) return;
+              }
+            }
+            dep._favName = fav.name || '';
+            allDeps.push(dep);
+          });
+        }
+      }catch(e){
+        console.error('fav fetch error', e);
       }
-    });
+    }
   });
-  favoritesListBottom.querySelectorAll('.show-deps').forEach(btn=>{
-    btn.addEventListener('click', (e)=>{
-      const idx = parseInt(btn.getAttribute('data-idx'));
-      if(!isNaN(idx)){
-        const fav = favorites[idx];
-        stopName.textContent = fav.name || '';
-        stopAreaEl.textContent = fav.stopPointId ? `StopPoint: ${fav.stopPointId}` : (fav.stopAreaId ? `Area: ${fav.stopAreaId}` : '');
-        stopInfo.style.display = 'block';
-        fetchAndShowDeparturesForFavorite(fav);
-      }
-    });
-  });
+  await Promise.all(runners);
 
-  // Attach listeners for top list (if visible)
-  favoritesList.querySelectorAll('.remove-small').forEach(btn=>{
-    btn.addEventListener('click', (e)=>{
-      const idx = parseInt(btn.getAttribute('data-idx'));
-      if(!isNaN(idx)) { favorites.splice(idx,1); saveFavorites(); renderFavoritesList(); }
-    });
-  });
-  favoritesList.querySelectorAll('.fav-lines-input').forEach(inp=>{
-    inp.addEventListener('change', (e)=>{
-      const idx = parseInt(inp.getAttribute('data-idx'));
-      if(!isNaN(idx)){
-        favorites[idx].lines = inp.value || '';
-        saveFavorites();
-      }
-    });
-  });
-  favoritesList.querySelectorAll('.show-deps').forEach(btn=>{
-    btn.addEventListener('click', (e)=>{
-      const idx = parseInt(btn.getAttribute('data-idx'));
-      if(!isNaN(idx)){
-        const fav = favorites[idx];
-        stopName.textContent = fav.name || '';
-        stopAreaEl.textContent = fav.stopPointId ? `StopPoint: ${fav.stopPointId}` : (fav.stopAreaId ? `Area: ${fav.stopAreaId}` : '');
-        stopInfo.style.display = 'block';
-        fetchAndShowDeparturesForFavorite(fav);
-      }
-    });
-  });
-}
+  showLoading(false);
 
-/* Set active button (controls visibility) */
-function setActiveButton(btn){
-  [locationBtn, favoritesBtn, searchBtn].forEach(b=>{ if(b) b.classList.remove('active'); });
-  if(btn) btn.classList.add('active');
-
-  if(btn === locationBtn){
-    searchContainer.classList.remove('show');
-    suggestions.style.display = 'none';
-    searchInput.value = '';
-    favoritesCard.style.display = 'none';
-    favoritesList.style.display = 'none';
-    favoritesInfo.style.display = 'none';
-    departuresCard.style.display = 'none';
-    seeAllBtn.style.display = 'none';
-  } else if(btn === favoritesBtn){
-    searchContainer.classList.remove('show');
-    suggestions.style.display = 'none';
-    searchInput.value = '';
-    favoritesCard.style.display = 'block';
+  if(allDeps.length === 0){
+    departuresList.innerHTML = '<div class="no-departures">Inga avgångar för dina favoriter</div>';
     departuresCard.style.display = 'block';
-    stopInfo.style.display = 'none';
-    topSupport.style.display = 'none';
-    showFavoritesDepartures(false).catch(e=>{ console.error(e); });
-  } else if(btn === searchBtn){
-    searchContainer.classList.add('show');
-    suggestions.style.display = 'none';
-    favoritesCard.style.display = 'none';
-    departuresCard.style.display = 'none';
-    stopInfo.style.display = 'none';
-    topSupport.style.display = 'none';
-    favoritesList.style.display = 'none';
-    favoritesInfo.style.display = 'none';
+  } else {
+    allDeps.forEach(dep => {
+      if(!dep.fromStop || String(dep.fromStop).trim() === ''){
+        if(dep._favName) dep.fromStop = dep._favName;
+      }
+    });
+    allDeps.sort((a,b)=> new Date(a.expected) - new Date(b.expected));
+    displayDepartures(allDeps);
   }
 
-  if(btn === locationBtn && stopInfo && stopInfo.style.display === 'block'){
-    seeAllBtn.style.display = 'inline-block';
+  renderFavoritesList();
+  favoritesCard.style.display = 'block';
+
+  if(showMap && mapMatches.length > 0){
+    updateMapForMatches(mapMatches);
   } else {
-    seeAllBtn.style.display = 'none';
+    mapContainer.style.display = 'none';
+    clearMapMarkers();
   }
 }
 
@@ -893,6 +820,72 @@ function toggleFavoriteCurrent(){
   saveFavorites();
   renderFavoritesList();
 }
+
+/* ---------- RENDER FAVORITES (AGGREGATED) ---------- */
+function renderFavoritesList(){
+  favoritesList.innerHTML = '';
+  favoritesListBottom.innerHTML = '';
+  if(!Array.isArray(favorites) || favorites.length===0){
+    favoritesListBottom.innerHTML = '<div class="no-departures">Inga favoriter sparade</div>';
+    return;
+  }
+  favorites.forEach((f, i)=>{
+    const name = escapeHtml(f.name || '');
+    const id = escapeHtml(f.stopPointId || f.stopAreaId || '');
+    const linesVal = escapeHtml(f.lines || '');
+
+    const item = document.createElement('div');
+    item.className = 'favorite-item';
+    item.innerHTML = `
+      <div class="favorite-left">
+        <div class="favorite-name">${name}</div>
+        <div class="favorite-id">${id}</div>
+        <div class="favorite-lines">Linjer: <input class="fav-lines-input" data-idx="${i}" value="${linesVal}" placeholder="t.ex. 1,2,3" /></div>
+      </div>
+      <div class="fav-actions">
+        <button class="remove-small" data-idx="${i}">Ta bort</button>
+      </div>`;
+    favoritesListBottom.appendChild(item);
+
+    const itemTop = item.cloneNode(true);
+    favoritesList.appendChild(itemTop);
+  });
+
+  // Bottom listeners
+  favoritesListBottom.querySelectorAll('.remove-small').forEach(btn=>{
+    btn.addEventListener('click', (e)=>{
+      const idx = parseInt(btn.getAttribute('data-idx'));
+      if(!isNaN(idx)) { favorites.splice(idx,1); saveFavorites(); renderFavoritesList(); }
+    });
+  });
+  favoritesListBottom.querySelectorAll('.fav-lines-input').forEach(inp=>{
+    inp.addEventListener('change', (e)=>{
+      const idx = parseInt(inp.getAttribute('data-idx'));
+      if(!isNaN(idx)){
+        favorites[idx].lines = inp.value || '';
+        saveFavorites();
+      }
+    });
+  });
+
+  // Top listeners
+  favoritesList.querySelectorAll('.remove-small').forEach(btn=>{
+    btn.addEventListener('click', (e)=>{
+      const idx = parseInt(btn.getAttribute('data-idx'));
+      if(!isNaN(idx)) { favorites.splice(idx,1); saveFavorites(); renderFavoritesList(); }
+    });
+  });
+  favoritesList.querySelectorAll('.fav-lines-input').forEach(inp=>{
+    inp.addEventListener('change', (e)=>{
+      const idx = parseInt(inp.getAttribute('data-idx'));
+      if(!isNaN(idx)){
+        favorites[idx].lines = inp.value || '';
+        saveFavorites();
+      }
+    });
+  });
+}
+/* ---------- SLUT RENDER FAVORITES ---------- */
 
 /* Clear search */
 clearSearchBtn.addEventListener('click', ()=>{
@@ -985,6 +978,7 @@ locationBtn.addEventListener('click', ()=>{
   }
 });
 
+/* Uppdaterad favoritesBtn: visa aggregerat flöde för alla favoriter */
 favoritesBtn.addEventListener('click', ()=>{
   searchContainer.classList.remove('show');
   suggestions.style.display = 'none';
@@ -999,6 +993,8 @@ favoritesBtn.addEventListener('click', ()=>{
   setActiveButton(favoritesBtn);
   favoritesCard.style.display = 'block';
   renderFavoritesList();
+  // Visa samlat flöde för alla favoriter (utan karta)
+  showFavoritesDepartures(false).catch(e=>{ console.error(e); });
 });
 
 searchBtn.addEventListener('click', ()=>{
@@ -1032,8 +1028,8 @@ seeAllBtn.style.display = 'none';
 loadStopPoints().catch(()=>{});
 loadSites().catch(()=>{});
 
-/* Optional: expose some helpers for debugging in console */
-window._debug = { favorites, allSites, allStopPoints, fetchAndShowDeparturesForFavorite };
+/* Expose debug helpers */
+window._debug = { favorites, allSites, allStopPoints };
 
 </script>
 </body>
