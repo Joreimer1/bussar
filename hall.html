@@ -30,7 +30,7 @@
   .action-col{flex:0 0 28%;display:flex;align-items:center;justify-content:center}
   .remove-btn{min-width:110px;background:linear-gradient(180deg,var(--remove-1),var(--remove-2));color:var(--white);border:0;padding:10px 12px;border-radius:10px;font-weight:800;box-shadow:0 8px 18px rgba(233,75,75,0.22)}
 
-  .suggestions{margin-top:10px;max-height:160px;overflow:auto;border:1px solid #2f3b46;background:#142026;border-radius:10px;display:none}
+  .suggestions{margin-top:10px;max-height:240px;overflow:auto;border:1px solid #2f3b46;background:#142026;border-radius:10px;display:none}
   .suggestion-item{padding:12px;border-bottom:1px solid #22313a;display:flex;gap:12px;align-items:flex-start;cursor:pointer}
   .suggestion-left{flex:1;display:flex;flex-direction:column;gap:6px}
   .suggestion-name{font-weight:700;color:#eaf4ff}
@@ -90,7 +90,7 @@
 <body>
   <div class="container">
     <div class="card" id="topCard">
-      <h1>SL Hållplatsavgångar by Johan</h1>
+      <h1>SL Hållplatsavgångar</h1>
 
       <div class="button-group">
         <button id="locationBtn">📍 Plats</button>
@@ -248,7 +248,7 @@ function initMapIfNeeded(){
 }
 function clearMapMarkers(){ if(!markersLayer) return; markersLayer.clearLayers(); }
 
-/* Update map with matches */
+/* Update map with matches and fit bounds to show all results */
 function updateMapForMatches(matches){
   if(!matches || matches.length===0){ mapContainer.style.display = 'none'; clearMapMarkers(); return; }
   const withCoords = matches.map(m=>{
@@ -289,8 +289,20 @@ function updateMapForMatches(matches){
     } catch(e) { console.error('User pos marker error', e); }
   }
 
-  if(bounds.length===1){ map.setView(bounds[0], 17); setTimeout(()=>{ if(map) map.invalidateSize(); }, 80); }
-  else { try{ map.fitBounds(bounds, { padding: [30,30] }); }catch(e){ map.setView(bounds[0], 13); } setTimeout(()=>{ if(map) map.invalidateSize(); }, 80); }
+  // Fit bounds to show all markers with padding; if only one marker, zoom in
+  if(bounds.length===1){
+    map.setView(bounds[0], 17);
+    setTimeout(()=>{ if(map) map.invalidateSize(); }, 80);
+  } else {
+    try{
+      const latlngs = bounds.map(b => L.latLng(b[0], b[1]));
+      const group = L.featureGroup(latlngs.map(ll => L.marker(ll)));
+      map.fitBounds(group.getBounds(), { padding: [40,40] });
+    }catch(e){
+      map.setView(bounds[0], 13);
+    }
+    setTimeout(()=>{ if(map) map.invalidateSize(); }, 80);
+  }
 
   mapContainer.style.display = 'block';
 }
@@ -534,9 +546,7 @@ async function selectStopPointById(spId){
   if(currentMode === 'search'){
     searchContainer.classList.add('show');
     suggestions.style.display = 'none';
-    // show map (updateMapForMatches called by search)
   } else {
-    // hide search UI after selecting from location flow
     setTimeout(()=>{ searchContainer.classList.remove('show'); suggestions.style.display='none'; searchInput.value=''; }, 160);
   }
 }
@@ -641,13 +651,53 @@ const doSearch = debounce(async (qRaw) => {
   updateMapForMatches(matches.slice(0,40));
 });
 
+/* Show favorites as a single search-like flow:
+   - Build a matches array from favorites (with lat/lon and name)
+   - Populate suggestions with favorites in the same style as search results
+   - Center/zoom map to show all favorite markers
+*/
+async function showFavoritesAsSearchResults(){
+  await loadStopPoints();
+  // Build matches from favorites by finding stop-points
+  const matches = [];
+  favorites.forEach(f=>{
+    const spId = f.stopPointId || f.stopAreaId || '';
+    if(!spId) return;
+    const sp = allStopPoints.find(p => String(p.id) === String(spId) || String(p.stop_point_id) === String(spId));
+    if(sp){
+      matches.push({ id: String(sp.id), name: sp.name || f.name || '', lat: sp.lat, lon: sp.lon, place: sp.place || sp.town || '' });
+    } else {
+      // fallback: show entry without coords (will not be mapped)
+      matches.push({ id: String(spId), name: f.name || spId, lat: null, lon: null, place: '' });
+    }
+  });
+
+  if(matches.length === 0){
+    suggestions.innerHTML = '<div class="suggestion-item">Inga favoriter sparade</div>';
+    suggestions.style.display = 'block';
+    updateMapForMatches([]);
+    return;
+  }
+
+  // Populate suggestions (single flow)
+  suggestions.innerHTML = matches.map(m=>{
+    const name = escapeHtml(m.name || '');
+    const note = m.place ? `<div class="suggestion-note">${escapeHtml(m.place)}</div>` : '';
+    const favStar = '⭐';
+    return `<div class="suggestion-item" data-id="${escapeHtml(m.id)}"><div class="suggestion-left"><div class="suggestion-name">${name}</div><div class="suggestion-id">StopPoint: ${escapeHtml(m.id)}</div>${note}</div><div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px"><div class="suggestion-star" data-id="${escapeHtml(m.id)}">${favStar}</div></div></div>`;
+  }).join('');
+  suggestions.style.display = 'block';
+
+  // Show map and center/zoom to include all favorites that have coords
+  updateMapForMatches(matches);
+}
+
 /* Set active button (controls visibility) */
 function setActiveButton(btn){
   [locationBtn, favoritesBtn, searchBtn].forEach(b=>{ if(b) b.classList.remove('active'); });
   if(btn) btn.classList.add('active');
 
   // Default hide elements that should not appear on certain modes
-  // Favorites must never be shown when location is active
   if(btn === locationBtn){
     // Clear search UI and suggestions
     searchContainer.classList.remove('show');
@@ -657,21 +707,22 @@ function setActiveButton(btn){
     favoritesCard.style.display = 'none';
     favoritesList.style.display = 'none';
     favoritesInfo.style.display = 'none';
-    // Show stop info area (if set later)
-    // Hide departuresCard until departures are loaded for location
+    // Hide departures until loaded for location
     departuresCard.style.display = 'none';
-    // Show seeAll only when stopInfo is visible (handled below)
   } else if(btn === favoritesBtn){
-    // Favorites view: show favorites card, hide search and stop info and departures
-    searchContainer.classList.remove('show');
+    // Favorites view: show favorites card and also show favorites as search-like flow
+    searchContainer.classList.add('show');
     suggestions.style.display = 'none';
     searchInput.value = '';
     favoritesCard.style.display = 'block';
     departuresCard.style.display = 'none';
     stopInfo.style.display = 'none';
     topSupport.style.display = 'none';
+    // show suggestions and map for favorites
     favoritesList.style.display = 'none';
     favoritesInfo.style.display = 'none';
+    // populate suggestions with favorites and map
+    showFavoritesAsSearchResults().catch(e=>{ console.error(e); });
   } else if(btn === searchBtn){
     // Search view: show search container, hide favorites and departures and stop info
     searchContainer.classList.add('show');
@@ -680,7 +731,6 @@ function setActiveButton(btn){
     departuresCard.style.display = 'none';
     stopInfo.style.display = 'none';
     topSupport.style.display = 'none';
-    // ensure favorites inside search are hidden
     favoritesList.style.display = 'none';
     favoritesInfo.style.display = 'none';
   }
@@ -806,7 +856,7 @@ suggestions.addEventListener('click', (e)=>{
   if(star){
     const id = star.getAttribute('data-id');
     if(!id) return;
-    // toggle favorite for that stopPoint id (this is allowed from search)
+    // toggle favorite for that stopPoint id (this is allowed from search or favorites flow)
     const existing = favorites.findIndex(f => f.stopPointId && String(f.stopPointId)===String(id));
     if(existing !== -1){
       favorites.splice(existing,1);
@@ -890,7 +940,7 @@ locationBtn.addEventListener('click', ()=>{
 
 favoritesBtn.addEventListener('click', ()=>{
   // Clear search and stop info when showing favorites
-  searchContainer.classList.remove('show');
+  searchContainer.classList.add('show'); // show search-like area to present favorites as a single flow
   suggestions.style.display = 'none';
   searchInput.value = '';
   stopInfo.style.display = 'none';
