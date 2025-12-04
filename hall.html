@@ -90,7 +90,7 @@
 <body>
   <div class="container">
     <div class="card" id="topCard">
-      <h1>SL Hållplatsavgångarna</h1>
+      <h1>SL Hållplatsavgångar</h1>
 
       <div class="button-group">
         <button id="locationBtn">📍 Plats</button>
@@ -654,16 +654,16 @@ const doSearch = debounce(async (qRaw) => {
 /* Show favorites as departures flow:
    - For each favorite, find stop-point and fetch departures filtered by that favorite (stopPointId/stopAreaId and lines)
    - Aggregate departures into a single feed and display them
-   - Also show map markers for favorites that have coordinates and fit bounds to show all
+   - Also optionally show map markers for favorites that have coordinates and fit bounds to show all
+   - Parameter showMap: when false, do not display or update the map (used when favorites view should not show map)
 */
-async function showFavoritesDepartures(){
+async function showFavoritesDepartures(showMap = false){
   await loadStopPoints();
   await loadSites();
   if(!Array.isArray(favorites) || favorites.length===0){
     departuresList.innerHTML = '<div class="no-departures">Inga favoriter sparade</div>';
     departuresCard.style.display = 'block';
-    mapContainer.style.display = 'none';
-    clearMapMarkers();
+    if(!showMap){ mapContainer.style.display = 'none'; clearMapMarkers(); }
     return;
   }
 
@@ -695,7 +695,7 @@ async function showFavoritesDepartures(){
         if(sp && sp.lat && sp.lon){
           mapMatches.push({ id: String(sp.id), name: sp.name || fav.name || '', lat: sp.lat, lon: sp.lon });
         } else {
-          // try to find site with coords
+          // fallback: show site coords if available
           const site = allSites.find(s => (fav.stopAreaId && (String(s.stop_area_id)===String(fav.stopAreaId) || String(s.id)===String(fav.stopAreaId))) || (fav.stopPointId && (String(s.site_id)===String(fav.stopPointId) || String(s.parentId)===String(fav.stopPointId))));
           if(site && site.lat && site.lon){
             mapMatches.push({ id: String(site.id), name: site.name || fav.name || '', lat: site.lat, lon: site.lon });
@@ -718,7 +718,7 @@ async function showFavoritesDepartures(){
             sitesToQuery = allSites.filter(s => s.name && s.name.trim().toLowerCase().startsWith(nm));
           }
           if(sitesToQuery.length === 0){
-            // fallback: create a pseudo-site object to query by id (some APIs accept site id)
+            // fallback: create a pseudo-site object to query by id
             sitesToQuery = [{ id: sp.site_id || ('sp-'+sp.id), name: sp.name }];
           }
         } else {
@@ -786,12 +786,18 @@ async function showFavoritesDepartures(){
   renderFavoritesList();
   favoritesCard.style.display = 'block';
 
-  // Show map markers for favorites (only those with coords)
-  if(mapMatches.length > 0){
+  // Show map markers for favorites only if showMap is true
+  if(showMap && mapMatches.length > 0){
     updateMapForMatches(mapMatches);
   } else {
-    mapContainer.style.display = 'none';
-    clearMapMarkers();
+    // Ensure map is hidden when showMap is false
+    if(!showMap){
+      mapContainer.style.display = 'none';
+      clearMapMarkers();
+    } else {
+      mapContainer.style.display = 'none';
+      clearMapMarkers();
+    }
   }
 }
 
@@ -812,6 +818,7 @@ function setActiveButton(btn){
     favoritesInfo.style.display = 'none';
     // Hide departures until loaded for location
     departuresCard.style.display = 'none';
+    // Ensure map visibility handled by location flow
   } else if(btn === favoritesBtn){
     // Favorites view: show favorites card and show aggregated departures for favorites
     searchContainer.classList.add('show');
@@ -821,8 +828,8 @@ function setActiveButton(btn){
     departuresCard.style.display = 'block';
     stopInfo.style.display = 'none';
     topSupport.style.display = 'none';
-    // populate departures and map for favorites
-    showFavoritesDepartures().catch(e=>{ console.error(e); });
+    // populate departures for favorites but do NOT show map
+    showFavoritesDepartures(false).catch(e=>{ console.error(e); });
   } else if(btn === searchBtn){
     // Search view: show search container, hide favorites and departures and stop info
     searchContainer.classList.add('show');
