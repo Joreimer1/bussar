@@ -74,9 +74,6 @@
   .loading-text{color:var(--muted);font-size:14px}
 
   .no-departures{text-align:center;color:var(--muted);padding:16px}
-
-  /* Se alla knapp (liten röd) - flyttad lite till vänster genom större högermarginal */
-  .seeall-btn{background:linear-gradient(180deg,var(--remove-1),var(--remove-2));color:var(--white);border:0;padding:8px 10px;border-radius:8px;font-weight:800;cursor:pointer;margin-right:14px}
   @media(max-width:420px){
     .search-input{margin-left:8px;font-size:14px}
     .action-col{flex-basis:34%}
@@ -85,81 +82,12 @@
     .fav-actions{flex-basis:36%}
     #resultsMap{height:240px}
   }
-
- /* Lägg detta sist i din <style> så det får företräde */
-.location-active #stopInfo {
-  min-height: 120px;    /* öka lite; justera efter behov */
-  padding-top: 16px;    /* mer luft upptill */
-  padding-bottom: 16px; /* mer luft nedtill */
-}
-
-/* Små skärmar: något mindre höjd så det inte tar över */
-@media (max-width: 420px) {
-  .location-active #stopInfo {
-    min-height: 92px;
-    padding-top: 12px;
-    padding-bottom: 12px;
-  }
-}
- /* Gör högerkolumnen i stop-row till en kolumn som justerar barnen till höger */
-.stop-row > div:last-child {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end; /* här sker högerjusteringen */
-  gap: 6px;
-}
-
-/* Se alla-knapp och stjärna får samma box‑egenskaper för exakt högerkant */
-.seeall-btn,
-.favorite-star {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  line-height: 1;
-  cursor: pointer;
-}
-
-/* Nollställ knappens högermarginal så den inte skjuter utanför */
-.seeall-btn {
-  margin-right: 0 !important;
-  padding: 8px 10px; /* justera vid behov */
-  height: 28px;      /* gör höjden matchande */
-}
-
-/* Ge stjärnan samma visuella höjd så högra kanten matchar */
-.favorite-star {
-  font-size: 20px;   /* justera storlek efter smak */
-  width: 28px;
-  height: 28px;
-  text-align: center;
-}
-
-/* Små skärmar: behåll proportioner */
-@media (max-width: 420px) {
-  .seeall-btn { padding: 6px 8px; height: 26px; }
-  .favorite-star { font-size: 18px; width: 26px; height: 26px; }
-}
- /* Mer luft ovanför hela StopPoint-rutan */
-#stopInfo {
-  padding-top: 12px; /* öka från t.ex. 12px till 14–18px efter smak */
-}
-
-/* Flytta ned högerkolumnen (Se alla + stjärna) lite */
-.stop-row > div:last-child {
-  margin-top: 6px;   /* flyttar hela kolumnen nedåt; justera 4–12px */
-  gap: 10px;         /* ökar vertikalt mellan knapp och stjärna */
-}
-
-/* Alternativ: om du bara vill flytta stjärnan nedåt */
-.favorite-star {
-  margin-top: 12px;   /* flyttar endast stjärnan nedåt */
-}
 </style>
 </head>
 <body>
   <div class="container">
     <div class="card" id="topCard">
-      <h1>SL Hållplatsavgångar J</h1>
+      <h1>SL Hållplatsavgångar f</h1>
 
       <div class="button-group">
         <button id="locationBtn">📍 Plats</button>
@@ -286,8 +214,6 @@ function debounce(fn, wait=250){ let t=null; return (...a)=>{ clearTimeout(t); t
     return copy;
   });
   localStorage.setItem('sl_favorites_sp', JSON.stringify(favorites));
-  // Render bottom favorites list on load
-  renderFavoritesListBottom();
 })();
 
 /* Save favorites (normalized) */
@@ -304,77 +230,7 @@ function saveFavorites(){
   }
   localStorage.setItem('sl_favorites_sp', JSON.stringify(favorites));
   refreshAllStars();
-  renderFavoritesListBottom(); // uppdatera listan när favoriter sparas
 }
-
-/* ---------- NY FUNKTION: renderFavoritesListBottom (global scope) ---------- */
-/* Rendera listan i favoritkortet längst ner (favoritesListBottom) och visa stop-id */
-function renderFavoritesListBottom(){
-  // Töm listan först
-  favoritesListBottom.innerHTML = '';
-
-  if(!Array.isArray(favorites) || favorites.length === 0){
-    favoritesListBottom.innerHTML = '<div class="no-departures">Inga favoriter sparade</div>';
-    return;
-  }
-
-  favorites.forEach(fav => {
-    const card = document.createElement('div');
-    card.className = 'favorite-item';
-
-    // Vänster kolumn: namn + id + linjer
-    const left = document.createElement('div');
-    left.className = 'favorite-left';
-
-    const nameEl = document.createElement('div');
-    nameEl.className = 'favorite-name';
-    nameEl.textContent = fav.name || (fav.stopPointId ? `Hållplats ${fav.stopPointId}` : 'Favorit');
-
-    const idEl = document.createElement('div');
-    idEl.className = 'favorite-id';
-    // Visa stopPointId om finns, annars stopAreaId, annars tomt
-    idEl.textContent = fav.stopPointId ? String(fav.stopPointId) : (fav.stopAreaId ? String(fav.stopAreaId) : '');
-
-    const linesEl = document.createElement('div');
-    linesEl.className = 'favorite-lines';
-    linesEl.textContent = fav.lines ? String(fav.lines) : '';
-
-    left.appendChild(nameEl);
-    if(idEl.textContent) left.appendChild(idEl);
-    if(linesEl.textContent) left.appendChild(linesEl);
-
-    // Höger kolumn: actions (t.ex. input + ta bort)
-    const actions = document.createElement('div');
-    actions.className = 'fav-actions';
-
-    const linesInput = document.createElement('input');
-    linesInput.className = 'fav-lines-input';
-    linesInput.value = fav.lines || '';
-    linesInput.placeholder = 'Linjer (valfritt)';
-    linesInput.addEventListener('change', (e) => {
-      fav.lines = e.target.value;
-      saveFavorites();
-    });
-
-    const removeBtn = document.createElement('button');
-    removeBtn.className = 'remove-small';
-    removeBtn.textContent = 'Ta bort';
-    removeBtn.addEventListener('click', () => {
-      favorites = favorites.filter(x => !( (x.stopPointId && fav.stopPointId && String(x.stopPointId)===String(fav.stopPointId)) || (x.stopAreaId && fav.stopAreaId && String(x.stopAreaId)===String(fav.stopAreaId)) ));
-      saveFavorites();
-      renderFavoritesListBottom();
-    });
-
-    actions.appendChild(linesInput);
-    actions.appendChild(removeBtn);
-
-    card.appendChild(left);
-    card.appendChild(actions);
-
-    favoritesListBottom.appendChild(card);
-  });
-}
-/* ---------- SLUT NY FUNKTION ---------- */
 
 /* Leaflet map */
 let map = null;
@@ -734,16 +590,21 @@ async function findNearestStop(userLat,userLon){
 
     const displayName = nearest.name || (matchedSites[0] && matchedSites[0].name) || 'Okänd hållplats';
     stopName.textContent = displayName;
+    if(minD !== null){ if(minD < 1) stopDistance.textContent = `${Math.round(minD*1000)} meter bort`; else stopDistance.textContent = `${minD.toFixed(2)} km bort`; } else stopDistance.textContent = '';
+    stopAreaEl.textContent = currentStopPointId ? `StopPoint: ${currentStopPointId}` : '';
+    stopInfo.style.display = 'block'; topSupport.style.display = 'flex';
+    currentStop = matchedSites.length>0 ? matchedSites[0] : { id: nearest.site_id || ('sp-'+(nearest.id||Math.random())), name: displayName };
+    currentMode = 'location';
+    setActiveButton(locationBtn);
+    favoritesCard.style.display = 'none';
+    showLoading(false);
 
-    // fortsätt med resten av findNearestStop...
-    showLoading(false);
-  }catch(e){
-    console.error('findNearestStop', e);
-    showLoading(false);
-    showError('Kunde inte hitta närmaste hållplats');
-  }
+    refreshAllStars();
+
+    if(matchedSites.length>0) getDeparturesFromSitesWithFiltering(matchedSites, { stopPointId: currentStopPointId }, true);
+    else getDeparturesFromSitesWithFiltering([currentStop], { stopPointId: currentStopPointId }, true);
+  }catch(e){ showLoading(false); showError('Kunde inte hitta hållplats'); console.error(e); }
 }
-
 
 /* Fetch + filter pipeline */
 async function getDeparturesFromSitesWithFiltering(stops, opts={}, force=false){
@@ -1265,7 +1126,6 @@ seeAllBtn.style.display = 'none';
 /* Initial load of caches in background */
 loadStopPoints().catch(()=>{});
 loadSites().catch(()=>{});
-
 
 </script>
 </body>
