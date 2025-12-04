@@ -85,6 +85,20 @@
     .fav-actions{flex-basis:36%}
     #resultsMap{height:240px}
   }
+ 
+ /* Lägg detta efter dina befintliga .card / #topCard-regler */
+.location-active #topCard {
+  min-height: 520px;
+  padding: 24px;
+}
+
+/* Anpassning för små skärmar */
+@media (max-width: 420px) {
+  .location-active #topCard {
+    min-height: 420px;
+    padding: 18px;
+  }
+}
 </style>
 </head>
 <body>
@@ -808,7 +822,13 @@ async function showFavoritesDepartures(showMap = false){
 function setActiveButton(btn){
   [locationBtn, favoritesBtn, searchBtn].forEach(b=>{ if(b) b.classList.remove('active'); });
   if(btn) btn.classList.add('active');
-
+ 
+// I början av setActiveButton(btn) eller direkt efter att du satt/taget bort .active på knapparna:
+if (btn === locationBtn) {
+  document.body.classList.add('location-active');
+} else {
+  document.body.classList.remove('location-active');
+}
   // Default hide elements that should not appear on certain modes
   if(btn === locationBtn){
     // Clear search UI and suggestions
