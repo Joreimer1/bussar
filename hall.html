@@ -139,6 +139,21 @@
   .seeall-btn { padding: 6px 8px; height: 26px; }
   .favorite-star { font-size: 18px; width: 26px; height: 26px; }
 }
+ /* Mer luft ovanför hela StopPoint-rutan */
+#stopInfo {
+  padding-top: 14px; /* öka från t.ex. 12px till 14–18px efter smak */
+}
+
+/* Flytta ned högerkolumnen (Se alla + stjärna) lite */
+.stop-row > div:last-child {
+  margin-top: 6px;   /* flyttar hela kolumnen nedåt; justera 4–12px */
+  gap: 10px;         /* ökar vertikalt mellan knapp och stjärna */
+}
+
+/* Alternativ: om du bara vill flytta stjärnan nedåt */
+.favorite-star {
+  margin-top: 6px;   /* flyttar endast stjärnan nedåt */
+}
 </style>
 </head>
 <body>
