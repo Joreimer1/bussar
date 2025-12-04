@@ -90,7 +90,7 @@
 <body>
   <div class="container">
     <div class="card" id="topCard">
-      <h1>SL Hållplatsavgångar*</h1>
+      <h1>SL Hållplatsavgångar @</h1>
 
       <div class="button-group">
         <button id="locationBtn">📍 Plats</button>
@@ -625,6 +625,9 @@ const doSearch = debounce(async (qRaw) => {
     favoritesInfo.style.display = 'none';
     favoritesList.style.display = 'none';
     updateMapForMatches([]);
+    departuresCard.style.display = 'none';
+    stopInfo.style.display = 'none';
+    topSupport.style.display = 'none';
     return;
   }
   await loadStopPoints();
@@ -633,11 +636,11 @@ const doSearch = debounce(async (qRaw) => {
     return n.includes(q) || note.includes(q);
   }).slice(0,40);
   const newHash = JSON.stringify(matches.map(m=>m.id));
-  if(newHash === lastSearchResults){ 
+  if(newHash === lastSearchResults){
     // ensure suggestions visible and map updated
     if(matches.length>0) suggestions.style.display='block';
-    updateMapForMatches(matches); 
-    return; 
+    updateMapForMatches(matches);
+    return;
   }
   lastSearchResults = newHash;
   if(matches.length === 0){ suggestions.innerHTML = '<div class="suggestion-item">Inga resultat</div>'; suggestions.style.display = 'block'; updateMapForMatches([]); return; }
@@ -820,8 +823,8 @@ function setActiveButton(btn){
     departuresCard.style.display = 'none';
     // Ensure map visibility handled by location flow
   } else if(btn === favoritesBtn){
-    // Favorites view: show favorites card and show aggregated departures for favorites
-    searchContainer.classList.add('show');
+    // Favorites view: hide search UI entirely and show aggregated departures for favorites
+    searchContainer.classList.remove('show');
     suggestions.style.display = 'none';
     searchInput.value = '';
     favoritesCard.style.display = 'block';
@@ -942,14 +945,29 @@ function renderFavoritesList(){
   });
 }
 
-/* Clear search */
+/* Clear search
+   Updated: ensure everything is cleared when Rensa is clicked, including departures card,
+   stop info, map, suggestions and internal selection state. This fixes the case where
+   a prior map click left the departures card visible.
+*/
 clearSearchBtn.addEventListener('click', ()=>{
+  // Clear input and UI elements
   searchInput.value = '';
   suggestions.style.display = 'none';
   updateMapForMatches([]);
-  // ensure search page shows nothing else
-  favoritesInfo.style.display = 'none';
-  favoritesList.style.display = 'none';
+  // Hide departures and stop info and support
+  departuresCard.style.display = 'none';
+  stopInfo.style.display = 'none';
+  topSupport.style.display = 'none';
+  // Clear internal selection state
+  currentStop = null;
+  currentStopPointId = null;
+  currentStopAreaId = null;
+  lastSelectedFromSearch = false;
+  // Clear map markers
+  clearMapMarkers();
+  mapContainer.style.display = 'none';
+  // Reset active button if needed (keep current mode but ensure search UI is clean)
 });
 
 /* Suggestion click handling (delegate) */
@@ -1041,14 +1059,17 @@ locationBtn.addEventListener('click', ()=>{
 });
 
 favoritesBtn.addEventListener('click', ()=>{
-  // Clear search and stop info when showing favorites
-  searchContainer.classList.add('show'); // show search-like area to present favorites
+  // When favorites is active we must NOT show the search UI or search input.
+  // Hide search container and map, show aggregated favorites departures.
+  searchContainer.classList.remove('show');
   suggestions.style.display = 'none';
   searchInput.value = '';
   stopInfo.style.display = 'none';
   topSupport.style.display = 'none';
   departuresCard.style.display = 'block';
   seeAllBtn.style.display = 'none';
+  mapContainer.style.display = 'none';
+  clearMapMarkers();
 
   setActiveButton(favoritesBtn);
   favoritesCard.style.display = 'block';
