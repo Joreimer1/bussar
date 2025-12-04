@@ -101,12 +101,50 @@
     padding-bottom: 12px;
   }
 }
+ /* Gör högerkolumnen i stop-row till en kolumn som justerar barnen till höger */
+.stop-row > div:last-child {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end; /* här sker högerjusteringen */
+  gap: 6px;
+}
+
+/* Se alla-knapp och stjärna får samma box‑egenskaper för exakt högerkant */
+.seeall-btn,
+.favorite-star {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  cursor: pointer;
+}
+
+/* Nollställ knappens högermarginal så den inte skjuter utanför */
+.seeall-btn {
+  margin-right: 0 !important;
+  padding: 8px 10px; /* justera vid behov */
+  height: 28px;      /* gör höjden matchande */
+}
+
+/* Ge stjärnan samma visuella höjd så högra kanten matchar */
+.favorite-star {
+  font-size: 20px;   /* justera storlek efter smak */
+  width: 28px;
+  height: 28px;
+  text-align: center;
+}
+
+/* Små skärmar: behåll proportioner */
+@media (max-width: 420px) {
+  .seeall-btn { padding: 6px 8px; height: 26px; }
+  .favorite-star { font-size: 18px; width: 26px; height: 26px; }
+}
 </style>
 </head>
 <body>
   <div class="container">
     <div class="card" id="topCard">
-      <h1>SL Hållplatsavgångar</h1>
+      <h1>SL Hållplatsavgångar dev1</h1>
 
       <div class="button-group">
         <button id="locationBtn">📍 Plats</button>
