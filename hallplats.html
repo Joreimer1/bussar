@@ -88,7 +88,7 @@
 <body>
   <div class="container">
     <div class="card" id="topCard">
-      <h1>SL Hållplatsavgångar devn1</h1>
+      <h1>SL Hållplatsavgångar</h1>
 
       <div class="button-group">
         <button id="locationBtn">📍 Plats</button>
@@ -780,19 +780,42 @@ async function showFavoritesDepartures(showMap = false){
         for(const site of sitesToQuery){
           const res = await fetchDeparturesForSite(site, true);
           const deps = res.departures || [];
-          deps.forEach(dep => {
-            if(fav.stopPointId && !departureMatchesStopPoint(dep, fav.stopPointId)) return;
-            if(fav.stopAreaId && !departureMatchesStopArea(dep, fav.stopAreaId)) return;
-            if(fav.lines && String(fav.lines).trim() !== ''){
-              const allowed = String(fav.lines).split(',').map(s=>s.trim()).filter(Boolean);
-              if(allowed.length>0){
-                const designation = dep.line && dep.line.designation ? String(dep.line.designation) : String(dep.designation || '');
-                if(!allowed.includes(designation)) return;
-              }
-            }
-            dep._favName = fav.name || '';
-            allDeps.push(dep);
-          });
+(res.departures || []).forEach(dep => {
+  // Filtrera enligt favoritens stopPoint/stopArea/linjer
+  if(fav.stopPointId && !departureMatchesStopPoint(dep, fav.stopPointId)) return;
+  if(fav.stopAreaId && !departureMatchesStopArea(dep, fav.stopAreaId)) return;
+  if(fav.lines && String(fav.lines).trim() !== ''){
+    const allowed = String(fav.lines).split(',').map(s=>s.trim()).filter(Boolean);
+    if(allowed.length>0){
+      const designation = dep.line && dep.line.designation ? String(dep.line.designation) : String(dep.designation || '');
+      if(!allowed.includes(designation)) return;
+    }
+  }
+
+  // --- NY: säkerställ att fromStop innehåller stop-id när möjligt ---
+  // Försök extrahera stopPoint från departure själv först
+  const extracted = extractStopPointId(dep);
+  if(extracted){
+    // Om API:et redan innehåller ett id, använd det tillsammans med ett namn om möjligt
+    const labelName = (dep.site && dep.site.name) || fav.name || '';
+    dep.fromStop = dep.fromStop || (labelName ? `${labelName} ${extracted}` : `${extracted}`);
+  } else {
+    // Om inget id i dep, använd favoritens sparade id (om den har någon)
+    if(!dep.fromStop || String(dep.fromStop).trim() === ''){
+      if(fav.stopPointId){
+        dep.fromStop = fav.name ? `${fav.name} ${fav.stopPointId}` : String(fav.stopPointId);
+      } else if(fav.stopAreaId){
+        dep.fromStop = fav.name ? `${fav.name} ${fav.stopAreaId}` : String(fav.stopAreaId);
+      }
+    }
+  }
+  // Spara referens till favoritens namn som fallback (behålls)
+  dep._favName = fav.name || '';
+
+  allDeps.push(dep);
+});
+
+
         }
       }catch(e){
         console.error('fav fetch error', e);
