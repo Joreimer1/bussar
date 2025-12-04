@@ -30,7 +30,7 @@
   .action-col{flex:0 0 28%;display:flex;align-items:center;justify-content:center}
   .remove-btn{min-width:110px;background:linear-gradient(180deg,var(--remove-1),var(--remove-2));color:var(--white);border:0;padding:10px 12px;border-radius:10px;font-weight:800;box-shadow:0 8px 18px rgba(233,75,75,0.22)}
 
-  .suggestions{margin-top:10px;max-height:240px;overflow:auto;border:1px solid #2f3b46;background:#142026;border-radius:10px;display:none}
+  .suggestions{margin-top:10px;max-height:240px;overflow:auto;border:1px solid #2f3b46;background:#142026;border-radius:10px;display:none;position:relative;z-index:20}
   .suggestion-item{padding:12px;border-bottom:1px solid #22313a;display:flex;gap:12px;align-items:flex-start;cursor:pointer}
   .suggestion-left{flex:1;display:flex;flex-direction:column;gap:6px}
   .suggestion-name{font-weight:700;color:#eaf4ff}
@@ -48,7 +48,7 @@
   .fav-lines-input{width:120px;padding:8px;border-radius:8px;border:1px solid var(--input-border);background:var(--input-bg);color:#e6f0f8;text-align:center}
   .remove-small{background:linear-gradient(180deg,var(--remove-1),var(--remove-2));color:var(--white);border:0;padding:8px 10px;border-radius:8px;font-weight:700}
 
-  .map-container{margin-top:10px;border-radius:10px;overflow:hidden;border:1px solid #23343d;display:none}
+  .map-container{margin-top:10px;border-radius:10px;overflow:hidden;border:1px solid #23343d;display:none;position:relative;z-index:10}
   #resultsMap{width:100%;height:320px;background:#0b1a20}
 
   .departures-title{font-size:18px;text-align:center;margin-bottom:12px}
@@ -75,8 +75,8 @@
 
   .no-departures{text-align:center;color:var(--muted);padding:16px}
 
-  /* Se alla knapp (liten röd) */
-  .seeall-btn{background:linear-gradient(180deg,var(--remove-1),var(--remove-2));color:var(--white);border:0;padding:8px 10px;border-radius:8px;font-weight:800;cursor:pointer;margin-right:8px}
+  /* Se alla knapp (liten röd) - flyttad lite till vänster genom större högermarginal */
+  .seeall-btn{background:linear-gradient(180deg,var(--remove-1),var(--remove-2));color:var(--white);border:0;padding:8px 10px;border-radius:8px;font-weight:800;cursor:pointer;margin-right:14px}
   @media(max-width:420px){
     .search-input{margin-left:8px;font-size:14px}
     .action-col{flex-basis:34%}
@@ -90,7 +90,7 @@
 <body>
   <div class="container">
     <div class="card" id="topCard">
-      <h1>SL Hållplatsavgångar</h1>
+      <h1>SL Hållplatsavgångar*</h1>
 
       <div class="button-group">
         <button id="locationBtn">📍 Plats</button>
@@ -133,7 +133,7 @@
           <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
             <!-- Se alla-knapp placeras framför stjärnan -->
             <button id="seeAllBtn" class="seeall-btn" title="Se alla avgångar">Se alla</button>
-            <div id="stopFavoriteStar" class="favorite-star" title="Spara som favorit">☆</div>
+            <div id="stopFavoriteStar" class="favorite-star" title="Spara som favorit" style="cursor:pointer">☆</div>
           </div>
         </div>
       </div>
@@ -633,7 +633,12 @@ const doSearch = debounce(async (qRaw) => {
     return n.includes(q) || note.includes(q);
   }).slice(0,40);
   const newHash = JSON.stringify(matches.map(m=>m.id));
-  if(newHash === lastSearchResults){ updateMapForMatches(matches); return; }
+  if(newHash === lastSearchResults){ 
+    // ensure suggestions visible and map updated
+    if(matches.length>0) suggestions.style.display='block';
+    updateMapForMatches(matches); 
+    return; 
+  }
   lastSearchResults = newHash;
   if(matches.length === 0){ suggestions.innerHTML = '<div class="suggestion-item">Inga resultat</div>'; suggestions.style.display = 'block'; updateMapForMatches([]); return; }
   suggestions.innerHTML = matches.slice(0,12).map(m=>{
@@ -791,13 +796,8 @@ async function showFavoritesDepartures(showMap = false){
     updateMapForMatches(mapMatches);
   } else {
     // Ensure map is hidden when showMap is false
-    if(!showMap){
-      mapContainer.style.display = 'none';
-      clearMapMarkers();
-    } else {
-      mapContainer.style.display = 'none';
-      clearMapMarkers();
-    }
+    mapContainer.style.display = 'none';
+    clearMapMarkers();
   }
 }
 
@@ -869,15 +869,10 @@ function refreshAllStars(){
 }
 
 /* Toggle favorite for current stop
-   Only allow toggling when the current selection originates from a search result.
+   Now allowed regardless of mode; clicking the top star toggles favorite state.
 */
 function toggleFavoriteCurrent(){
   if(!currentStop) return;
-  // Only allow starring if currentMode is 'search' (i.e., selected from search results)
-  if(currentMode !== 'search'){
-    // Do nothing if user tries to star a location-derived stop
-    return;
-  }
   const name = currentStop.name || stopName.textContent || '';
   const spId = currentStopPointId ? String(currentStopPointId) : null;
   const saId = currentStopAreaId ? String(currentStopAreaId) : null;
