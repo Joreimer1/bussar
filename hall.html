@@ -85,6 +85,22 @@
     .fav-actions{flex-basis:36%}
     #resultsMap{height:240px}
   }
+
+ /* Lägg detta sist i din <style> så det får företräde */
+.location-active #stopInfo {
+  min-height: 110px;    /* öka lite; justera efter behov */
+  padding-top: 16px;    /* mer luft upptill */
+  padding-bottom: 16px; /* mer luft nedtill */
+}
+
+/* Små skärmar: något mindre höjd så det inte tar över */
+@media (max-width: 420px) {
+  .location-active #stopInfo {
+    min-height: 92px;
+    padding-top: 12px;
+    padding-bottom: 12px;
+  }
+}
 </style>
 </head>
 <body>
@@ -808,6 +824,8 @@ async function showFavoritesDepartures(showMap = false){
 function setActiveButton(btn){
   [locationBtn, favoritesBtn, searchBtn].forEach(b=>{ if(b) b.classList.remove('active'); });
   if(btn) btn.classList.add('active');
+   document.body.classList.add('location-active');   // när Plats aktiveras
+   document.body.classList.remove('location-active'); // när Sök eller Favoriter aktiveras
 
   // Default hide elements that should not appear on certain modes
   if(btn === locationBtn){
