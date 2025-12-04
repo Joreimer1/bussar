@@ -88,7 +88,7 @@
 <body>
   <div class="container">
     <div class="card" id="topCard">
-      <h1>SL Hållplatsavgångar h</h1>
+      <h1>SL Hållplatsavgångar devn1</h1>
 
       <div class="button-group">
         <button id="locationBtn">📍 Plats</button>
@@ -201,6 +201,48 @@ function showLoading(v){ loading.style.display = v ? 'block' : 'none'; }
 function showError(msg){ error.textContent = msg; error.style.display = 'block'; setTimeout(()=>error.style.display='none',5000); }
 function escapeHtml(s){ if(!s) return ''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;'); }
 function debounce(fn, wait=250){ let t=null; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a),wait); }; }
+
+/* --- setActiveButton: definiera tidigt så inga anrop sker innan den finns --- */
+function setActiveButton(btn){
+  [locationBtn, favoritesBtn, searchBtn].forEach(b => { if(b) b.classList.remove('active'); });
+  if(btn) btn.classList.add('active');
+
+  if(btn === locationBtn){
+    searchContainer.classList.remove('show');
+    suggestions.style.display = 'none';
+    searchInput.value = '';
+    favoritesCard.style.display = 'none';
+    favoritesList.style.display = 'none';
+    favoritesInfo.style.display = 'none';
+    departuresCard.style.display = 'none';
+    seeAllBtn.style.display = 'none';
+  } else if(btn === favoritesBtn){
+    searchContainer.classList.remove('show');
+    suggestions.style.display = 'none';
+    searchInput.value = '';
+    favoritesCard.style.display = 'block';
+    departuresCard.style.display = 'block';
+    stopInfo.style.display = 'none';
+    topSupport.style.display = 'none';
+    try { if(typeof showFavoritesDepartures === 'function') showFavoritesDepartures(false).catch(()=>{}); } catch(e){}
+  } else if(btn === searchBtn){
+    searchContainer.classList.add('show');
+    suggestions.style.display = 'none';
+    favoritesCard.style.display = 'none';
+    departuresCard.style.display = 'none';
+    stopInfo.style.display = 'none';
+    topSupport.style.display = 'none';
+    favoritesList.style.display = 'none';
+    favoritesInfo.style.display = 'none';
+  }
+
+  if(btn === locationBtn && stopInfo && stopInfo.style.display === 'block'){
+    seeAllBtn.style.display = 'inline-block';
+  } else {
+    seeAllBtn.style.display = 'none';
+  }
+}
+/* --- end setActiveButton --- */
 
 /* Normalize favorites on load */
 (function normalizeFavoritesOnLoad(){
@@ -533,7 +575,6 @@ async function selectStopPointById(spId){
   stopInfo.style.display='block'; topSupport.style.display='flex';
   currentStop = matchedSites.length>0 ? matchedSites[0] : { id: sp.site_id || ('sp-'+sp.id), name: sp.name };
 
-  // Determine mode: if selection came from search results, keep search mode so star marks search result.
   currentMode = lastSelectedFromSearch ? 'search' : 'location';
   setActiveButton(currentMode === 'search' ? searchBtn : locationBtn);
 
@@ -548,10 +589,8 @@ async function selectStopPointById(spId){
   if(matchedSites.length>0) getDeparturesFromSitesWithFiltering(matchedSites, { stopPointId: currentStopPointId }, true);
   else getDeparturesFromSitesWithFiltering([currentStop], { stopPointId: currentStopPointId }, true);
 
-  // After handling selection, reset flag
   lastSelectedFromSearch = false;
 
-  // If selection came from search, keep search UI visible and show map; do not show favorites or departures panels outside departuresCard
   if(currentMode === 'search'){
     searchContainer.classList.add('show');
     suggestions.style.display = 'none';
@@ -993,7 +1032,6 @@ favoritesBtn.addEventListener('click', ()=>{
   setActiveButton(favoritesBtn);
   favoritesCard.style.display = 'block';
   renderFavoritesList();
-  // Visa samlat flöde för alla favoriter (utan karta)
   showFavoritesDepartures(false).catch(e=>{ console.error(e); });
 });
 
