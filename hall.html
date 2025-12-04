@@ -159,7 +159,7 @@
 <body>
   <div class="container">
     <div class="card" id="topCard">
-      <h1>SL Hållplatsavgångar dev2</h1>
+      <h1>SL Hållplatsavgångar dev3</h1>
 
       <div class="button-group">
         <button id="locationBtn">📍 Plats</button>
@@ -319,16 +319,33 @@ function clearMapMarkers(){ if(!markersLayer) return; markersLayer.clearLayers()
 
 /* Update map with matches and fit bounds to show all results */
 function updateMapForMatches(matches){
-  if(!matches || matches.length===0){ mapContainer.style.display = 'none'; clearMapMarkers(); return; }
+  // Om inga träffar: göm kartan och rensa markörer
+  if(!matches || matches.length===0){
+    mapContainer.style.display = 'none';
+    clearMapMarkers();
+    return;
+  }
+
+  // Filtrera bort poster utan koordinater
   const withCoords = matches.map(m=>{
     const lat = parseFloat(m.lat); const lon = parseFloat(m.lon);
     if(!isFinite(lat) || !isFinite(lon)) return null;
     return { id: m.id, name: m.name || '', lat, lon };
   }).filter(Boolean);
-  if(withCoords.length===0){ mapContainer.style.display='none'; clearMapMarkers(); return; }
 
+  if(withCoords.length===0){
+    mapContainer.style.display='none';
+    clearMapMarkers();
+    return;
+  }
+
+  // Se till att kartbehållaren är synlig innan Leaflet gör beräkningar
+  mapContainer.style.display = 'block';
+
+  // Initiera karta om behövs och rensa gamla markörer
   initMapIfNeeded();
   clearMapMarkers();
+
   const bounds = [];
   withCoords.forEach(pt=>{
     try{
@@ -347,6 +364,7 @@ function updateMapForMatches(matches){
     }catch(e){ console.error('marker add error', e); }
   });
 
+  // Lägg till användarens position om den finns
   if(currentUserPos && map){
     try {
       const userMarker = L.circleMarker([currentUserPos.lat, currentUserPos.lon], {
@@ -358,22 +376,23 @@ function updateMapForMatches(matches){
     } catch(e) { console.error('User pos marker error', e); }
   }
 
-  // Fit bounds to show all markers with padding; if only one marker, zoom in
-  if(bounds.length===1){
-    map.setView(bounds[0], 17);
-    setTimeout(()=>{ if(map) map.invalidateSize(); }, 80);
-  } else {
+  // Vänta en kort stund så att browsern renderar container och Leaflet kan räkna rätt storlek
+  setTimeout(()=>{
     try{
-      const latlngs = bounds.map(b => L.latLng(b[0], b[1]));
-      const group = L.featureGroup(latlngs.map(ll => L.marker(ll)));
-      map.fitBounds(group.getBounds(), { padding: [40,40] });
-    }catch(e){
-      map.setView(bounds[0], 13);
-    }
-    setTimeout(()=>{ if(map) map.invalidateSize(); }, 80);
-  }
+      if(!map) return;
+      map.invalidateSize();
 
-  mapContainer.style.display = 'block';
+      if(bounds.length === 1){
+        map.setView(bounds[0], 17);
+      } else {
+        const latlngs = bounds.map(b => L.latLng(b[0], b[1]));
+        const group = L.featureGroup(latlngs.map(ll => L.marker(ll)));
+        map.fitBounds(group.getBounds(), { padding: [40,40] });
+      }
+    }catch(e){
+      console.error('fit bounds error', e);
+    }
+  }, 80);
 }
 
 /* Load caches */
