@@ -159,7 +159,7 @@
 <body>
   <div class="container">
     <div class="card" id="topCard">
-      <h1>SL Hållplatsavgångar*</h1>
+      <h1>SL Hållplatsavgångar J</h1>
 
       <div class="button-group">
         <button id="locationBtn">📍 Plats</button>
@@ -306,6 +306,75 @@ function saveFavorites(){
   refreshAllStars();
   renderFavoritesListBottom(); // uppdatera listan när favoriter sparas
 }
+
+/* ---------- NY FUNKTION: renderFavoritesListBottom (global scope) ---------- */
+/* Rendera listan i favoritkortet längst ner (favoritesListBottom) och visa stop-id */
+function renderFavoritesListBottom(){
+  // Töm listan först
+  favoritesListBottom.innerHTML = '';
+
+  if(!Array.isArray(favorites) || favorites.length === 0){
+    favoritesListBottom.innerHTML = '<div class="no-departures">Inga favoriter sparade</div>';
+    return;
+  }
+
+  favorites.forEach(fav => {
+    const card = document.createElement('div');
+    card.className = 'favorite-item';
+
+    // Vänster kolumn: namn + id + linjer
+    const left = document.createElement('div');
+    left.className = 'favorite-left';
+
+    const nameEl = document.createElement('div');
+    nameEl.className = 'favorite-name';
+    nameEl.textContent = fav.name || (fav.stopPointId ? `Hållplats ${fav.stopPointId}` : 'Favorit');
+
+    const idEl = document.createElement('div');
+    idEl.className = 'favorite-id';
+    // Visa stopPointId om finns, annars stopAreaId, annars tomt
+    idEl.textContent = fav.stopPointId ? String(fav.stopPointId) : (fav.stopAreaId ? String(fav.stopAreaId) : '');
+
+    const linesEl = document.createElement('div');
+    linesEl.className = 'favorite-lines';
+    linesEl.textContent = fav.lines ? String(fav.lines) : '';
+
+    left.appendChild(nameEl);
+    if(idEl.textContent) left.appendChild(idEl);
+    if(linesEl.textContent) left.appendChild(linesEl);
+
+    // Höger kolumn: actions (t.ex. input + ta bort)
+    const actions = document.createElement('div');
+    actions.className = 'fav-actions';
+
+    const linesInput = document.createElement('input');
+    linesInput.className = 'fav-lines-input';
+    linesInput.value = fav.lines || '';
+    linesInput.placeholder = 'Linjer (valfritt)';
+    linesInput.addEventListener('change', (e) => {
+      fav.lines = e.target.value;
+      saveFavorites();
+    });
+
+    const removeBtn = document.createElement('button');
+    removeBtn.className = 'remove-small';
+    removeBtn.textContent = 'Ta bort';
+    removeBtn.addEventListener('click', () => {
+      favorites = favorites.filter(x => !( (x.stopPointId && fav.stopPointId && String(x.stopPointId)===String(fav.stopPointId)) || (x.stopAreaId && fav.stopAreaId && String(x.stopAreaId)===String(fav.stopAreaId)) ));
+      saveFavorites();
+      renderFavoritesListBottom();
+    });
+
+    actions.appendChild(linesInput);
+    actions.appendChild(removeBtn);
+
+    card.appendChild(left);
+    card.appendChild(actions);
+
+    favoritesListBottom.appendChild(card);
+  });
+}
+/* ---------- SLUT NY FUNKTION ---------- */
 
 /* Leaflet map */
 let map = null;
@@ -665,78 +734,538 @@ async function findNearestStop(userLat,userLon){
 
     const displayName = nearest.name || (matchedSites[0] && matchedSites[0].name) || 'Okänd hållplats';
     stopName.textContent = displayName;
-  
-/* ---------- NY FUNKTION: renderFavoritesListBottom ---------- */
-/* Rendera listan i favoritkortet längst ner (favoritesListBottom) och visa stop-id */
-function renderFavoritesListBottom(){
-  // Töm listan först
-  favoritesListBottom.innerHTML = '';
 
-  if(!Array.isArray(favorites) || favorites.length === 0){
-    favoritesListBottom.innerHTML = '<div class="no-departures">Inga favoriter sparade</div>';
+    // fortsätt med resten av findNearestStop...
+    showLoading(false);
+  }catch(e){
+    console.error('findNearestStop', e);
+    showLoading(false);
+    showError('Kunde inte hitta närmaste hållplats');
+  }
+}
+
+
+/* Fetch + filter pipeline */
+async function getDeparturesFromSitesWithFiltering(stops, opts={}, force=false){
+  try{
+    showLoading(true); departuresCard.style.display='none';
+    const worker = async s=>await fetchDeparturesForSite(s, force);
+    const concurrency = 3; const results=[]; let i=0;
+    const runners = new Array(concurrency).fill(0).map(async ()=>{ while(i<stops.length){ const idx=i++; try{ results[idx]=await worker(stops[idx]); }catch(e){ results[idx]=undefined; } }});
+    await Promise.all(runners);
+    showLoading(false);
+
+    let allDeps = [];
+    results.forEach(res=>{ if(!res) return; res.departures.forEach(dep=>{
+      dep.fromStop = dep.fromStop || (res.stop && res.stop.name ? getDepFromStopLabel(dep, res.stop.name) : '');
+      dep.fromStop = dep.fromStop || '';
+      if(opts && opts.stopPointId){ if(!departureMatchesStopPoint(dep, opts.stopPointId)) return; }
+      else if(opts && opts.stopAreaId){ if(!departureMatchesStopArea(dep, opts.stopAreaId)) return; }
+      if(opts && opts.favoriteLines){ const allowed = String(opts.favoriteLines).split(',').map(s=>s.trim()).filter(Boolean); if(allowed.length>0){ const designation = dep.line && dep.line.designation ? String(dep.line.designation) : String(dep.designation || ''); if(!allowed.includes(designation)) return; } }
+      allDeps.push(dep);
+    })});
+    if(allDeps.length===0){ departuresList.innerHTML = '<div class="no-departures">Inga avgångar hittades</div>'; departuresCard.style.display='block'; if(countdownInterval) clearInterval(countdownInterval); return; }
+    allDeps.sort((a,b)=> new Date(a.expected) - new Date(b.expected));
+    displayDepartures(allDeps);
+  }catch(e){ showLoading(false); showError('Kunde inte hämta avgångar'); console.error(e); }
+}
+
+/* Search (stop-points) */
+let lastSearchResults = '';
+const doSearch = debounce(async (qRaw) => {
+  const q = (qRaw||'').trim().toLowerCase();
+  if(q.length < 2){
+    suggestions.style.display='none';
+    // ensure search page shows nothing else
+    favoritesInfo.style.display = 'none';
+    favoritesList.style.display = 'none';
+    updateMapForMatches([]);
+    departuresCard.style.display = 'none';
+    stopInfo.style.display = 'none';
+    topSupport.style.display = 'none';
+    return;
+  }
+  await loadStopPoints();
+  const matches = allStopPoints.filter(pt=>{
+    const n = (pt.name||'').toLowerCase(); const note = (pt.place||pt.town||'').toLowerCase();
+    return n.includes(q) || note.includes(q);
+  }).slice(0,40);
+  const newHash = JSON.stringify(matches.map(m=>m.id));
+  if(newHash === lastSearchResults){
+    // ensure suggestions visible and map updated
+    if(matches.length>0) suggestions.style.display='block';
+    updateMapForMatches(matches);
+    return;
+  }
+  lastSearchResults = newHash;
+  if(matches.length === 0){ suggestions.innerHTML = '<div class="suggestion-item">Inga resultat</div>'; suggestions.style.display = 'block'; updateMapForMatches([]); return; }
+  suggestions.innerHTML = matches.slice(0,12).map(m=>{
+    const name = escapeHtml(m.name || ''); const note = m.place? `<div class="suggestion-note">${escapeHtml(m.place)}</div>` : '';
+    const favStar = favorites.some(f=>String(f.stopPointId)===String(m.id)) ? '⭐' : '☆';
+    return `<div class="suggestion-item" data-id="${escapeHtml(m.id)}"><div class="suggestion-left"><div class="suggestion-name">${name}</div><div class="suggestion-id">StopPoint: ${escapeHtml(m.id)}</div>${note}</div><div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px"><div class="suggestion-star" data-id="${escapeHtml(m.id)}">${favStar}</div></div></div>`;
+  }).join('');
+  suggestions.style.display = 'block';
+  // ensure search page does not show favorites or departures
+  favoritesInfo.style.display = 'none';
+  favoritesList.style.display = 'none';
+  departuresCard.style.display = 'none';
+  stopInfo.style.display = 'none';
+  topSupport.style.display = 'none';
+  updateMapForMatches(matches.slice(0,40));
+});
+
+/* Show favorites as departures flow:
+   - For each favorite, find stop-point and fetch departures filtered by that favorite (stopPointId/stopAreaId and lines)
+   - Aggregate departures into a single feed and display them
+   - Also optionally show map markers for favorites that have coordinates and fit bounds to show all
+   - Parameter showMap: when false, do not display or update the map (used when favorites view should not show map)
+*/
+async function showFavoritesDepartures(showMap = false){
+  await loadStopPoints();
+  await loadSites();
+  if(!Array.isArray(favorites) || favorites.length===0){
+    departuresList.innerHTML = '<div class="no-departures">Inga favoriter sparade</div>';
+    departuresCard.style.display = 'block';
+    if(!showMap){ mapContainer.style.display = 'none'; clearMapMarkers(); }
     return;
   }
 
-  favorites.forEach(fav => {
-    const card = document.createElement('div');
-    card.className = 'favorite-item';
+  showLoading(true);
+  departuresCard.style.display = 'none';
+  clearMapMarkers();
 
-    // Vänster kolumn: namn + id + linjer
-    const left = document.createElement('div');
-    left.className = 'favorite-left';
+  const allDeps = [];
+  const mapMatches = [];
 
-    const nameEl = document.createElement('div');
-    nameEl.className = 'favorite-name';
-    nameEl.textContent = fav.name || (fav.stopPointId ? `Hållplats ${fav.stopPointId}` : 'Favorit');
+  // For concurrency, fetch departures per favorite but limit concurrency
+  const favs = favorites.slice();
+  const concurrency = 4;
+  let i = 0;
+  const runners = new Array(concurrency).fill(0).map(async ()=>{
+    while(i < favs.length){
+      const idx = i++;
+      const fav = favs[idx];
+      try{
+        // find stop-point object
+        let sp = null;
+        if(fav.stopPointId){
+          sp = allStopPoints.find(p => String(p.id) === String(fav.stopPointId) || String(p.stop_point_id) === String(fav.stopPointId));
+        }
+        if(!sp && fav.stopAreaId){
+          sp = allStopPoints.find(p => String(p.stop_area_id) === String(fav.stopAreaId) || String(p.parentId) === String(fav.stopAreaId) || String(p.site_id) === String(fav.stopAreaId));
+        }
+        // If we have a stop-point with coords, add to mapMatches
+        if(sp && sp.lat && sp.lon){
+          mapMatches.push({ id: String(sp.id), name: sp.name || fav.name || '', lat: sp.lat, lon: sp.lon });
+        } else {
+          // fallback: show site coords if available
+          const site = allSites.find(s => (fav.stopAreaId && (String(s.stop_area_id)===String(fav.stopAreaId) || String(s.id)===String(fav.stopAreaId))) || (fav.stopPointId && (String(s.site_id)===String(fav.stopPointId) || String(s.parentId)===String(fav.stopPointId))));
+          if(site && site.lat && site.lon){
+            mapMatches.push({ id: String(site.id), name: site.name || fav.name || '', lat: site.lat, lon: site.lon });
+          }
+        }
 
-    const idEl = document.createElement('div');
-    idEl.className = 'favorite-id';
-    // Visa stopPointId om finns, annars stopAreaId, annars tomt
-    idEl.textContent = fav.stopPointId ? String(fav.stopPointId) : (fav.stopAreaId ? String(fav.stopAreaId) : '');
+        // Determine site(s) to query departures from
+        let sitesToQuery = [];
+        if(sp){
+          // try to find matching site(s) by stop_area_id or name
+          const areaId = sp.stop_area_id || sp.parentId || sp.site_id || null;
+          if(areaId){
+            sitesToQuery = allSites.filter(s => {
+              const cand = [s.stop_area_id, s.stopAreaId, s.parentId, s.site_id, s.id];
+              return cand.some(c => c && String(c) === String(areaId));
+            });
+          }
+          if(sitesToQuery.length === 0 && sp.name){
+            const nm = (sp.name||'').trim().toLowerCase();
+            sitesToQuery = allSites.filter(s => s.name && s.name.trim().toLowerCase().startsWith(nm));
+          }
+          if(sitesToQuery.length === 0){
+            // fallback: create a pseudo-site object to query by id
+            sitesToQuery = [{ id: sp.site_id || ('sp-'+sp.id), name: sp.name }];
+          }
+        } else {
+          // No stop-point found; try to find site by favorite name or area id
+          let siteCandidates = [];
+          if(fav.stopAreaId){
+            siteCandidates = allSites.filter(s => {
+              const cand = [s.stop_area_id, s.stopAreaId, s.parentId, s.site_id, s.id];
+              return cand.some(c => c && String(c) === String(fav.stopAreaId));
+            });
+          }
+          if(siteCandidates.length === 0 && fav.name){
+            const qn = (fav.name||'').trim().toLowerCase();
+            siteCandidates = allSites.filter(s => s.name && s.name.trim().toLowerCase().startsWith(qn));
+          }
+          if(siteCandidates.length > 0) sitesToQuery = siteCandidates;
+        }
 
-    const linesEl = document.createElement('div');
-    linesEl.className = 'favorite-lines';
-    linesEl.textContent = fav.lines ? String(fav.lines) : '';
+        // For each site, fetch departures and filter by stopPointId/lines
+        for(const site of sitesToQuery){
+          const res = await fetchDeparturesForSite(site, true);
+          const deps = res.departures || [];
+          deps.forEach(dep => {
+            // filter by stopPointId if favorite has it
+            if(fav.stopPointId && !departureMatchesStopPoint(dep, fav.stopPointId)) return;
+            if(fav.stopAreaId && !departureMatchesStopArea(dep, fav.stopAreaId)) return;
+            // filter by lines if specified
+            if(fav.lines && String(fav.lines).trim() !== ''){
+              const allowed = String(fav.lines).split(',').map(s=>s.trim()).filter(Boolean);
+              if(allowed.length>0){
+                const designation = dep.line && dep.line.designation ? String(dep.line.designation) : String(dep.designation || '');
+                if(!allowed.includes(designation)) return;
+              }
+            }
+            // attach favorite reference for fromStop fallback
+            dep._favName = fav.name || '';
+            allDeps.push(dep);
+          });
+        }
+      }catch(e){
+        console.error('fav fetch error', e);
+      }
+    }
+  });
+  await Promise.all(runners);
 
-    left.appendChild(nameEl);
-    if(idEl.textContent) left.appendChild(idEl);
-    if(linesEl.textContent) left.appendChild(linesEl);
+  showLoading(false);
 
-    // Höger kolumn: actions (t.ex. input + ta bort)
-    const actions = document.createElement('div');
-    actions.className = 'fav-actions';
-
-    const linesInput = document.createElement('input');
-    linesInput.className = 'fav-lines-input';
-    linesInput.value = fav.lines || '';
-    linesInput.placeholder = 'Linjer (valfritt)';
-    linesInput.addEventListener('change', (e) => {
-      fav.lines = e.target.value;
-      saveFavorites();
+  // Sort and display aggregated departures
+  if(allDeps.length === 0){
+    departuresList.innerHTML = '<div class="no-departures">Inga avgångar för dina favoriter</div>';
+    departuresCard.style.display = 'block';
+  } else {
+    // Ensure fromStop is filled using favorite name if needed
+    allDeps.forEach(dep => {
+      if(!dep.fromStop || String(dep.fromStop).trim() === ''){
+        if(dep._favName) dep.fromStop = dep._favName;
+      }
     });
+    allDeps.sort((a,b)=> new Date(a.expected) - new Date(b.expected));
+    displayDepartures(allDeps);
+  }
 
-    const removeBtn = document.createElement('button');
-    removeBtn.className = 'remove-small';
-    removeBtn.textContent = 'Ta bort';
-    removeBtn.addEventListener('click', () => {
-      favorites = favorites.filter(x => !( (x.stopPointId && fav.stopPointId && String(x.stopPointId)===String(fav.stopPointId)) || (x.stopAreaId && fav.stopAreaId && String(x.stopAreaId)===String(fav.stopAreaId)) ));
-      saveFavorites();
-      renderFavoritesListBottom();
-    });
+  // Show favorites list (editable) below card
+  renderFavoritesList();
+  favoritesCard.style.display = 'block';
 
-    actions.appendChild(linesInput);
-    actions.appendChild(removeBtn);
+  // Show map markers for favorites only if showMap is true
+  if(showMap && mapMatches.length > 0){
+    updateMapForMatches(mapMatches);
+  } else {
+    // Ensure map is hidden when showMap is false
+    mapContainer.style.display = 'none';
+    clearMapMarkers();
+  }
+}
 
-    card.appendChild(left);
-    card.appendChild(actions);
+/* Set active button (controls visibility) */
+function setActiveButton(btn){
+  [locationBtn, favoritesBtn, searchBtn].forEach(b=>{ if(b) b.classList.remove('active'); });
+  if(btn) btn.classList.add('active');
+   document.body.classList.add('location-active');   // när Plats aktiveras
+   document.body.classList.remove('location-active'); // när Sök eller Favoriter aktiveras
 
-    favoritesListBottom.appendChild(card);
+  // Default hide elements that should not appear on certain modes
+  if(btn === locationBtn){
+    // Clear search UI and suggestions
+    searchContainer.classList.remove('show');
+    suggestions.style.display = 'none';
+    searchInput.value = '';
+    // Hide favorites UI
+    favoritesCard.style.display = 'none';
+    favoritesList.style.display = 'none';
+    favoritesInfo.style.display = 'none';
+    // Hide departures until loaded for location
+    departuresCard.style.display = 'none';
+    // Ensure map visibility handled by location flow
+  } else if(btn === favoritesBtn){
+    // Favorites view: hide search UI entirely and show aggregated departures for favorites
+    searchContainer.classList.remove('show');
+    suggestions.style.display = 'none';
+    searchInput.value = '';
+    favoritesCard.style.display = 'block';
+    departuresCard.style.display = 'block';
+    stopInfo.style.display = 'none';
+    topSupport.style.display = 'none';
+    // populate departures for favorites but do NOT show map
+    showFavoritesDepartures(false).catch(e=>{ console.error(e); });
+  } else if(btn === searchBtn){
+    // Search view: show search container, hide favorites and departures and stop info
+    searchContainer.classList.add('show');
+    suggestions.style.display = 'none';
+    favoritesCard.style.display = 'none';
+    departuresCard.style.display = 'none';
+    stopInfo.style.display = 'none';
+    topSupport.style.display = 'none';
+    favoritesList.style.display = 'none';
+    favoritesInfo.style.display = 'none';
+  }
+
+  // Show seeAllBtn only when location is active and stopInfo is visible
+  if(btn === locationBtn && stopInfo && stopInfo.style.display === 'block'){
+    seeAllBtn.style.display = 'inline-block';
+  } else {
+    seeAllBtn.style.display = 'none';
+  }
+}
+
+/* Refresh star icons based on favorites */
+function refreshAllStars(){
+  // top star for current stop
+  if(!currentStop) { stopFavoriteStar.textContent = '☆'; return; }
+  const isFav = favorites.some(f=>{
+    if(f.stopPointId && currentStopPointId && String(f.stopPointId)===String(currentStopPointId)) return true;
+    if(f.stopAreaId && currentStopAreaId && String(f.stopAreaId)===String(currentStopAreaId)) return true;
+    return false;
+  });
+  stopFavoriteStar.textContent = isFav ? '⭐' : '☆';
+
+  // suggestion stars
+  document.querySelectorAll('.suggestion-star').forEach(el=>{
+    const id = el.getAttribute('data-id');
+    if(favorites.some(f=>String(f.stopPointId)===String(id))) el.textContent = '⭐'; else el.textContent = '☆';
   });
 }
-/* ---------- SLUT NY FUNKTION ---------- */
 
-/* Resten av din kod fortsätter här... */
-/* (Observera: filen är längre; jag har infogat renderFavoritesListBottom ovan och anrop i saveFavorites och normalizeFavoritesOnLoad) */
+/* Toggle favorite for current stop
+   Now allowed regardless of mode; clicking the top star toggles favorite state.
+*/
+function toggleFavoriteCurrent(){
+  if(!currentStop) return;
+  const name = currentStop.name || stopName.textContent || '';
+  const spId = currentStopPointId ? String(currentStopPointId) : null;
+  const saId = currentStopAreaId ? String(currentStopAreaId) : null;
+  const idx = favorites.findIndex(f => (spId && f.stopPointId && String(f.stopPointId)===String(spId)) || (saId && f.stopAreaId && String(f.stopAreaId)===String(saId)));
+  if(idx !== -1){
+    favorites.splice(idx,1);
+  } else {
+    favorites.push({ name: name, stopPointId: spId, stopAreaId: saId, lines: '' });
+  }
+  saveFavorites();
+  renderFavoritesList();
+}
+
+/* Render favorites list (both top and bottom) with line input restored */
+function renderFavoritesList(){
+  favoritesList.innerHTML = '';
+  favoritesListBottom.innerHTML = '';
+  if(favorites.length===0){
+    favoritesListBottom.innerHTML = '<div class="no-departures">Inga favoriter sparade</div>';
+    return;
+  }
+  favorites.forEach((f, i)=>{
+    const name = escapeHtml(f.name || '');
+    const id = escapeHtml(f.stopPointId || f.stopAreaId || '');
+    const linesVal = escapeHtml(f.lines || '');
+    const item = document.createElement('div');
+    item.className = 'favorite-item';
+    item.innerHTML = `<div class="favorite-left"><div class="favorite-name">${name}</div><div class="favorite-id">${id}</div><div class="favorite-lines">Linjer: <input class="fav-lines-input" data-idx="${i}" value="${linesVal}" placeholder="t.ex. 1,2,3" /></div></div><div class="fav-actions"><button class="remove-small" data-idx="${i}">Ta bort</button></div>`;
+    favoritesListBottom.appendChild(item);
+
+    const itemTop = item.cloneNode(true);
+    favoritesList.appendChild(itemTop);
+  });
+
+  // Attach listeners for remove and lines input (bottom list)
+  favoritesListBottom.querySelectorAll('.remove-small').forEach(btn=>{
+    btn.addEventListener('click', (e)=>{
+      const idx = parseInt(btn.getAttribute('data-idx'));
+      if(!isNaN(idx)) { favorites.splice(idx,1); saveFavorites(); renderFavoritesList(); }
+    });
+  });
+  favoritesListBottom.querySelectorAll('.fav-lines-input').forEach(inp=>{
+    inp.addEventListener('change', (e)=>{
+      const idx = parseInt(inp.getAttribute('data-idx'));
+      if(!isNaN(idx)){
+        favorites[idx].lines = inp.value || '';
+        saveFavorites();
+      }
+    });
+  });
+
+  // Attach listeners for top favoritesList (if visible)
+  favoritesList.querySelectorAll('.remove-small').forEach(btn=>{
+    btn.addEventListener('click', (e)=>{
+      const idx = parseInt(btn.getAttribute('data-idx'));
+      if(!isNaN(idx)) { favorites.splice(idx,1); saveFavorites(); renderFavoritesList(); }
+    });
+  });
+  favoritesList.querySelectorAll('.fav-lines-input').forEach(inp=>{
+    inp.addEventListener('change', (e)=>{
+      const idx = parseInt(inp.getAttribute('data-idx'));
+      if(!isNaN(idx)){
+        favorites[idx].lines = inp.value || '';
+        saveFavorites();
+      }
+    });
+  });
+}
+
+/* Clear search
+   Updated: ensure everything is cleared when Rensa is clicked, including departures card,
+   stop info, map, suggestions and internal selection state. This fixes the case where
+   a prior map click left the departures card visible.
+*/
+clearSearchBtn.addEventListener('click', ()=>{
+  // Clear input and UI elements
+  searchInput.value = '';
+  suggestions.style.display = 'none';
+  updateMapForMatches([]);
+  // Hide departures and stop info and support
+  departuresCard.style.display = 'none';
+  stopInfo.style.display = 'none';
+  topSupport.style.display = 'none';
+  // Clear internal selection state
+  currentStop = null;
+  currentStopPointId = null;
+  currentStopAreaId = null;
+  lastSelectedFromSearch = false;
+  // Clear map markers
+  clearMapMarkers();
+  mapContainer.style.display = 'none';
+  // Reset active button if needed (keep current mode but ensure search UI is clean)
+});
+
+/* Suggestion click handling (delegate) */
+suggestions.addEventListener('click', (e)=>{
+  const star = e.target.closest('.suggestion-star');
+  if(star){
+    const id = star.getAttribute('data-id');
+    if(!id) return;
+    // toggle favorite for that stopPoint id (this is allowed from search or favorites flow)
+    const existing = favorites.findIndex(f => f.stopPointId && String(f.stopPointId)===String(id));
+    if(existing !== -1){
+      favorites.splice(existing,1);
+    } else {
+      // find stop point name
+      const sp = allStopPoints.find(p=>String(p.id)===String(id));
+      const nm = sp ? sp.name : id;
+      favorites.push({ name: nm, stopPointId: String(id), stopAreaId: '', lines: '' });
+    }
+    saveFavorites();
+    renderFavoritesList();
+    refreshAllStars();
+    return;
+  }
+
+  const item = e.target.closest('.suggestion-item');
+  if(item){
+    const id = item.getAttribute('data-id');
+    if(id){
+      // mark that selection came from search so starring is allowed
+      lastSelectedFromSearch = true;
+      selectStopPointById(id);
+    }
+    return;
+  }
+});
+
+/* Star click for current stop */
+stopFavoriteStar.addEventListener('click', ()=>{
+  toggleFavoriteCurrent();
+});
+
+/* See alla button behavior:
+   - Only visible when location is active and stopInfo visible
+   - On click: take the name of the shown stop (stopName), copy to searchInput,
+     activate search page and run search as if user typed and pressed search.
+*/
+seeAllBtn.addEventListener('click', async ()=>{
+  const name = (stopName.textContent || '').trim();
+  if(!name) return;
+  // Put name into search input and activate search UI
+  searchInput.value = name;
+  // Ensure search mode
+  setActiveButton(searchBtn);
+  searchContainer.classList.add('show');
+  // Trigger search
+  doSearch(name);
+});
+
+/* Button group actions */
+locationBtn.addEventListener('click', ()=>{
+  // Clear UI elements that must not be visible when switching to location
+  searchContainer.classList.remove('show');
+  suggestions.style.display = 'none';
+  searchInput.value = '';
+  favoritesCard.style.display = 'none';
+  favoritesList.style.display = 'none';
+  favoritesInfo.style.display = 'none';
+  departuresCard.style.display = 'none';
+  stopInfo.style.display = 'none';
+  topSupport.style.display = 'none';
+  seeAllBtn.style.display = 'none';
+  currentMode = 'location';
+  setActiveButton(locationBtn);
+
+  // Try to get geolocation
+  if(navigator.geolocation){
+    navigator.geolocation.getCurrentPosition(pos=>{
+      currentUserPos = { lat: pos.coords.latitude, lon: pos.coords.longitude };
+      findNearestStop(pos.coords.latitude, pos.coords.longitude);
+    }, err=>{
+      // fallback: just set active and show error
+      setActiveButton(locationBtn);
+      showError('Kunde inte hämta din plats');
+    }, { enableHighAccuracy:true, timeout:8000 });
+  } else {
+    setActiveButton(locationBtn);
+    showError('Geolocation stöds inte i din webbläsare');
+  }
+});
+
+favoritesBtn.addEventListener('click', ()=>{
+  // When favorites is active we must NOT show the search UI or search input.
+  // Hide search container and map, show aggregated favorites departures.
+  searchContainer.classList.remove('show');
+  suggestions.style.display = 'none';
+  searchInput.value = '';
+  stopInfo.style.display = 'none';
+  topSupport.style.display = 'none';
+  departuresCard.style.display = 'block';
+  seeAllBtn.style.display = 'none';
+  mapContainer.style.display = 'none';
+  clearMapMarkers();
+
+  setActiveButton(favoritesBtn);
+  favoritesCard.style.display = 'block';
+  renderFavoritesList();
+});
+
+searchBtn.addEventListener('click', ()=>{
+  // Clear other UI elements when entering search
+  setActiveButton(searchBtn);
+  searchContainer.classList.add('show');
+  suggestions.style.display = 'none';
+  favoritesCard.style.display = 'none';
+  departuresCard.style.display = 'none';
+  stopInfo.style.display = 'none';
+  topSupport.style.display = 'none';
+  seeAllBtn.style.display = 'none';
+  // ensure favorites inside search are hidden
+  favoritesList.style.display = 'none';
+  favoritesInfo.style.display = 'none';
+});
+
+/* Search input */
+searchInput.addEventListener('input', (e)=>{
+  const v = e.target.value || '';
+  doSearch(v);
+});
+
+/* Initial rendering of favorites */
+renderFavoritesList();
+refreshAllStars();
+
+/* Initial UI state */
+setActiveButton(locationBtn);
+seeAllBtn.style.display = 'none';
+
+/* Initial load of caches in background */
+loadStopPoints().catch(()=>{});
+loadSites().catch(()=>{});
+
 
 </script>
 </body>
