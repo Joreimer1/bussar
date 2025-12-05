@@ -1,153 +1,41 @@
 <!DOCTYPE html>
 <html lang="sv">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
     <title>SL Avgångar</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
-            background-color: #f0f0f0;
-            padding: 20px;
-        }
-        
-        .container {
-            max-width: 600px;
-            margin: 0 auto;
-        }
-        
-        .header {
-            display: flex;
-            align-items: center;
-            gap: 15px;
-            margin-bottom: 30px;
-            padding: 20px;
-            background: white;
-            border-radius: 12px;
-        }
-        
-        .bus-icon {
-            font-size: 32px;
-            background: black;
-            color: white;
-            padding: 10px;
-            border-radius: 8px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            width: 52px;
-            height: 52px;
-        }
-        
-        .header-text h1 {
-            font-size: 28px;
-            font-weight: 600;
-            color: #333;
-        }
-        
-        .column-headers {
-            display: grid;
-            grid-template-columns: auto 1fr;
-            gap: 40px;
-            padding: 0 20px;
-            margin-bottom: 15px;
-            font-size: 12px;
-            font-weight: 600;
-            color: #999;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-        
-        .column-headers div:last-child {
-            padding-left: 80px;
-        }
-        
-        .departures {
-            background: white;
-            border-radius: 12px;
-            overflow: hidden;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        }
-        
-        .departure-row {
-            display: grid;
-            grid-template-columns: auto 1fr;
-            gap: 40px;
-            padding: 18px 20px;
-            border-bottom: 1px solid #eee;
-            align-items: center;
-        }
-        
-        .departure-row:last-child {
-            border-bottom: none;
-        }
-        
-        .departure-info {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-        
-        .bus-number {
-            background: black;
-            color: white;
-            font-size: 20px;
-            font-weight: 700;
-            width: 44px;
-            height: 44px;
-            border-radius: 6px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex-shrink: 0;
-        }
-        
-        .destination {
-            font-size: 16px;
-            font-weight: 500;
-            color: #333;
-        }
-        
-        .time {
-            font-size: 24px;
-            font-weight: 600;
-            color: #008B8B;
-            text-align: right;
-        }
-        
-        .time.urgent {
-            color: #DC143C;
-        }
-        
-        .timestamp {
-            text-align: center;
-            font-size: 12px;
-            color: #999;
-            margin-top: 20px;
-            padding: 0 20px;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; background-color: #f0f0f0; padding: 20px; }
+        .container { max-width: 600px; margin: 0 auto; }
+        .header { display: flex; align-items: center; gap: 15px; margin-bottom: 30px; padding: 20px; background: white; border-radius: 12px; }
+        .bus-icon { font-size: 32px; background: black; color: white; padding: 10px; border-radius: 8px; display: flex; align-items: center; justify-content: center; width: 52px; height: 52px; }
+        .header-text h1 { font-size: 28px; font-weight: 600; color: #333; }
+        .column-headers { display: grid; grid-template-columns: auto 1fr; gap: 40px; padding: 0 20px; margin-bottom: 15px; font-size: 12px; font-weight: 600; color: #999; text-transform: uppercase; letter-spacing: 0.5px; }
+        .column-headers div:last-child { padding-left: 80px; }
+        .departures { background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        .departure-row { display: grid; grid-template-columns: auto 1fr; gap: 40px; padding: 18px 20px; border-bottom: 1px solid #eee; align-items: center; }
+        .departure-row:last-child { border-bottom: none; }
+        .departure-info { display: flex; align-items: center; gap: 12px; }
+        .bus-number { background: black; color: white; font-size: 20px; font-weight: 700; width: 44px; height: 44px; border-radius: 6px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+        .destination { font-size: 16px; font-weight: 500; color: #333; }
+        .time { font-size: 24px; font-weight: 600; color: #008B8B; text-align: right; }
+        .time.urgent { color: #DC143C; }
+        .timestamp { text-align: center; font-size: 12px; color: #999; margin-top: 20px; padding: 0 20px; }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
             <div class="bus-icon">SL</div>
-            <div class="header-text">
-                <h1>Avgångar Luma mot City</h1>
-            </div>
+            <div class="header-text"><h1>Avgångar Luma mot City by Johan</h1></div>
         </div>
-        
+
         <div class="column-headers">
             <div>Buss nr</div>
             <div>Avgår om:</div>
         </div>
-        
+
         <div class="departures" id="departures">
             <div class="departure-row">
                 <div class="departure-info">
@@ -157,124 +45,122 @@
                 <div class="time">-</div>
             </div>
         </div>
-        
+
         <div class="timestamp" id="timestamp"></div>
     </div>
 
     <script>
+        // Konfiguration: endast site 1552 och filtrera på stop_point id 4529 och 13232
+        const SITE_ID = 1552;
+        const allowedStopPoints = [4529, 13232];
+
         let allDepartures = [];
         let lastFetchTime = null;
 
-        /**
-         * Hämtar avgångar för en given siteId.
-         * Funktionen tar emot siteId och anropar rätt endpoint.
-         * Filtrerar också på tillåtna stop_point.id (om du vill justera, ändra allowedStopPoints).
-         */
+        // Hämta avgångar för site 1552
         async function getSlDepartures(siteId) {
             try {
-                const response = await fetch(`https://transport.integration.sl.se/v1/sites/${siteId}/departures`);
+                const url = `https://transport.integration.sl.se/v1/sites/${siteId}/departures`;
+                const response = await fetch(url);
                 const data = await response.json();
-                
-                console.log('Alla avgångar från API för site', siteId, ':', data.departures);
-                
-                const departures = [];
-                const allowedStopPoints = [4529, 13232]; // justera vid behov
-                
-                data.departures.forEach(departure => {
-                    // Om du vill filtrera på stop_point, behåll denna kontroll.
-                    // Om du vill ta med alla stop_points, ta bort eller kommentera ut följande rad.
-                    if (allowedStopPoints.length === 0 || allowedStopPoints.includes(departure.stop_point.id)) {
-                        departures.push(departure);
-                    }
+
+                if (!Array.isArray(data.departures)) {
+                    console.warn('Ingen departures-array i svaret för site', siteId);
+                    return [];
+                }
+
+                // Filtrera på stop_point.id enligt allowedStopPoints
+                const departures = data.departures.filter(d => {
+                    if (!d || !d.stop_point) return false;
+                    return allowedStopPoints.includes(d.stop_point.id);
                 });
-                
-                console.log('Filtrerade avgångar för site', siteId, ':', departures);
-                
+
+                console.log('Hämtade och filtrerade avgångar för site', siteId, departures.length);
+                if (departures.length > 0) console.log('Exempel:', departures[0]);
+
                 return departures;
             } catch (error) {
-                console.error('Fel vid hämtning av data för site', siteId, ':', error);
+                console.error('Fel vid hämtning av data för site', siteId, error);
                 return [];
             }
+        }
+
+        // Försök hitta rätt tidsfält i objektet
+        function getExpectedTime(departure) {
+            return departure.expected
+                || departure.expectedTime
+                || departure.expectedDepartureTime
+                || departure.aimedDepartureTime
+                || departure.time
+                || null;
         }
 
         function formatTimeRemaining(expectedTime) {
             const now = new Date();
             const expected = new Date(expectedTime);
+            if (isNaN(expected.getTime())) return null;
             const diffMs = expected - now;
-            
-            if (diffMs <= 0) {
-                return null;
-            }
-            
+            if (diffMs <= 0) return null;
             const totalSeconds = Math.floor(diffMs / 1000);
             const minutes = Math.floor(totalSeconds / 60);
             const seconds = totalSeconds % 60;
-            
             const secStr = seconds < 10 ? '0' + seconds : seconds;
-            
             return `${minutes} min ${secStr} sek`;
         }
 
-        // Deduplicera avgångar baserat på unik nyckel (föredra departure.id om tillgängligt)
+        // Deduplicera baserat på departure.id eller kombination av fält
         function dedupeDepartures(arr) {
             const map = new Map();
             arr.forEach(d => {
-                const key = d.id ?? `${d.line.id}|${d.expected}|${d.stop_point.id}`;
+                const key = d.id ?? `${d.line?.id}|${getExpectedTime(d)}|${d.stop_point?.id}`;
                 if (!map.has(key)) map.set(key, d);
             });
             return Array.from(map.values());
         }
 
         async function fetchDepartures() {
-            // Hämta från två olika siteId: 1301 och 1463 (som i din ursprungliga kod)
-            const [departures1301, departures1463] = await Promise.all([
-                getSlDepartures(1301),
-                getSlDepartures(1463)
-            ]);
-            
-            // Slå ihop utan att filtrera bort buss 66 (borttaget enligt önskemål)
-            const merged = [...departures1301, ...departures1463];
-            
-            // Ta bort dubbletter
-            allDepartures = dedupeDepartures(merged);
-            
-            // Sortera på förväntad tid
-            allDepartures.sort((a, b) => new Date(a.expected) - new Date(b.expected));
-            lastFetchTime = new Date();
+            try {
+                const departures = await getSlDepartures(SITE_ID);
+                allDepartures = dedupeDepartures(departures);
+                allDepartures.sort((a, b) => new Date(getExpectedTime(a)) - new Date(getExpectedTime(b)));
+                lastFetchTime = new Date();
+                console.log('Totalt efter dedupe:', allDepartures.length);
+            } catch (err) {
+                console.error('Fel i fetchDepartures', err);
+                allDepartures = [];
+            }
         }
 
         function updateDisplay() {
             let html = '';
-            
+
             allDepartures.forEach(departure => {
-                const timeRemaining = formatTimeRemaining(departure.expected);
-                
+                const expected = getExpectedTime(departure);
+                const timeRemaining = expected ? formatTimeRemaining(expected) : null;
+
                 if (timeRemaining) {
-                    const busNumber = departure.line.id;
-                    
-                    // Kolla om det är 2 minuter eller mindre kvar
-                    const now = new Date();
-                    const expected = new Date(departure.expected);
-                    const diffMs = expected - now;
+                    const busNumber = departure.line?.id ?? '-';
+                    const destination = departure.destination ?? departure.direction ?? departure.destination_display_name ?? '';
+                    const diffMs = new Date(expected) - new Date();
                     const totalMinutes = Math.floor(diffMs / 60000);
                     const urgentClass = totalMinutes <= 2 ? ' urgent' : '';
-                    
+
                     html += `
                         <div class="departure-row">
                             <div class="departure-info">
                                 <div class="bus-number">${busNumber}</div>
-                                <div class="destination">${departure.destination || ''}</div>
+                                <div class="destination">${destination}</div>
                             </div>
                             <div class="time${urgentClass}">${timeRemaining}</div>
                         </div>
                     `;
                 }
             });
-            
+
             if (html === '') {
                 html = '<div class="departure-row"><div class="departure-info"><div class="destination">Inga avgångar</div></div><div class="time">-</div></div>';
             }
-            
+
             document.getElementById('departures').innerHTML = html;
             document.getElementById('timestamp').textContent = 'API-anrop gjort: ' + (lastFetchTime ? lastFetchTime.toLocaleTimeString('sv-SE') : '-');
         }
@@ -282,7 +168,6 @@
         async function init() {
             await fetchDepartures();
             updateDisplay();
-            
             setInterval(updateDisplay, 1000);
             setInterval(fetchDepartures, 60000);
         }
