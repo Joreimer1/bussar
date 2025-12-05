@@ -171,10 +171,10 @@
                 const data = await response.json();
                 
                 const departures = [];
-                const allowedStopAreas = [4529, 13232];
+                const allowedStopPoints = [4529, 13232];
                 
                 data.departures.forEach(departure => {
-                    if (allowedStopAreas.includes(departure.stop_area.id)) {
+                    if (allowedStopPoints.includes(departure.stop_point.id)) {
                         departures.push(departure);
                     }
                 });
