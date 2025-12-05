@@ -165,27 +165,34 @@
         let allDepartures = [];
         let lastFetchTime = null;
 
-        async function getSlDepartures() {
+        /**
+         * Hämtar avgångar för en given siteId.
+         * Funktionen tar emot siteId och anropar rätt endpoint.
+         * Filtrerar också på tillåtna stop_point.id (om du vill justera, ändra allowedStopPoints).
+         */
+        async function getSlDepartures(siteId) {
             try {
-                const response = await fetch(`https://transport.integration.sl.se/v1/sites/1552/departures`);
+                const response = await fetch(`https://transport.integration.sl.se/v1/sites/${siteId}/departures`);
                 const data = await response.json();
                 
-                console.log('Alla avgångar från API:', data.departures);
+                console.log('Alla avgångar från API för site', siteId, ':', data.departures);
                 
                 const departures = [];
-                const allowedStopPoints = [4529, 13232];
+                const allowedStopPoints = [4529, 13232]; // justera vid behov
                 
                 data.departures.forEach(departure => {
-                    if (allowedStopPoints.includes(departure.stop_point.id)) {
+                    // Om du vill filtrera på stop_point, behåll denna kontroll.
+                    // Om du vill ta med alla stop_points, ta bort eller kommentera ut följande rad.
+                    if (allowedStopPoints.length === 0 || allowedStopPoints.includes(departure.stop_point.id)) {
                         departures.push(departure);
                     }
                 });
                 
-                console.log('Filtrerade avgångar:', departures);
+                console.log('Filtrerade avgångar för site', siteId, ':', departures);
                 
                 return departures;
             } catch (error) {
-                console.error('Fel vid hämtning av data:', error);
+                console.error('Fel vid hämtning av data för site', siteId, ':', error);
                 return [];
             }
         }
@@ -208,14 +215,30 @@
             return `${minutes} min ${secStr} sek`;
         }
 
+        // Deduplicera avgångar baserat på unik nyckel (föredra departure.id om tillgängligt)
+        function dedupeDepartures(arr) {
+            const map = new Map();
+            arr.forEach(d => {
+                const key = d.id ?? `${d.line.id}|${d.expected}|${d.stop_point.id}`;
+                if (!map.has(key)) map.set(key, d);
+            });
+            return Array.from(map.values());
+        }
+
         async function fetchDepartures() {
-            let departures1301 = await getSlDepartures(1301);
-            const departures1463 = await getSlDepartures(1463);
+            // Hämta från två olika siteId: 1301 och 1463 (som i din ursprungliga kod)
+            const [departures1301, departures1463] = await Promise.all([
+                getSlDepartures(1301),
+                getSlDepartures(1463)
+            ]);
             
-            // Filtrera bort buss 66 från 1301
-            departures1301 = departures1301.filter(d => d.line.id !== 66);
+            // Slå ihop utan att filtrera bort buss 66 (borttaget enligt önskemål)
+            const merged = [...departures1301, ...departures1463];
             
-            allDepartures = [...departures1301, ...departures1463];
+            // Ta bort dubbletter
+            allDepartures = dedupeDepartures(merged);
+            
+            // Sortera på förväntad tid
             allDepartures.sort((a, b) => new Date(a.expected) - new Date(b.expected));
             lastFetchTime = new Date();
         }
@@ -240,6 +263,7 @@
                         <div class="departure-row">
                             <div class="departure-info">
                                 <div class="bus-number">${busNumber}</div>
+                                <div class="destination">${departure.destination || ''}</div>
                             </div>
                             <div class="time${urgentClass}">${timeRemaining}</div>
                         </div>
@@ -248,11 +272,11 @@
             });
             
             if (html === '') {
-                html = '<div class="departure-row"><div class="departure-info"><div class="destination">Inga avgångar</div></div></div>';
+                html = '<div class="departure-row"><div class="departure-info"><div class="destination">Inga avgångar</div></div><div class="time">-</div></div>';
             }
             
             document.getElementById('departures').innerHTML = html;
-            document.getElementById('timestamp').textContent = 'API-anrop gjort: ' + lastFetchTime.toLocaleTimeString('sv-SE');
+            document.getElementById('timestamp').textContent = 'API-anrop gjort: ' + (lastFetchTime ? lastFetchTime.toLocaleTimeString('sv-SE') : '-');
         }
 
         async function init() {
