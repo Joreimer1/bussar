@@ -137,9 +137,9 @@
 <body>
     <div class="container">
         <div class="header">
-            <div class="bus-icon"></div>
+            <div class="bus-icon">SL</div>
             <div class="header-text">
-                <h1>BAvgångar från Luma mot City</h1>
+                <h1>Avgångar från Luma mot City</h1>
             </div>
         </div>
         
@@ -171,10 +171,10 @@
                 const data = await response.json();
                 
                 const departures = [];
-                const allowedStopPoints = [4529, 13232];
+                const allowedStopAreas = [4529, 13232];
                 
                 data.departures.forEach(departure => {
-                    if (allowedStopPoints.includes(departure.stop_point.id)) {
+                    if (allowedStopAreas.includes(departure.stop_area.id)) {
                         departures.push(departure);
                     }
                 });
