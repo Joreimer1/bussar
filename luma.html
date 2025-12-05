@@ -165,7 +165,7 @@
         let allDepartures = [];
         let lastFetchTime = null;
 
-        async function getSlDepartures() {
+async function getSlDepartures() {
             try {
                 const response = await fetch(`https://transport.integration.sl.se/v1/sites/1552/departures`);
                 const data = await response.json();
