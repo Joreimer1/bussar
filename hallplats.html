@@ -1018,6 +1018,11 @@ seeAllBtn.addEventListener('click', async ()=>{
 
 /* Button group actions */
 locationBtn.addEventListener('click', ()=>{
+   // NY KOD: Stoppa favoriter-uppdatering
+  if(window.favoritesUpdateInterval) {
+    clearInterval(window.favoritesUpdateInterval);
+    window.favoritesUpdateInterval = null;
+  }
   searchContainer.classList.remove('show');
   suggestions.style.display = 'none';
   searchInput.value = '';
@@ -1061,9 +1066,25 @@ favoritesBtn.addEventListener('click', ()=>{
   favoritesCard.style.display = 'block';
   renderFavoritesList();
   showFavoritesDepartures(false).catch(e=>{ console.error(e); });
+
+  // NY KOD: Starta automatisk uppdatering
+  if(window.favoritesUpdateInterval) {
+    clearInterval(window.favoritesUpdateInterval);
+  }
+  window.favoritesUpdateInterval = setInterval(() => {
+    if(currentMode === 'favorites') {
+      showFavoritesDepartures(false).catch(e=>{ console.error(e); });
+    }
+  }, 60000); // Uppdatera varje 60 sekunder
+ 
 });
 
 searchBtn.addEventListener('click', ()=>{
+   // NY KOD: Stoppa favoriter-uppdatering
+  if(window.favoritesUpdateInterval) {
+    clearInterval(window.favoritesUpdateInterval);
+    window.favoritesUpdateInterval = null;
+  }
   setActiveButton(searchBtn);
   searchContainer.classList.add('show');
   suggestions.style.display = 'none';
