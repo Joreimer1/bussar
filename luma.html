@@ -12,7 +12,11 @@
         .bus-icon { font-size: 32px; background: black; color: white; padding: 10px; border-radius: 8px; display: flex; align-items: center; justify-content: center; width: 52px; height: 52px; }
         .header-text h1 { font-size: 28px; font-weight: 600; color: #333; }
         .column-headers { display: grid; grid-template-columns: auto 1fr; gap: 40px; padding: 0 20px; margin-bottom: 15px; font-size: 12px; font-weight: 600; color: #999; text-transform: uppercase; letter-spacing: 0.5px; }
-        .column-headers div:last-child { padding-left: 80px; }
+        /* Högerställ rubriken "Avgår om:" och ta bort vänsterpadding så den linjerar med tiderna */
+        .column-headers div:last-child {
+            padding-left: 0;
+            text-align: right;
+        }
         .departures { background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
         .departure-row { display: grid; grid-template-columns: auto 1fr; gap: 40px; padding: 18px 20px; border-bottom: 1px solid #eee; align-items: center; }
         .departure-row:last-child { border-bottom: none; }
@@ -28,7 +32,7 @@
     <div class="container">
         <div class="header">
             <div class="bus-icon">SL</div>
-            <div class="header-text"><h1>Avgångar Luma mot City by Johan</h1></div>
+            <div class="header-text"><h1>Avgångar Luma mot City</h1></div>
         </div>
 
         <div class="column-headers">
@@ -57,7 +61,6 @@
         let allDepartures = [];
         let lastFetchTime = null;
 
-        // Hämta avgångar för site 1552
         async function getSlDepartures(siteId) {
             try {
                 const url = `https://transport.integration.sl.se/v1/sites/${siteId}/departures`;
@@ -69,7 +72,6 @@
                     return [];
                 }
 
-                // Filtrera på stop_point.id enligt allowedStopPoints
                 const departures = data.departures.filter(d => {
                     if (!d || !d.stop_point) return false;
                     return allowedStopPoints.includes(d.stop_point.id);
@@ -85,7 +87,6 @@
             }
         }
 
-        // Försök hitta rätt tidsfält i objektet
         function getExpectedTime(departure) {
             return departure.expected
                 || departure.expectedTime
@@ -108,7 +109,6 @@
             return `${minutes} min ${secStr} sek`;
         }
 
-        // Deduplicera baserat på departure.id eller kombination av fält
         function dedupeDepartures(arr) {
             const map = new Map();
             arr.forEach(d => {
