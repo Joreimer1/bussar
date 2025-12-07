@@ -1010,6 +1010,30 @@ stopFavoriteStar.addEventListener('click', ()=>{
 seeAllBtn.addEventListener('click', async ()=>{
   const name = (stopName.textContent || '').trim();
   if(!name) return;
+
+  // Försök hitta siteId/stop_area från aktuell kontext
+  const siteId = currentStopAreaId || (currentStop && (currentStop.stop_area_id || currentStop.stopAreaId || currentStop.id));
+  if(siteId && Array.isArray(allStopPoints) && allStopPoints.length>0){
+    // Hämta alla stop-points som tillhör samma site/stop_area
+    const pointsForSite = allStopPoints
+      .filter(sp => {
+        const cand = [sp.stop_area_id, sp.stopAreaId, sp.parentId, sp.site_id];
+        return cand.some(c => c && String(c) === String(siteId));
+      })
+      .map(sp => ({ id: sp.id, name: sp.name || '', lat: sp.lat, lon: sp.lon }));
+
+    if(pointsForSite.length > 0){
+      // Visa bara dessa på kartan (ingen ändring i avgångsflödet)
+      lastSelectedFromSearch = false; // behåll läge som Plats
+      setActiveButton(locationBtn);
+      updateMapForMatches(pointsForSite);
+      // Visa stopInfo kvar (valfritt)
+      stopInfo.style.display = 'block';
+      return;
+    }
+  }
+
+  // Fallback: om vi inte hittar siteId eller inga punkter, kör vanlig sökning på namn
   searchInput.value = name;
   setActiveButton(searchBtn);
   searchContainer.classList.add('show');
