@@ -9,143 +9,122 @@
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       font-family: -apple-system, sans-serif;
-      background: #1a1a2e;
-      color: #fff;
+      background: #1a1a2e; color: #fff;
       min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      padding: 16px;
+      display: flex; flex-direction: column; align-items: center;
+      padding: 12px;
     }
     h1 { font-size: 1.1rem; margin-bottom: 2px; color: #e8304a; }
-    p.sub { font-size: 0.75rem; color: #aaa; margin-bottom: 10px; text-align: center; }
+    p.sub { font-size: 0.72rem; color: #aaa; margin-bottom: 8px; text-align: center; }
 
     #videoWrap {
-      position: relative;
-      width: 100%;
-      max-width: 420px;
-      border-radius: 12px;
-      overflow: hidden;
-      border: 3px solid #e8304a;
-      max-height: 40vh;
+      position: relative; width: 100%; max-width: 420px;
+      border-radius: 12px; overflow: hidden;
+      border: 3px solid #e8304a; max-height: 38vh;
       transition: border-color 0.3s;
     }
     #videoWrap.scanning { border-color: #f5a623; }
     #videoWrap.found    { border-color: #2ecc71; }
-
-    video { width: 100%; display: block; max-height: 40vh; object-fit: cover; }
+    video { width: 100%; display: block; max-height: 38vh; object-fit: cover; }
 
     #overlay {
       position: absolute;
-      top: 50%; left: 10%;
-      width: 80%; height: 55px;
+      top: 50%; left: 8%; width: 84%; height: 52px;
       transform: translateY(-50%);
-      border-radius: 6px;
-      pointer-events: none;
+      border-radius: 6px; pointer-events: none;
       border: 2px solid rgba(232,48,74,0.9);
-      background: rgba(232,48,74,0.05);
+      background: rgba(232,48,74,0.04);
       transition: border-color 0.3s, background 0.3s;
     }
-    #overlay.scanning {
-      border-color: rgba(245,166,35,0.9);
-      background: rgba(245,166,35,0.07);
-    }
-    #overlay.found {
-      border-color: rgba(46,204,113,0.9);
-      background: rgba(46,204,113,0.1);
-    }
+    #overlay.scanning { border-color: rgba(245,166,35,0.9); background: rgba(245,166,35,0.07); }
+    #overlay.found    { border-color: rgba(46,204,113,0.9); background: rgba(46,204,113,0.1); }
 
     #progressBar {
-      position: absolute;
-      bottom: 0; left: 0;
-      height: 3px; width: 0%;
-      background: #f5a623;
+      position: absolute; bottom: 0; left: 0;
+      height: 4px; width: 0%;
+      background: linear-gradient(90deg, #f5a623, #ffe066);
       border-radius: 0 0 6px 6px;
-      transition: width 0.15s linear;
+      transition: width 0.2s linear;
     }
-
     #overlayLabel {
-      position: absolute;
-      bottom: -20px; left: 0;
+      position: absolute; bottom: -20px; left: 0;
       width: 100%; text-align: center;
-      font-size: 0.7rem; color: #aaa;
+      font-size: 0.68rem; color: #aaa;
     }
 
     canvas { display: none; }
 
-    #zoomWrap {
+    .slider-row {
       width: 100%; max-width: 420px;
       display: flex; align-items: center; gap: 8px;
-      margin-top: 8px; font-size: 0.8rem; color: #aaa;
+      margin-top: 6px; font-size: 0.78rem; color: #aaa;
     }
-    #zoomSlider { flex: 1; accent-color: #e8304a; }
+    .slider-row input[type=range] { flex: 1; accent-color: #e8304a; }
 
     #status {
-      margin-top: 10px;
-      font-size: 0.85rem; color: #aaa;
-      text-align: center; min-height: 18px;
+      margin-top: 8px; font-size: 0.82rem; color: #aaa;
+      text-align: center; min-height: 16px;
     }
 
+    #scanBtn {
+      margin-top: 8px; width: 100%; max-width: 420px;
+      padding: 13px; font-size: 1rem; font-weight: bold;
+      border: none; border-radius: 10px;
+      background: #e8304a; color: #fff; cursor: pointer;
+    }
+    #scanBtn:disabled { background: #555; }
+
     #result {
-      margin-top: 10px;
-      width: 100%; max-width: 420px;
-      background: #16213e;
-      border-radius: 12px;
-      padding: 14px;
+      margin-top: 8px; width: 100%; max-width: 420px;
+      background: #16213e; border-radius: 12px; padding: 12px;
       display: none;
     }
-    #result h2 { font-size: 0.9rem; color: #e8304a; margin-bottom: 8px; }
-    #stopCode { font-size: 2rem; font-weight: bold; letter-spacing: 4px; }
-    #stopName { font-size: 0.95rem; color: #ccc; margin-top: 2px; }
-    #departures { margin-top: 10px; }
+    #result h2 { font-size: 0.88rem; color: #e8304a; margin-bottom: 6px; }
+    #stopCode { font-size: 1.9rem; font-weight: bold; letter-spacing: 4px; }
+    #stopName { font-size: 0.92rem; color: #ccc; margin-top: 2px; }
+    #departures { margin-top: 8px; }
     .dep {
       display: flex; justify-content: space-between;
-      padding: 7px 0;
-      border-bottom: 1px solid #2a2a4a;
-      font-size: 0.88rem;
+      padding: 6px 0; border-bottom: 1px solid #2a2a4a; font-size: 0.86rem;
     }
     .dep:last-child { border-bottom: none; }
-    .dep .line { background: #e8304a; color: #fff; padding: 2px 7px; border-radius: 4px; font-weight: bold; font-size: 0.78rem; }
+    .dep .line { background: #e8304a; color: #fff; padding: 2px 7px; border-radius: 4px; font-weight: bold; font-size: 0.76rem; }
     .dep .time { color: #7ec8e3; font-weight: bold; }
 
     #resetBtn {
-      margin-top: 8px;
-      width: 100%; max-width: 420px;
-      padding: 10px;
-      font-size: 0.9rem; font-weight: bold;
+      margin-top: 6px; width: 100%; max-width: 420px;
+      padding: 9px; font-size: 0.88rem; font-weight: bold;
       border: none; border-radius: 10px;
-      background: #333; color: #ccc;
-      cursor: pointer; display: none;
+      background: #2a2a4a; color: #ccc; cursor: pointer; display: none;
     }
 
-    #sensitivityWrap {
-      width: 100%; max-width: 420px;
-      display: flex; align-items: center; gap: 8px;
-      margin-top: 6px; font-size: 0.8rem; color: #aaa;
-    }
-    #sensitivitySlider { flex: 1; accent-color: #e8304a; }
-      margin-top: 8px;
-      width: 100%; max-width: 420px;
+    #manualWrap {
+      margin-top: 6px; width: 100%; max-width: 420px;
       display: flex; gap: 8px;
     }
     #manualInput {
-      flex: 1; padding: 11px;
-      border-radius: 8px; border: 1px solid #444;
-      background: #16213e; color: #fff;
+      flex: 1; padding: 10px; border-radius: 8px;
+      border: 1px solid #444; background: #16213e; color: #fff;
       font-size: 1rem; text-align: center; letter-spacing: 2px;
     }
-    #manualBtn {
-      padding: 11px 14px;
-      font-size: 0.9rem; font-weight: bold;
+    #manualGoBtn {
+      padding: 10px 14px; font-size: 0.88rem; font-weight: bold;
       border: none; border-radius: 8px;
-      background: #e8304a; color: #fff; cursor: pointer;
+      background: #444; color: #fff; cursor: pointer;
     }
+
+    #debugWrap {
+      margin-top: 6px; width: 100%; max-width: 420px;
+      display: none; gap: 4px; flex-wrap: wrap;
+    }
+    #debugWrap canvas { display: block; border-radius: 4px; border: 1px solid #333; width: 48%; height: auto; }
+    #debugToggle { font-size: 0.7rem; color: #444; cursor: pointer; margin-top: 4px; text-align: center; width: 100%; max-width: 420px; }
   </style>
 </head>
 <body>
 
 <h1>🚌 SL Hållplatsscanner</h1>
-<p class="sub">Rikta mot koden — detekteras automatiskt när du håller stilla</p>
+<p class="sub">Håll koden inom rutan — eller tryck 📷 för att scanna direkt</p>
 
 <div id="videoWrap">
   <video id="video" autoplay playsinline muted></video>
@@ -157,12 +136,18 @@
 
 <canvas id="canvas"></canvas>
 
-<div id="zoomWrap">
+<div class="slider-row">
   🔍 <input id="zoomSlider" type="range" min="1" max="5" step="0.5" value="2.5" />
   <span id="zoomVal">2.5×</span>
 </div>
+<div class="slider-row">
+  🤚 <input id="sensitivitySlider" type="range" min="5" max="60" step="1" value="35" />
+  <span id="sensitivityVal">Hand</span>
+</div>
 
 <div id="status">Startar kamera…</div>
+
+<button id="scanBtn">📷 Scanna nu</button>
 
 <div id="result">
   <h2>Hittad hållplats</h2>
@@ -173,103 +158,121 @@
 
 <button id="resetBtn">🔄 Scanna ny hållplats</button>
 
-<div id="sensitivityWrap">
-  🤚 <input id="sensitivitySlider" type="range" min="5" max="40" step="1" value="18" />
-  <span id="sensitivityVal">Normal</span>
-</div>
-
 <div id="manualWrap">
   <input id="manualInput" type="number" placeholder="Skriv kod manuellt" />
-  <button id="manualBtn">Sök</button>
+  <button id="manualGoBtn">Sök</button>
+</div>
+
+<div id="debugToggle">▼ visa bildanalys</div>
+<div id="debugWrap">
+  <canvas id="dbgNormal"></canvas>
+  <canvas id="dbgInvert"></canvas>
 </div>
 
 <script>
 const video        = document.getElementById('video');
 const canvas       = document.getElementById('canvas');
-const status       = document.getElementById('status');
+const statusEl     = document.getElementById('status');
 const resultDiv    = document.getElementById('result');
 const stopCodeEl   = document.getElementById('stopCode');
 const stopNameEl   = document.getElementById('stopName');
 const departuresEl = document.getElementById('departures');
 const manualInput  = document.getElementById('manualInput');
-const manualBtn    = document.getElementById('manualBtn');
+const manualGoBtn  = document.getElementById('manualGoBtn');
 const resetBtn     = document.getElementById('resetBtn');
+const scanBtn      = document.getElementById('scanBtn');
 const zoomSlider   = document.getElementById('zoomSlider');
 const zoomVal      = document.getElementById('zoomVal');
+const sensitivitySlider = document.getElementById('sensitivitySlider');
+const sensitivityVal    = document.getElementById('sensitivityVal');
 const videoWrap    = document.getElementById('videoWrap');
 const overlay      = document.getElementById('overlay');
 const overlayLabel = document.getElementById('overlayLabel');
 const progressBar  = document.getElementById('progressBar');
+const debugWrap    = document.getElementById('debugWrap');
+const debugToggle  = document.getElementById('debugToggle');
+const dbgNormal    = document.getElementById('dbgNormal');
+const dbgInvert    = document.getElementById('dbgInvert');
 
 let videoTrack = null;
 let scanning   = false;
 let paused     = false;
-let lastFrame  = null;
+let lastPixels = null;
 let stillCount = 0;
 let autoLoop   = null;
+let MOTION_LIMIT   = 35;
+const STILL_NEEDED = 6;
+const CHECK_MS     = 300;
 
-const CHECK_INTERVAL  = 300; // ms
-let MOTION_LIMIT    = 18;  // högre = mer tillåten rörelse (justeras av slider)
-let STILL_THRESHOLD = 8;   // frames stilla innan OCR körs
-
-// ── Kamera ──────────────────────────────────────────────
+// ── Kamera ───────────────────────────────────────────────
 async function startCamera() {
   try {
     const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
+      video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } }
     });
     video.srcObject = stream;
     videoTrack = stream.getVideoTracks()[0];
 
-    const caps = videoTrack.getCapabilities?.() || {};
+    const caps = videoTrack.getCapabilities ? videoTrack.getCapabilities() : {};
     if (caps.zoom) {
       const max = Math.min(caps.zoom.max, 8);
-      zoomSlider.min = caps.zoom.min;
-      zoomSlider.max = max;
+      zoomSlider.min = caps.zoom.min; zoomSlider.max = max;
       const z = Math.min(2.5, max);
-      zoomSlider.value = z;
-      zoomVal.textContent = z + '×';
+      zoomSlider.value = z; zoomVal.textContent = z + 'x';
       await applyZoom(z);
     } else {
       applyCSSZoom(2.5);
     }
-
     video.addEventListener('playing', () => {
-      status.textContent = 'Rikta mot hållplatsnumret…';
+      statusEl.textContent = 'Rikta mot hållplatsnumret…';
       startAutoScan();
     }, { once: true });
-
   } catch (e) {
-    status.textContent = '❌ Kamerafel: ' + e.message;
+    statusEl.textContent = 'Kamerafel: ' + e.message;
   }
 }
 
 async function applyZoom(z) {
   if (!videoTrack) return;
-  const caps = videoTrack.getCapabilities?.() || {};
+  const caps = videoTrack.getCapabilities ? videoTrack.getCapabilities() : {};
   if (caps.zoom) {
     try { await videoTrack.applyConstraints({ advanced: [{ zoom: z }] }); } catch(_) {}
   } else { applyCSSZoom(z); }
 }
 function applyCSSZoom(z) {
-  video.style.transform = `scale(${z})`;
+  video.style.transform = 'scale(' + z + ')';
   video.style.transformOrigin = 'center center';
 }
-zoomSlider.addEventListener('input', () => {
+zoomSlider.addEventListener('input', function() {
   const z = parseFloat(zoomSlider.value);
-  zoomVal.textContent = z + '×';
+  zoomVal.textContent = z + 'x';
   applyZoom(z);
 });
 
+// ── Känslighet ───────────────────────────────────────────
+function sensitivityLabel(v) {
+  if (v <= 12) return 'Stativ';
+  if (v <= 25) return 'Normal';
+  if (v <= 40) return 'Hand';
+  return 'Max';
+}
+sensitivitySlider.addEventListener('input', function() {
+  MOTION_LIMIT = parseInt(sensitivitySlider.value);
+  sensitivityVal.textContent = sensitivityLabel(MOTION_LIMIT);
+});
+
 // ── Rörelsedetektering ───────────────────────────────────
-function captureGrayscale() {
-  const w = Math.floor(video.videoWidth  * 0.15);
-  const h = Math.floor(video.videoHeight * 0.15);
-  if (!w || !h) return null;
-  const c = document.createElement('canvas');
-  c.width = w; c.height = h;
-  c.getContext('2d').drawImage(video, 0, 0, w, h);
-  return c.getContext('2d').getImageData(0, 0, w, h).data;
+function sampleCenter() {
+  const sw = Math.floor(video.videoWidth  * 0.5);
+  const sh = Math.floor(video.videoHeight * 0.3);
+  const sx = Math.floor(video.videoWidth  * 0.25);
+  const sy = Math.floor(video.videoHeight * 0.35);
+  if (!sw || !sh) return null;
+  const tmp = document.createElement('canvas');
+  tmp.width  = Math.max(1, Math.floor(sw * 0.1));
+  tmp.height = Math.max(1, Math.floor(sh * 0.1));
+  tmp.getContext('2d').drawImage(video, sx, sy, sw, sh, 0, 0, tmp.width, tmp.height);
+  return tmp.getContext('2d').getImageData(0, 0, tmp.width, tmp.height).data;
 }
 
 function motionScore(a, b) {
@@ -279,150 +282,178 @@ function motionScore(a, b) {
   return diff / (a.length / 4);
 }
 
-// ── Auto-scan loop ────────────────────────────────────────
+// ── Auto-scan loop ───────────────────────────────────────
 function startAutoScan() {
   if (autoLoop) clearInterval(autoLoop);
-  autoLoop = setInterval(tick, CHECK_INTERVAL);
+  autoLoop = setInterval(tick, CHECK_MS);
 }
 
 async function tick() {
   if (paused || scanning) return;
-
-  const frame = captureGrayscale();
-  const score = motionScore(lastFrame, frame);
-  lastFrame = frame;
+  const frame = sampleCenter();
+  const score = motionScore(lastPixels, frame);
+  lastPixels = frame;
 
   if (score < MOTION_LIMIT) {
-    stillCount = Math.min(stillCount + 1, STILL_THRESHOLD);
+    stillCount = Math.min(stillCount + 1, STILL_NEEDED);
   } else {
-    stillCount = Math.max(stillCount - 2, 0);
+    stillCount = Math.max(stillCount - 1, 0);
     if (stillCount === 0) {
       overlay.className = '';
       overlayLabel.textContent = 'Håll koden inom rutan';
     }
   }
 
-  progressBar.style.width = (stillCount / STILL_THRESHOLD * 100) + '%';
-
-  if (stillCount >= STILL_THRESHOLD) {
+  progressBar.style.width = (stillCount / STILL_NEEDED * 100) + '%';
+  if (stillCount >= STILL_NEEDED) {
     stillCount = 0;
-    await runOCR();
+    await runOCR(false);
   }
 }
 
-// ── OCR ──────────────────────────────────────────────────
-async function runOCR() {
-  scanning = true;
-  overlay.className = 'scanning';
-  videoWrap.className = 'scanning';
-  overlayLabel.textContent = 'Analyserar…';
-  status.textContent = '🔍 Läser av kod…';
-
+// ── Bygg OCR-canvas ──────────────────────────────────────
+function buildOCRCanvas(invert) {
   const ctx = canvas.getContext('2d');
   canvas.width  = video.videoWidth;
   canvas.height = video.videoHeight;
   ctx.drawImage(video, 0, 0);
 
-  // Crop & scale up för bättre OCR
-  const cropX = canvas.width  * 0.1;
-  const cropY = canvas.height * 0.35;
-  const cropW = canvas.width  * 0.8;
-  const cropH = canvas.height * 0.30;
+  const cropX = Math.floor(canvas.width  * 0.05);
+  const cropY = Math.floor(canvas.height * 0.28);
+  const cropW = Math.floor(canvas.width  * 0.90);
+  const cropH = Math.floor(canvas.height * 0.44);
 
-  const cc   = document.createElement('canvas');
-  cc.width   = cropW * 2;
-  cc.height  = cropH * 2;
+  const scale = 3;
+  const cc = document.createElement('canvas');
+  cc.width  = cropW * scale;
+  cc.height = cropH * scale;
   const cctx = cc.getContext('2d');
-  cctx.scale(2, 2);
-  cctx.drawImage(canvas, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+  cctx.imageSmoothingEnabled = true;
+  cctx.imageSmoothingQuality = 'high';
+  cctx.drawImage(canvas, cropX, cropY, cropW, cropH, 0, 0, cc.width, cc.height);
 
-  // Binarisering
   const id = cctx.getImageData(0, 0, cc.width, cc.height);
-  for (let i = 0; i < id.data.length; i += 4) {
-    const v = (id.data[i] + id.data[i+1] + id.data[i+2]) / 3 > 128 ? 255 : 0;
-    id.data[i] = id.data[i+1] = id.data[i+2] = v;
+  const d  = id.data;
+  for (let i = 0; i < d.length; i += 4) {
+    let lum = 0.299 * d[i] + 0.587 * d[i+1] + 0.114 * d[i+2];
+    lum = Math.min(255, Math.max(0, (lum - 128) * 1.8 + 128));
+    let v = lum > 140 ? 255 : 0;
+    if (invert) v = 255 - v;
+    d[i] = d[i+1] = d[i+2] = v;
   }
   cctx.putImageData(id, 0, 0);
 
-  try {
-    const result = await Tesseract.recognize(cc, 'eng', {
-      tessedit_char_whitelist: '0123456789',
-      tessedit_pageseg_mode: '7'
-    });
-    const text  = result.data.text.replace(/\D/g, '');
-    const match = text.match(/\d{4,6}/);
+  // Spara till debug-canvas
+  const dbg = invert ? dbgInvert : dbgNormal;
+  dbg.width  = Math.floor(cc.width  / 3);
+  dbg.height = Math.floor(cc.height / 3);
+  dbg.getContext('2d').drawImage(cc, 0, 0, dbg.width, dbg.height);
 
-    if (match) {
-      const code = match[0];
-      overlay.className = 'found';
-      videoWrap.className = 'found';
-      overlayLabel.textContent = '✅ ' + code;
-      status.textContent = `✅ Hittade kod: ${code}`;
-      progressBar.style.width = '100%';
-      paused = true;
-      resetBtn.style.display = 'block';
-      await fetchDepartures(code);
-    } else {
-      overlay.className = '';
-      videoWrap.className = '';
-      overlayLabel.textContent = 'Håll koden inom rutan';
-      status.textContent = 'Ingen kod hittades – försök igen…';
-    }
-  } catch (e) {
+  return cc;
+}
+
+// ── OCR: prova normal + inverterad ───────────────────────
+async function runOCR(manual) {
+  if (scanning) return;
+  scanning = true;
+  scanBtn.disabled = true;
+  overlay.className = 'scanning';
+  videoWrap.className = 'scanning';
+  overlayLabel.textContent = 'Analyserar…';
+  statusEl.textContent = 'Laser av kod…';
+
+  const opts = {
+    tessedit_char_whitelist: '0123456789',
+    tessedit_pageseg_mode: '7',
+    tessedit_ocr_engine_mode: '1'
+  };
+
+  let foundCode = null;
+
+  try {
+    const cc1 = buildOCRCanvas(false);
+    const r1  = await Tesseract.recognize(cc1, 'eng', opts);
+    const m1  = r1.data.text.replace(/\D/g, '').match(/\d{4,6}/);
+    if (m1) foundCode = m1[0];
+  } catch(_) {}
+
+  if (!foundCode) {
+    try {
+      const cc2 = buildOCRCanvas(true);
+      const r2  = await Tesseract.recognize(cc2, 'eng', opts);
+      const m2  = r2.data.text.replace(/\D/g, '').match(/\d{4,6}/);
+      if (m2) foundCode = m2[0];
+    } catch(_) {}
+  }
+
+  if (foundCode) {
+    overlay.className = 'found';
+    videoWrap.className = 'found';
+    overlayLabel.textContent = 'Hittade ' + foundCode;
+    statusEl.textContent = 'Hittade kod: ' + foundCode;
+    progressBar.style.width = '100%';
+    paused = true;
+    resetBtn.style.display = 'block';
+    await fetchDepartures(foundCode);
+  } else {
     overlay.className = '';
     videoWrap.className = '';
-    status.textContent = '❌ OCR-fel: ' + e.message;
+    overlayLabel.textContent = 'Håll koden inom rutan';
+    statusEl.textContent = manual
+      ? 'Ingen kod hittades. Prova narmre eller battre ljus.'
+      : 'Ingen kod – fortsatter leta…';
   }
 
   scanning = false;
+  scanBtn.disabled = false;
 }
 
 // ── Avgångar ─────────────────────────────────────────────
 async function fetchDepartures(siteId) {
   stopCodeEl.textContent = siteId;
   resultDiv.style.display = 'block';
-  stopNameEl.textContent = 'Hämtar avgångar…';
+  stopNameEl.textContent = 'Hamtar avganger…';
   departuresEl.innerHTML = '';
 
   try {
-    const res  = await fetch(`https://transport.integration.sl.se/v1/sites/${siteId}/departures?forecast=30`);
+    const res  = await fetch('https://transport.integration.sl.se/v1/sites/' + siteId + '/departures?forecast=30');
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
     const deps = data.departures || [];
-
     if (!deps.length) {
-      stopNameEl.textContent = 'Hållplats ' + siteId;
-      departuresEl.innerHTML = '<div style="color:#aaa;font-size:0.85rem">Inga avgångar just nu.</div>';
+      stopNameEl.textContent = 'Hallplats ' + siteId;
+      departuresEl.innerHTML = '<div style="color:#aaa;font-size:0.82rem">Inga avganger just nu.</div>';
       return;
     }
-    stopNameEl.textContent = deps[0]?.line?.group_of_lines || ('Hållplats ' + siteId);
-    departuresEl.innerHTML = deps.slice(0, 6).map(d => `
-      <div class="dep">
-        <span><span class="line">${d.line?.designation || '?'}</span> ${d.destination || ''}</span>
-        <span class="time">${d.display || ''}</span>
-      </div>`).join('');
+    stopNameEl.textContent = (deps[0] && deps[0].line && deps[0].line.group_of_lines) || ('Hallplats ' + siteId);
+    departuresEl.innerHTML = deps.slice(0, 6).map(function(d) {
+      return '<div class="dep"><span><span class="line">' +
+        (d.line && d.line.designation || '?') + '</span> ' +
+        (d.destination || '') + '</span><span class="time">' +
+        (d.display || '') + '</span></div>';
+    }).join('');
   } catch (e) {
-    stopNameEl.textContent = 'Hållplats ' + siteId;
-    departuresEl.innerHTML = `<div style="color:#aaa;font-size:0.85rem">Kunde inte hämta avgångar.<br>
-      Prova <a href="https://sl.se" style="color:#7ec8e3">sl.se</a></div>`;
+    stopNameEl.textContent = 'Hallplats ' + siteId;
+    departuresEl.innerHTML = '<div style="color:#aaa;font-size:0.82rem">Kunde inte hamta avganger.<br>Prova <a href="https://sl.se" style="color:#7ec8e3">sl.se</a></div>';
   }
 }
 
-// ── Reset ─────────────────────────────────────────────────
-resetBtn.addEventListener('click', () => {
+// ── Reset ────────────────────────────────────────────────
+resetBtn.addEventListener('click', function() {
   paused = scanning = false;
-  stillCount = 0; lastFrame = null;
-  overlay.className = '';
-  videoWrap.className = '';
-  overlayLabel.textContent = 'Håll koden inom rutan';
+  stillCount = 0; lastPixels = null;
+  overlay.className = ''; videoWrap.className = '';
+  overlayLabel.textContent = 'Hall koden inom rutan';
   progressBar.style.width = '0%';
   resultDiv.style.display = 'none';
   resetBtn.style.display = 'none';
-  status.textContent = 'Rikta mot hållplatsnumret…';
+  scanBtn.disabled = false;
+  statusEl.textContent = 'Rikta mot hallplatsnumret…';
 });
 
-// ── Manuell sökning ───────────────────────────────────────
-manualBtn.addEventListener('click', () => {
+scanBtn.addEventListener('click', function() { runOCR(true); });
+
+manualGoBtn.addEventListener('click', function() {
   const code = manualInput.value.trim();
   if (code.length >= 4) {
     paused = true;
@@ -430,20 +461,12 @@ manualBtn.addEventListener('click', () => {
     fetchDepartures(code);
   }
 });
-manualInput.addEventListener('keydown', e => { if (e.key === 'Enter') manualBtn.click(); });
+manualInput.addEventListener('keydown', function(e) { if (e.key === 'Enter') manualGoBtn.click(); });
 
-const sensitivitySlider = document.getElementById('sensitivitySlider');
-const sensitivityVal    = document.getElementById('sensitivityVal');
-
-function sensitivityLabel(v) {
-  if (v <= 10) return 'Stativ';
-  if (v <= 18) return 'Normal';
-  if (v <= 28) return 'Hand';
-  return 'Max';
-}
-sensitivitySlider.addEventListener('input', () => {
-  MOTION_LIMIT = parseInt(sensitivitySlider.value);
-  sensitivityVal.textContent = sensitivityLabel(MOTION_LIMIT);
+debugToggle.addEventListener('click', function() {
+  const open = debugWrap.style.display === 'flex';
+  debugWrap.style.display = open ? 'none' : 'flex';
+  debugToggle.textContent = open ? 'visa bildanalys' : 'dolj bildanalys';
 });
 
 startCamera();
