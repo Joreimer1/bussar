@@ -15,14 +15,10 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      padding: 20px;
+      padding: 16px;
     }
-    h1 {
-      font-size: 1.4rem;
-      margin-bottom: 6px;
-      color: #e8304a;
-    }
-    p.sub { font-size: 0.85rem; color: #aaa; margin-bottom: 16px; text-align: center; }
+    h1 { font-size: 1.1rem; margin-bottom: 2px; color: #e8304a; }
+    p.sub { font-size: 0.75rem; color: #aaa; margin-bottom: 10px; text-align: center; }
 
     #videoWrap {
       position: relative;
@@ -30,124 +26,137 @@
       max-width: 420px;
       border-radius: 12px;
       overflow: hidden;
-      border: 2px solid #e8304a;
+      border: 3px solid #e8304a;
+      max-height: 40vh;
+      transition: border-color 0.3s;
     }
-    video { width: 100%; display: block; }
+    #videoWrap.scanning { border-color: #f5a623; }
+    #videoWrap.found    { border-color: #2ecc71; }
 
-    /* Siktlinje */
+    video { width: 100%; display: block; max-height: 40vh; object-fit: cover; }
+
     #overlay {
       position: absolute;
-      top: 50%;
-      left: 10%;
-      width: 80%;
-      height: 60px;
+      top: 50%; left: 10%;
+      width: 80%; height: 55px;
       transform: translateY(-50%);
-      border: 2px solid rgba(232,48,74,0.8);
       border-radius: 6px;
-      background: rgba(232,48,74,0.05);
       pointer-events: none;
+      border: 2px solid rgba(232,48,74,0.9);
+      background: rgba(232,48,74,0.05);
+      transition: border-color 0.3s, background 0.3s;
     }
+    #overlay.scanning {
+      border-color: rgba(245,166,35,0.9);
+      background: rgba(245,166,35,0.07);
+    }
+    #overlay.found {
+      border-color: rgba(46,204,113,0.9);
+      background: rgba(46,204,113,0.1);
+    }
+
+    #progressBar {
+      position: absolute;
+      bottom: 0; left: 0;
+      height: 3px; width: 0%;
+      background: #f5a623;
+      border-radius: 0 0 6px 6px;
+      transition: width 0.15s linear;
+    }
+
     #overlayLabel {
       position: absolute;
-      bottom: -22px;
-      left: 0;
-      width: 100%;
-      text-align: center;
-      font-size: 0.7rem;
-      color: #e8304a;
+      bottom: -20px; left: 0;
+      width: 100%; text-align: center;
+      font-size: 0.7rem; color: #aaa;
     }
 
     canvas { display: none; }
 
-    button {
-      margin-top: 24px;
-      width: 100%;
-      max-width: 420px;
-      padding: 14px;
-      font-size: 1rem;
-      font-weight: bold;
-      border: none;
-      border-radius: 10px;
-      background: #e8304a;
-      color: #fff;
-      cursor: pointer;
-      transition: opacity 0.2s;
+    #zoomWrap {
+      width: 100%; max-width: 420px;
+      display: flex; align-items: center; gap: 8px;
+      margin-top: 8px; font-size: 0.8rem; color: #aaa;
     }
-    button:active { opacity: 0.8; }
-    button:disabled { background: #555; cursor: not-allowed; }
+    #zoomSlider { flex: 1; accent-color: #e8304a; }
 
     #status {
-      margin-top: 14px;
-      font-size: 0.85rem;
-      color: #aaa;
-      text-align: center;
-      min-height: 20px;
+      margin-top: 10px;
+      font-size: 0.85rem; color: #aaa;
+      text-align: center; min-height: 18px;
     }
 
     #result {
-      margin-top: 18px;
-      width: 100%;
-      max-width: 420px;
+      margin-top: 10px;
+      width: 100%; max-width: 420px;
       background: #16213e;
       border-radius: 12px;
-      padding: 16px;
+      padding: 14px;
       display: none;
     }
-    #result h2 { font-size: 1rem; color: #e8304a; margin-bottom: 10px; }
-    #stopCode { font-size: 2rem; font-weight: bold; letter-spacing: 4px; color: #fff; }
-    #stopName { font-size: 1rem; color: #ccc; margin-top: 4px; }
-    #departures { margin-top: 12px; }
+    #result h2 { font-size: 0.9rem; color: #e8304a; margin-bottom: 8px; }
+    #stopCode { font-size: 2rem; font-weight: bold; letter-spacing: 4px; }
+    #stopName { font-size: 0.95rem; color: #ccc; margin-top: 2px; }
+    #departures { margin-top: 10px; }
     .dep {
-      display: flex;
-      justify-content: space-between;
-      padding: 8px 0;
+      display: flex; justify-content: space-between;
+      padding: 7px 0;
       border-bottom: 1px solid #2a2a4a;
-      font-size: 0.9rem;
+      font-size: 0.88rem;
     }
     .dep:last-child { border-bottom: none; }
-    .dep .line { background: #e8304a; color: #fff; padding: 2px 8px; border-radius: 4px; font-weight: bold; font-size: 0.8rem; }
+    .dep .line { background: #e8304a; color: #fff; padding: 2px 7px; border-radius: 4px; font-weight: bold; font-size: 0.78rem; }
     .dep .time { color: #7ec8e3; font-weight: bold; }
 
+    #resetBtn {
+      margin-top: 8px;
+      width: 100%; max-width: 420px;
+      padding: 10px;
+      font-size: 0.9rem; font-weight: bold;
+      border: none; border-radius: 10px;
+      background: #333; color: #ccc;
+      cursor: pointer; display: none;
+    }
+
     #manualWrap {
-      margin-top: 16px;
-      width: 100%;
-      max-width: 420px;
-      display: flex;
-      gap: 8px;
+      margin-top: 8px;
+      width: 100%; max-width: 420px;
+      display: flex; gap: 8px;
     }
     #manualInput {
-      flex: 1;
-      padding: 12px;
-      border-radius: 8px;
-      border: 1px solid #444;
-      background: #16213e;
-      color: #fff;
-      font-size: 1rem;
-      text-align: center;
-      letter-spacing: 2px;
+      flex: 1; padding: 11px;
+      border-radius: 8px; border: 1px solid #444;
+      background: #16213e; color: #fff;
+      font-size: 1rem; text-align: center; letter-spacing: 2px;
     }
     #manualBtn {
-      margin-top: 0;
-      width: auto;
-      padding: 12px 16px;
-      flex-shrink: 0;
-      border-radius: 8px;
+      padding: 11px 14px;
+      font-size: 0.9rem; font-weight: bold;
+      border: none; border-radius: 8px;
+      background: #e8304a; color: #fff; cursor: pointer;
     }
   </style>
 </head>
 <body>
 
 <h1>🚌 SL Hållplatsscanner</h1>
-<p class="sub">Rikta kameran mot hållplatsnumret och tryck "Scanna"</p>
+<p class="sub">Rikta mot koden — detekteras automatiskt när du håller stilla</p>
 
 <div id="videoWrap">
   <video id="video" autoplay playsinline muted></video>
-  <div id="overlay"><span id="overlayLabel">Rikta mot sifferkoden</span></div>
+  <div id="overlay">
+    <div id="progressBar"></div>
+    <span id="overlayLabel">Håll koden inom rutan</span>
+  </div>
 </div>
 
 <canvas id="canvas"></canvas>
 
-<button id="scanBtn">📷 Scanna hållplats</button>
+<div id="zoomWrap">
+  🔍 <input id="zoomSlider" type="range" min="1" max="5" step="0.5" value="2.5" />
+  <span id="zoomVal">2.5×</span>
+</div>
+
 <div id="status">Startar kamera…</div>
 
 <div id="result">
@@ -157,143 +166,260 @@
   <div id="departures"></div>
 </div>
 
+<button id="resetBtn">🔄 Scanna ny hållplats</button>
+
 <div id="manualWrap">
-  <input id="manualInput" type="number" placeholder="Skriv kod" maxlength="6" />
+  <input id="manualInput" type="number" placeholder="Skriv kod manuellt" />
   <button id="manualBtn">Sök</button>
 </div>
 
 <script>
-const video = document.getElementById('video');
-const canvas = document.getElementById('canvas');
-const scanBtn = document.getElementById('scanBtn');
-const status = document.getElementById('status');
-const resultDiv = document.getElementById('result');
-const stopCodeEl = document.getElementById('stopCode');
-const stopNameEl = document.getElementById('stopName');
+const video        = document.getElementById('video');
+const canvas       = document.getElementById('canvas');
+const status       = document.getElementById('status');
+const resultDiv    = document.getElementById('result');
+const stopCodeEl   = document.getElementById('stopCode');
+const stopNameEl   = document.getElementById('stopName');
 const departuresEl = document.getElementById('departures');
-const manualInput = document.getElementById('manualInput');
-const manualBtn = document.getElementById('manualBtn');
+const manualInput  = document.getElementById('manualInput');
+const manualBtn    = document.getElementById('manualBtn');
+const resetBtn     = document.getElementById('resetBtn');
+const zoomSlider   = document.getElementById('zoomSlider');
+const zoomVal      = document.getElementById('zoomVal');
+const videoWrap    = document.getElementById('videoWrap');
+const overlay      = document.getElementById('overlay');
+const overlayLabel = document.getElementById('overlayLabel');
+const progressBar  = document.getElementById('progressBar');
 
-// Starta kamera
+let videoTrack = null;
+let scanning   = false;
+let paused     = false;
+let lastFrame  = null;
+let stillCount = 0;
+let autoLoop   = null;
+
+const STILL_THRESHOLD = 12;  // frames stilla innan OCR körs
+const CHECK_INTERVAL  = 300; // ms
+
+// ── Kamera ──────────────────────────────────────────────
 async function startCamera() {
   try {
     const stream = await navigator.mediaDevices.getUserMedia({
       video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
     });
     video.srcObject = stream;
-    status.textContent = 'Kamera redo. Rikta mot hållplatsnumret.';
+    videoTrack = stream.getVideoTracks()[0];
+
+    const caps = videoTrack.getCapabilities?.() || {};
+    if (caps.zoom) {
+      const max = Math.min(caps.zoom.max, 8);
+      zoomSlider.min = caps.zoom.min;
+      zoomSlider.max = max;
+      const z = Math.min(2.5, max);
+      zoomSlider.value = z;
+      zoomVal.textContent = z + '×';
+      await applyZoom(z);
+    } else {
+      applyCSSZoom(2.5);
+    }
+
+    video.addEventListener('playing', () => {
+      status.textContent = 'Rikta mot hållplatsnumret…';
+      startAutoScan();
+    }, { once: true });
+
   } catch (e) {
-    status.textContent = '❌ Kunde inte starta kameran: ' + e.message;
+    status.textContent = '❌ Kamerafel: ' + e.message;
   }
 }
 
-// Capture + OCR
-async function scanFrame() {
-  scanBtn.disabled = true;
-  status.textContent = '🔍 Analyserar bild…';
+async function applyZoom(z) {
+  if (!videoTrack) return;
+  const caps = videoTrack.getCapabilities?.() || {};
+  if (caps.zoom) {
+    try { await videoTrack.applyConstraints({ advanced: [{ zoom: z }] }); } catch(_) {}
+  } else { applyCSSZoom(z); }
+}
+function applyCSSZoom(z) {
+  video.style.transform = `scale(${z})`;
+  video.style.transformOrigin = 'center center';
+}
+zoomSlider.addEventListener('input', () => {
+  const z = parseFloat(zoomSlider.value);
+  zoomVal.textContent = z + '×';
+  applyZoom(z);
+});
 
-  // Rita frame till canvas
+// ── Rörelsedetektering ───────────────────────────────────
+function captureGrayscale() {
+  const w = Math.floor(video.videoWidth  * 0.15);
+  const h = Math.floor(video.videoHeight * 0.15);
+  if (!w || !h) return null;
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  c.getContext('2d').drawImage(video, 0, 0, w, h);
+  return c.getContext('2d').getImageData(0, 0, w, h).data;
+}
+
+function motionScore(a, b) {
+  if (!a || !b || a.length !== b.length) return 999;
+  let diff = 0;
+  for (let i = 0; i < a.length; i += 4) diff += Math.abs(a[i] - b[i]);
+  return diff / (a.length / 4);
+}
+
+// ── Auto-scan loop ────────────────────────────────────────
+function startAutoScan() {
+  if (autoLoop) clearInterval(autoLoop);
+  autoLoop = setInterval(tick, CHECK_INTERVAL);
+}
+
+async function tick() {
+  if (paused || scanning) return;
+
+  const frame = captureGrayscale();
+  const score = motionScore(lastFrame, frame);
+  lastFrame = frame;
+
+  if (score < 4) {
+    stillCount = Math.min(stillCount + 1, STILL_THRESHOLD);
+  } else {
+    stillCount = Math.max(stillCount - 2, 0);
+    if (stillCount === 0) {
+      overlay.className = '';
+      overlayLabel.textContent = 'Håll koden inom rutan';
+    }
+  }
+
+  progressBar.style.width = (stillCount / STILL_THRESHOLD * 100) + '%';
+
+  if (stillCount >= STILL_THRESHOLD) {
+    stillCount = 0;
+    await runOCR();
+  }
+}
+
+// ── OCR ──────────────────────────────────────────────────
+async function runOCR() {
+  scanning = true;
+  overlay.className = 'scanning';
+  videoWrap.className = 'scanning';
+  overlayLabel.textContent = 'Analyserar…';
+  status.textContent = '🔍 Läser av kod…';
+
   const ctx = canvas.getContext('2d');
-  canvas.width = video.videoWidth;
+  canvas.width  = video.videoWidth;
   canvas.height = video.videoHeight;
   ctx.drawImage(video, 0, 0);
 
-  // Crop till mitten (siktlinjen)
+  // Crop & scale up för bättre OCR
+  const cropX = canvas.width  * 0.1;
   const cropY = canvas.height * 0.35;
+  const cropW = canvas.width  * 0.8;
   const cropH = canvas.height * 0.30;
-  const cropX = canvas.width * 0.1;
-  const cropW = canvas.width * 0.8;
 
-  const cropCanvas = document.createElement('canvas');
-  cropCanvas.width = cropW;
-  cropCanvas.height = cropH;
-  const cctx = cropCanvas.getContext('2d');
+  const cc   = document.createElement('canvas');
+  cc.width   = cropW * 2;
+  cc.height  = cropH * 2;
+  const cctx = cc.getContext('2d');
+  cctx.scale(2, 2);
   cctx.drawImage(canvas, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
 
-  // Kontrast-förstärkning
-  const imgData = cctx.getImageData(0, 0, cropW, cropH);
-  for (let i = 0; i < imgData.data.length; i += 4) {
-    const avg = (imgData.data[i] + imgData.data[i+1] + imgData.data[i+2]) / 3;
-    const v = avg > 128 ? 255 : 0;
-    imgData.data[i] = imgData.data[i+1] = imgData.data[i+2] = v;
+  // Binarisering
+  const id = cctx.getImageData(0, 0, cc.width, cc.height);
+  for (let i = 0; i < id.data.length; i += 4) {
+    const v = (id.data[i] + id.data[i+1] + id.data[i+2]) / 3 > 128 ? 255 : 0;
+    id.data[i] = id.data[i+1] = id.data[i+2] = v;
   }
-  cctx.putImageData(imgData, 0, 0);
+  cctx.putImageData(id, 0, 0);
 
   try {
-    const result = await Tesseract.recognize(cropCanvas, 'eng', {
+    const result = await Tesseract.recognize(cc, 'eng', {
       tessedit_char_whitelist: '0123456789',
-      psm: 7
+      tessedit_pageseg_mode: '7'
     });
-
-    const text = result.data.text.trim().replace(/\D/g, '');
+    const text  = result.data.text.replace(/\D/g, '');
     const match = text.match(/\d{4,6}/);
 
     if (match) {
       const code = match[0];
-      status.textContent = `✅ Kod hittad: ${code}`;
+      overlay.className = 'found';
+      videoWrap.className = 'found';
+      overlayLabel.textContent = '✅ ' + code;
+      status.textContent = `✅ Hittade kod: ${code}`;
+      progressBar.style.width = '100%';
+      paused = true;
+      resetBtn.style.display = 'block';
       await fetchDepartures(code);
     } else {
-      status.textContent = '⚠️ Ingen kod hittades. Försök igen.';
+      overlay.className = '';
+      videoWrap.className = '';
+      overlayLabel.textContent = 'Håll koden inom rutan';
+      status.textContent = 'Ingen kod hittades – försök igen…';
     }
   } catch (e) {
+    overlay.className = '';
+    videoWrap.className = '';
     status.textContent = '❌ OCR-fel: ' + e.message;
   }
 
-  scanBtn.disabled = false;
+  scanning = false;
 }
 
-// Hämta avgångar via SL Trafiklab (öppen endpoint utan API-nyckel)
+// ── Avgångar ─────────────────────────────────────────────
 async function fetchDepartures(siteId) {
   stopCodeEl.textContent = siteId;
   resultDiv.style.display = 'block';
   stopNameEl.textContent = 'Hämtar avgångar…';
   departuresEl.innerHTML = '';
 
-  // SL Transport API (öppen, ingen nyckel krävs för grunddata)
-  const url = `https://transport.integration.sl.se/v1/sites/${siteId}/departures?forecast=30`;
-
   try {
-    const res = await fetch(url);
+    const res  = await fetch(`https://transport.integration.sl.se/v1/sites/${siteId}/departures?forecast=30`);
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
-
     const deps = data.departures || [];
-    if (deps.length === 0) {
+
+    if (!deps.length) {
       stopNameEl.textContent = 'Hållplats ' + siteId;
-      departuresEl.innerHTML = '<div style="color:#aaa;font-size:0.85rem">Inga avgångar hittades.</div>';
+      departuresEl.innerHTML = '<div style="color:#aaa;font-size:0.85rem">Inga avgångar just nu.</div>';
       return;
     }
-
-    // Hållplatsnamn från första avgången
-    const name = deps[0]?.stop_point?.designation || '';
     stopNameEl.textContent = deps[0]?.line?.group_of_lines || ('Hållplats ' + siteId);
-
-    // Visa upp till 6 avgångar
-    const shown = deps.slice(0, 6);
-    departuresEl.innerHTML = shown.map(d => {
-      const lineName = d.line?.designation || '?';
-      const dest = d.destination || '';
-      const display = d.display || '';
-      return `<div class="dep">
-        <span><span class="line">${lineName}</span> ${dest}</span>
-        <span class="time">${display}</span>
-      </div>`;
-    }).join('');
-
+    departuresEl.innerHTML = deps.slice(0, 6).map(d => `
+      <div class="dep">
+        <span><span class="line">${d.line?.designation || '?'}</span> ${d.destination || ''}</span>
+        <span class="time">${d.display || ''}</span>
+      </div>`).join('');
   } catch (e) {
     stopNameEl.textContent = 'Hållplats ' + siteId;
-    departuresEl.innerHTML = `<div style="color:#aaa;font-size:0.85rem">Kunde inte hämta avgångar.<br>Prova: <a href="https://sl.se" style="color:#7ec8e3">sl.se</a></div>`;
+    departuresEl.innerHTML = `<div style="color:#aaa;font-size:0.85rem">Kunde inte hämta avgångar.<br>
+      Prova <a href="https://sl.se" style="color:#7ec8e3">sl.se</a></div>`;
   }
 }
 
-scanBtn.addEventListener('click', scanFrame);
+// ── Reset ─────────────────────────────────────────────────
+resetBtn.addEventListener('click', () => {
+  paused = scanning = false;
+  stillCount = 0; lastFrame = null;
+  overlay.className = '';
+  videoWrap.className = '';
+  overlayLabel.textContent = 'Håll koden inom rutan';
+  progressBar.style.width = '0%';
+  resultDiv.style.display = 'none';
+  resetBtn.style.display = 'none';
+  status.textContent = 'Rikta mot hållplatsnumret…';
+});
+
+// ── Manuell sökning ───────────────────────────────────────
 manualBtn.addEventListener('click', () => {
   const code = manualInput.value.trim();
-  if (code.length >= 4) fetchDepartures(code);
+  if (code.length >= 4) {
+    paused = true;
+    resetBtn.style.display = 'block';
+    fetchDepartures(code);
+  }
 });
-manualInput.addEventListener('keydown', e => {
-  if (e.key === 'Enter') manualBtn.click();
-});
+manualInput.addEventListener('keydown', e => { if (e.key === 'Enter') manualBtn.click(); });
 
 startCamera();
 </script>
