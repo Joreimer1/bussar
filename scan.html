@@ -118,7 +118,12 @@
       cursor: pointer; display: none;
     }
 
-    #manualWrap {
+    #sensitivityWrap {
+      width: 100%; max-width: 420px;
+      display: flex; align-items: center; gap: 8px;
+      margin-top: 6px; font-size: 0.8rem; color: #aaa;
+    }
+    #sensitivitySlider { flex: 1; accent-color: #e8304a; }
       margin-top: 8px;
       width: 100%; max-width: 420px;
       display: flex; gap: 8px;
@@ -168,6 +173,11 @@
 
 <button id="resetBtn">🔄 Scanna ny hållplats</button>
 
+<div id="sensitivityWrap">
+  🤚 <input id="sensitivitySlider" type="range" min="5" max="40" step="1" value="18" />
+  <span id="sensitivityVal">Normal</span>
+</div>
+
 <div id="manualWrap">
   <input id="manualInput" type="number" placeholder="Skriv kod manuellt" />
   <button id="manualBtn">Sök</button>
@@ -198,8 +208,9 @@ let lastFrame  = null;
 let stillCount = 0;
 let autoLoop   = null;
 
-const STILL_THRESHOLD = 12;  // frames stilla innan OCR körs
 const CHECK_INTERVAL  = 300; // ms
+let MOTION_LIMIT    = 18;  // högre = mer tillåten rörelse (justeras av slider)
+let STILL_THRESHOLD = 8;   // frames stilla innan OCR körs
 
 // ── Kamera ──────────────────────────────────────────────
 async function startCamera() {
@@ -281,7 +292,7 @@ async function tick() {
   const score = motionScore(lastFrame, frame);
   lastFrame = frame;
 
-  if (score < 4) {
+  if (score < MOTION_LIMIT) {
     stillCount = Math.min(stillCount + 1, STILL_THRESHOLD);
   } else {
     stillCount = Math.max(stillCount - 2, 0);
@@ -420,6 +431,20 @@ manualBtn.addEventListener('click', () => {
   }
 });
 manualInput.addEventListener('keydown', e => { if (e.key === 'Enter') manualBtn.click(); });
+
+const sensitivitySlider = document.getElementById('sensitivitySlider');
+const sensitivityVal    = document.getElementById('sensitivityVal');
+
+function sensitivityLabel(v) {
+  if (v <= 10) return 'Stativ';
+  if (v <= 18) return 'Normal';
+  if (v <= 28) return 'Hand';
+  return 'Max';
+}
+sensitivitySlider.addEventListener('input', () => {
+  MOTION_LIMIT = parseInt(sensitivitySlider.value);
+  sensitivityVal.textContent = sensitivityLabel(MOTION_LIMIT);
+});
 
 startCamera();
 </script>
