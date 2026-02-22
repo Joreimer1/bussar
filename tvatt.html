@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Tvättstugan — Elpris</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --green: #2ecc6e;
+    --yellow: #f5c842;
+    --red: #f04848;
+    --bg: #0e0e12;
+    --surface: #18181f;
+    --border: #2a2a35;
+    --text: #e8e8f0;
+    --muted: #6b6b80;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    width: 100%; height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    overflow: hidden;
+  }
+
+  body {
+    display: grid;
+    grid-template-columns: 220px 1fr;
+    grid-template-rows: 1fr;
+    gap: 0;
+    height: 100vh;
+  }
+
+  /* LEFT: Traffic light panel */
+  #left-panel {
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    position: relative;
+    gap: 12px;
+  }
+
+  #status-label {
+    font-family: 'Playfair Display', serif;
+    font-size: 13px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--muted);
+    text-align: center;
+  }
+
+  #traffic-light-housing {
+    background: #111116;
+    border: 2px solid #2a2a35;
+    border-radius: 40px;
+    padding: 14px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    box-shadow: 0 0 30px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.05);
+  }
+
+  .tl-dot {
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    transition: all 0.6s ease;
+    position: relative;
+  }
+
+  .tl-dot.off {
+    background: #1e1e26;
+    box-shadow: none;
+  }
+
+  .tl-dot.on-red {
+    background: radial-gradient(circle at 35% 35%, #ff7070, var(--red));
+    box-shadow: 0 0 20px var(--red), 0 0 40px rgba(240,72,72,0.4);
+  }
+
+  .tl-dot.on-yellow {
+    background: radial-gradient(circle at 35% 35%, #ffe090, var(--yellow));
+    box-shadow: 0 0 20px var(--yellow), 0 0 40px rgba(245,200,66,0.4);
+  }
+
+  .tl-dot.on-green {
+    background: radial-gradient(circle at 35% 35%, #80ffb0, var(--green));
+    box-shadow: 0 0 20px var(--green), 0 0 40px rgba(46,204,110,0.4);
+  }
+
+  #current-price-display {
+    text-align: center;
+  }
+
+  #current-price-num {
+    font-family: 'Playfair Display', serif;
+    font-size: 36px;
+    font-weight: 700;
+    line-height: 1;
+    transition: color 0.6s ease;
+  }
+
+  #current-price-unit {
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 0.1em;
+    margin-top: 2px;
+  }
+
+  #wash-window-info {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 10px 12px;
+    text-align: center;
+    width: 100%;
+  }
+
+  #wash-window-label {
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+
+  #wash-window-time {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text);
+  }
+
+  #wash-window-price {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+
+  #clock {
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 0.08em;
+  }
+
+  /* RIGHT: Timeline */
+  #right-panel {
+    padding: 14px 16px 14px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    overflow: hidden;
+  }
+
+  #right-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+  }
+
+  #right-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 15px;
+    color: var(--text);
+  }
+
+  #right-subtitle {
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 0.08em;
+  }
+
+  #timeline {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    overflow-y: auto;
+    scrollbar-width: none;
+  }
+
+  #timeline::-webkit-scrollbar { display: none; }
+
+  .time-block {
+    display: grid;
+    grid-template-columns: 44px 1fr 52px;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    border-radius: 8px;
+    transition: all 0.3s ease;
+    border: 1px solid transparent;
+    flex-shrink: 0;
+  }
+
+  .time-block.current-block {
+    border-color: rgba(255,255,255,0.15);
+    background: rgba(255,255,255,0.05);
+  }
+
+  .time-block.best-window {
+    border-style: dashed;
+  }
+
+  .time-block.best-window-green { border-color: rgba(46,204,110,0.4); background: rgba(46,204,110,0.07); }
+  .time-block.best-window-yellow { border-color: rgba(245,200,66,0.4); background: rgba(245,200,66,0.07); }
+
+  .block-time {
+    font-size: 12px;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+
+  .block-time.now {
+    color: var(--text);
+    font-weight: 500;
+  }
+
+  .block-bar-wrap {
+    position: relative;
+    height: 22px;
+    background: rgba(255,255,255,0.04);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+
+  .block-bar {
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    border-radius: 4px;
+    transition: width 0.8s ease, background 0.6s ease;
+    min-width: 4px;
+  }
+
+  .block-bar-label {
+    position: absolute;
+    right: 6px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 10px;
+    color: rgba(0,0,0,0.7);
+    font-weight: 500;
+    mix-blend-mode: multiply;
+    white-space: nowrap;
+  }
+
+  .block-price {
+    font-size: 12px;
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  .wash-badge {
+    font-size: 9px;
+    padding: 1px 5px;
+    border-radius: 4px;
+    margin-left: 4px;
+    vertical-align: middle;
+    font-weight: 500;
+  }
+
+  .badge-green { background: rgba(46,204,110,0.2); color: var(--green); }
+  .badge-yellow { background: rgba(245,200,66,0.2); color: var(--yellow); }
+
+  #legend {
+    display: flex;
+    gap: 14px;
+    align-items: center;
+    flex-shrink: 0;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 10px;
+    color: var(--muted);
+  }
+
+  .legend-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  #error-msg {
+    display: none;
+    color: var(--red);
+    font-size: 11px;
+    text-align: center;
+  }
+
+  .pulse {
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
+</style>
+</head>
+<body>
+
+<div id="left-panel">
+  <div id="status-label">Nu kostar det</div>
+  <div id="traffic-light-housing">
+    <div class="tl-dot off" id="tl-red"></div>
+    <div class="tl-dot off" id="tl-yellow"></div>
+    <div class="tl-dot off" id="tl-green"></div>
+  </div>
+  <div id="current-price-display">
+    <div id="current-price-num" class="pulse">—</div>
+    <div id="current-price-unit">öre / kWh</div>
+  </div>
+  <div id="wash-window-info">
+    <div id="wash-window-label">🧺 Bästa tvätt-start</div>
+    <div id="wash-window-time">Laddar…</div>
+    <div id="wash-window-price"></div>
+  </div>
+  <div id="clock">—</div>
+  <div id="error-msg">Kunde ej hämta priser</div>
+</div>
+
+<div id="right-panel">
+  <div id="right-header">
+    <div id="right-title">Dagens elpriser — SE3</div>
+    <div id="right-subtitle">Spot inkl. moms & påslag*</div>
+  </div>
+  <div id="timeline"></div>
+  <div id="legend">
+    <div class="legend-item"><div class="legend-dot" style="background:var(--green)"></div> Under 80 öre</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--yellow)"></div> 80–120 öre</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--red)"></div> Över 120 öre</div>
+    <div class="legend-item" style="margin-left:auto; font-size:9px; color:var(--muted)">🧺 = bäst att starta tvätt</div>
+  </div>
+</div>
+
+<script>
+// Config
+const SURCHARGE_ORE = 6.25; // approximate grid fee + energy tax expressed as flat addition
+// Note: spot price is ex-VAT in SEK/kWh; we convert to öre and add VAT+surcharge
+// The API returns SEK/kWh ex VAT. We multiply by 100 to get öre, then add 25% moms.
+// Plus a rough påslag of ~6.25 öre (transmission losses, certificate). Adjust as needed.
+
+const GREEN_MAX = 80;
+const YELLOW_MAX = 120;
+
+function rawToOre(sek_kwh) {
+  return Math.round(sek_kwh * 100 * 1.25 + SURCHARGE_ORE);
+}
+
+function getColor(ore) {
+  if (ore < GREEN_MAX) return 'var(--green)';
+  if (ore <= YELLOW_MAX) return 'var(--yellow)';
+  return 'var(--red)';
+}
+
+function getClass(ore) {
+  if (ore < GREEN_MAX) return 'on-green';
+  if (ore <= YELLOW_MAX) return 'on-yellow';
+  return 'on-red';
+}
+
+function setTrafficLight(ore) {
+  document.getElementById('tl-red').className = 'tl-dot off';
+  document.getElementById('tl-yellow').className = 'tl-dot off';
+  document.getElementById('tl-green').className = 'tl-dot off';
+  const cls = getClass(ore);
+  const id = cls === 'on-green' ? 'tl-green' : cls === 'on-yellow' ? 'tl-yellow' : 'tl-red';
+  document.getElementById(id).className = 'tl-dot ' + cls;
+  const num = document.getElementById('current-price-num');
+  num.textContent = ore;
+  num.style.color = getColor(ore);
+  num.classList.remove('pulse');
+}
+
+function padZ(n) { return n < 10 ? '0' + n : '' + n; }
+
+function updateClock() {
+  const now = new Date();
+  document.getElementById('clock').textContent =
+    padZ(now.getHours()) + ':' + padZ(now.getMinutes()) + ':' + padZ(now.getSeconds());
+}
+
+setInterval(updateClock, 1000);
+updateClock();
+
+async function fetchPrices() {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = padZ(now.getMonth() + 1);
+  const d = padZ(now.getDate());
+  const url = `https://www.elprisetjustnu.se/api/v1/prices/${y}/${m}-${d}_SE3.json`;
+
+  let data;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    data = await res.json();
+  } catch(e) {
+    document.getElementById('error-msg').style.display = 'block';
+    console.error(e);
+    // Try to fetch tomorrow as well if current hour is late
+    return;
+  }
+
+  // Also try to fetch tomorrow's prices
+  const tomorrow = new Date(now);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const y2 = tomorrow.getFullYear();
+  const m2 = padZ(tomorrow.getMonth() + 1);
+  const d2 = padZ(tomorrow.getDate());
+  const url2 = `https://www.elprisetjustnu.se/api/v1/prices/${y2}/${m2}-${d2}_SE3.json`;
+  let data2 = [];
+  try {
+    const res2 = await fetch(url2);
+    if (res2.ok) data2 = await res2.json();
+  } catch(e) { /* tomorrow not available yet */ }
+
+  const allData = [...data, ...data2];
+
+  // Convert and filter from current hour onwards
+  const currentHour = new Date(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours());
+
+  const entries = allData.map(p => ({
+    timeStart: new Date(p.time_start),
+    ore: rawToOre(p.SEK_per_kWh)
+  })).filter(e => e.timeStart >= currentHour).slice(0, 24);
+
+  // Find current price
+  const current = entries[0];
+  if (current) {
+    // For current block: consider 1.5h wash window = blocks starting from now
+    // A wash cycle started NOW spans current + next block (1.5h = 1h + 0.5h of next)
+    // We weigh: 1.0 * now_ore + 0.5 * next_ore / 1.5
+    setTrafficLight(current.ore);
+  }
+
+  // Find best 1.5h window (weighted average of block[i] + 0.5*block[i+1])
+  let bestIdx = -1;
+  let bestAvg = Infinity;
+  for (let i = 0; i < entries.length - 1; i++) {
+    const avg = (entries[i].ore * 1.0 + entries[i+1].ore * 0.5) / 1.5;
+    if (avg < bestAvg) {
+      bestAvg = avg;
+      bestIdx = i;
+    }
+  }
+
+  if (bestIdx >= 0) {
+    const bt = entries[bestIdx].timeStart;
+    const bh = padZ(bt.getHours());
+    const bm = padZ(bt.getMinutes());
+    const et = new Date(bt.getTime() + 90 * 60000);
+    const eh = padZ(et.getHours());
+    const em = padZ(et.getMinutes());
+    document.getElementById('wash-window-time').textContent = `${bh}:${bm} – ${eh}:${em}`;
+    const avgOre = Math.round(bestAvg);
+    document.getElementById('wash-window-price').textContent = `≈ ${avgOre} öre/kWh`;
+    document.getElementById('wash-window-price').style.color = getColor(avgOre);
+  }
+
+  // Render timeline
+  const maxOre = Math.max(...entries.map(e => e.ore), 150);
+  const timeline = document.getElementById('timeline');
+  timeline.innerHTML = '';
+
+  entries.forEach((entry, i) => {
+    const t = entry.timeStart;
+    const isNow = i === 0;
+    const isBestStart = i === bestIdx;
+    const isBestNext = i === bestIdx + 1;
+
+    const block = document.createElement('div');
+    block.className = 'time-block';
+    if (isNow) block.classList.add('current-block');
+
+    const colorClass = getClass(entry.ore);
+    if (isBestStart || isBestNext) {
+      block.classList.add('best-window');
+      if (colorClass === 'on-green' || colorClass === 'on-yellow') {
+        block.classList.add('best-window-' + (colorClass === 'on-green' ? 'green' : 'yellow'));
+      }
+    }
+
+    const timeStr = padZ(t.getHours()) + ':' + padZ(t.getMinutes());
+    const isNextDay = t.getDate() !== now.getDate();
+    const dayLabel = isNextDay ? ' (+1)' : '';
+
+    const pct = Math.min(100, Math.round((entry.ore / maxOre) * 100));
+
+    let badge = '';
+    if (isBestStart) {
+      badge = `<span class="wash-badge badge-${colorClass === 'on-green' ? 'green' : 'yellow'}">🧺 Starta här</span>`;
+    }
+
+    block.innerHTML = `
+      <div class="block-time ${isNow ? 'now' : ''}">${timeStr}${dayLabel}${isNow ? ' ←' : ''}</div>
+      <div class="block-bar-wrap">
+        <div class="block-bar" style="width:${pct}%; background:${getColor(entry.ore)}"></div>
+        <div class="block-bar-label">${entry.ore} öre${badge}</div>
+      </div>
+      <div class="block-price" style="color:${getColor(entry.ore)}">${entry.ore} ö</div>
+    `;
+
+    timeline.appendChild(block);
+  });
+
+  // Scroll current into view
+  if (timeline.firstChild) timeline.firstChild.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+fetchPrices();
+// Refresh every 15 minutes
+setInterval(fetchPrices, 15 * 60 * 1000);
+</script>
+</body>
+</html>
