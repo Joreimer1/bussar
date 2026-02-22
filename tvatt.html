@@ -38,12 +38,12 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: 14px;
-    gap: 12px;
+    padding: 10px;
+    gap: 8px;
   }
   #status-label {
     font-family: 'Playfair Display', serif;
-    font-size: 11px;
+    font-size: 10px;
     letter-spacing: 0.15em;
     text-transform: uppercase;
     color: var(--muted);
@@ -52,15 +52,15 @@
   #traffic-light-housing {
     background: #111116;
     border: 2px solid #2a2a35;
-    border-radius: 38px;
-    padding: 11px 10px;
+    border-radius: 30px;
+    padding: 7px 8px;
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 5px;
     box-shadow: 0 0 28px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.05);
   }
   .tl-dot {
-    width: 46px; height: 46px;
+    width: 34px; height: 34px;
     border-radius: 50%;
     transition: all 0.6s ease;
   }
@@ -81,29 +81,29 @@
   #current-price-display { text-align: center; }
   #current-price-num {
     font-family: 'Playfair Display', serif;
-    font-size: 44px;
+    font-size: 34px;
     font-weight: 900;
     line-height: 1;
     transition: color 0.6s ease;
   }
   #current-price-unit {
-    font-size: 11px; color: var(--muted);
-    letter-spacing: 0.1em; margin-top: 3px;
+    font-size: 10px; color: var(--muted);
+    letter-spacing: 0.1em; margin-top: 2px;
   }
 
   #wash-window-info {
     background: rgba(255,255,255,0.04);
     border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 8px 10px;
+    border-radius: 8px;
+    padding: 6px 8px;
     text-align: center;
     width: 100%;
   }
-  #wash-window-label { font-size: 11px; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 3px; }
-  #wash-window-time { font-size: 15px; font-weight: 500; }
-  #wash-window-price { font-size: 13px; color: var(--muted); margin-top: 2px; }
+  #wash-window-label { font-size: 10px; color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 2px; }
+  #wash-window-time { font-size: 13px; font-weight: 500; }
+  #wash-window-price { font-size: 12px; color: var(--muted); margin-top: 1px; }
 
-  #clock-digital { font-size: 11px; color: var(--muted); letter-spacing: 0.08em; }
+  #clock-digital { font-size: 10px; color: var(--muted); letter-spacing: 0.08em; }
 
   /* RIGHT */
   #right-panel {
@@ -287,7 +287,7 @@ function drawClock(hourPrices) {
 
     // Hour number inside ring
     const hp = polar(midAngle, (innerR + outerR) / 2);
-    const hfs = Math.max(9, size * 0.055);
+    const hfs = Math.max(9, size * 0.038);
     svg.appendChild(mk('text', {
       x: hp.x, y: hp.y,
       'text-anchor': 'middle',
