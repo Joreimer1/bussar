@@ -287,7 +287,7 @@ function drawClock(hourPrices) {
 
     // Hour number inside ring
     const hp = polar(midAngle, (innerR + outerR) / 2);
-    const hfs = Math.max(9, size * 0.038);
+    const hfs = Math.max(9, size * 0.055);
     svg.appendChild(mk('text', {
       x: hp.x, y: hp.y,
       'text-anchor': 'middle',
