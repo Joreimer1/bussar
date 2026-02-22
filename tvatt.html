@@ -162,7 +162,7 @@ const GREEN_MAX = 80, YELLOW_MAX = 120;
 
 function rawToOre(sek) { return sek * 100 * 1.25 + SURCHARGE_ORE; }
 function oreToKr(ore) { return Math.round(ore / 100 * 10) / 10; } // one decimal, whole-ish
-function oreToDisplay(ore) { return Math.round(ore / 100) + ' kr'; } // whole kronor for labels
+function oreToDisplay(ore) { return (ore / 100).toFixed(2) + ' kr'; } // two decimals for left panel
 function getColor(ore) {
   if (ore < GREEN_MAX) return '#2ecc6e';
   if (ore <= YELLOW_MAX) return '#f5c842';
@@ -259,8 +259,9 @@ function drawClock(hourPrices) {
       'stroke-width': 0.8
     }));
 
-    // Hour label OUTSIDE ring (rotated along edge)
-    const lp = polar(midAngle, labelR);
+    // Hour label OUTSIDE ring (no rotation, close to ring)
+    const closeR = outerR + 14;
+    const lp = polar(midAngle, closeR);
     const hfs = Math.max(10, size * 0.055);
     svg.appendChild(mk('text', {
       x: lp.x, y: lp.y,
@@ -269,19 +270,18 @@ function drawClock(hourPrices) {
       fill: isPast ? '#2e2e3a' : '#9090a8',
       'font-size': hfs,
       'font-family': 'DM Mono, monospace',
-      'font-weight': '500',
-      transform: `rotate(${midAngle}, ${lp.x}, ${lp.y})`
+      'font-weight': '500'
     }, padZ(hour)));
 
-    // Price label INSIDE sector
+    // Price label INSIDE sector, near outer edge
     if (hasData && !isPast) {
-      const hp = polar(midAngle, (innerR + outerR) / 2);
-      const fs = Math.max(8, size * 0.038);
+      const hp = polar(midAngle, innerR + (outerR - innerR) * 0.72);
+      const fs = Math.max(9, size * 0.048);
       svg.appendChild(mk('text', {
         x: hp.x, y: hp.y,
         'text-anchor': 'middle',
         'dominant-baseline': 'middle',
-        fill: 'rgba(0,0,0,0.75)',
+        fill: 'rgba(0,0,0,0.80)',
         'font-size': fs,
         'font-family': 'DM Mono, monospace',
         'font-weight': '500'
