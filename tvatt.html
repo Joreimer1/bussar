@@ -114,13 +114,6 @@
     padding: 10px 10px 8px;
     gap: 6px;
   }
-  #clock-title {
-    font-family: 'Playfair Display', serif;
-    font-size: 12px;
-    color: var(--muted);
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-  }
   #clock-svg { display: block; filter: drop-shadow(0 0 24px rgba(0,0,0,0.6)); }
 
   #legend {
@@ -155,7 +148,6 @@
 </div>
 
 <div id="right-panel">
-  <div id="clock-title">Elpriser idag — SE3 Stockholm</div>
   <svg id="clock-svg"></svg>
   <div id="legend">
     <div class="legend-item"><div class="legend-dot" style="background:var(--green)"></div>Under 1 kr</div>
@@ -203,12 +195,12 @@ function setTrafficLight(ore) {
 function drawClock(hourPrices) {
   const svg = document.getElementById('clock-svg');
   const panel = document.getElementById('right-panel');
-  const availH = panel.clientHeight - 60;
+  const availH = panel.clientHeight - 40;
   const availW = panel.clientWidth - 20;
   // We need extra room outside the ring for labels, so shrink inner size
   const maxFit = Math.min(availW, availH);
-  const size = Math.max(200, Math.min(maxFit * 0.82, 340));
-  const labelGap = 36; // space for labels outside ring
+  const size = Math.max(180, Math.min(maxFit * 0.72, 290));
+  const labelGap = 46;
   const totalSvgSize = size + labelGap * 2;
 
   svg.setAttribute('width', totalSvgSize);
@@ -218,8 +210,8 @@ function drawClock(hourPrices) {
   const cx = totalSvgSize / 2;
   const cy = totalSvgSize / 2;
   const outerR = size / 2;
-  const innerR = outerR * 0.40;
-  const labelR = outerR + labelGap - 4;
+  const innerR = outerR * 0.22;
+  const labelR = outerR + labelGap - 5;
 
   const ns = 'http://www.w3.org/2000/svg';
   function mk(tag, attrs, txt) {
@@ -267,36 +259,34 @@ function drawClock(hourPrices) {
       'stroke-width': 0.8
     }));
 
-    // Price label outside
-    if (hasData && !isPast) {
-      const lp = polar(midAngle, labelR);
-      const fs = Math.max(10, size * 0.038);
-      const txtEl = mk('text', {
-        x: lp.x, y: lp.y,
-        'text-anchor': 'middle',
-        'dominant-baseline': 'middle',
-        fill: color,
-        'font-size': fs,
-        'font-family': 'DM Mono, monospace',
-        'font-weight': '500',
-        opacity: 0.95,
-        transform: `rotate(${midAngle}, ${lp.x}, ${lp.y})`
-      }, Math.round(ore / 100) + '');
-      svg.appendChild(txtEl);
-    }
-
-    // Hour number inside ring
-    const hp = polar(midAngle, (innerR + outerR) / 2);
-    const hfs = Math.max(9, size * 0.055);
+    // Hour label OUTSIDE ring (rotated along edge)
+    const lp = polar(midAngle, labelR);
+    const hfs = Math.max(10, size * 0.055);
     svg.appendChild(mk('text', {
-      x: hp.x, y: hp.y,
+      x: lp.x, y: lp.y,
       'text-anchor': 'middle',
       'dominant-baseline': 'middle',
-      fill: isPast ? '#2e2e3a' : 'rgba(0,0,0,0.65)',
+      fill: isPast ? '#2e2e3a' : '#9090a8',
       'font-size': hfs,
       'font-family': 'DM Mono, monospace',
-      'font-weight': '500'
+      'font-weight': '500',
+      transform: `rotate(${midAngle}, ${lp.x}, ${lp.y})`
     }, padZ(hour)));
+
+    // Price label INSIDE sector
+    if (hasData && !isPast) {
+      const hp = polar(midAngle, (innerR + outerR) / 2);
+      const fs = Math.max(8, size * 0.038);
+      svg.appendChild(mk('text', {
+        x: hp.x, y: hp.y,
+        'text-anchor': 'middle',
+        'dominant-baseline': 'middle',
+        fill: 'rgba(0,0,0,0.75)',
+        'font-size': fs,
+        'font-family': 'DM Mono, monospace',
+        'font-weight': '500'
+      }, Math.round(ore / 100) + ''));
+    }
   });
 
   // Inner cap
