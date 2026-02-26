@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Ordletare</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0e0e0e;
+    --surface: #1a1a1a;
+    --surface2: #242424;
+    --border: #2e2e2e;
+    --accent: #c8f060;
+    --accent2: #60d4f0;
+    --text: #f0ede8;
+    --muted: #888;
+    --danger: #f06060;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+  }
+
+  header {
+    padding: 24px 20px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+  }
+
+  h1 {
+    font-family: 'DM Serif Display', serif;
+    font-size: 2rem;
+    letter-spacing: -0.5px;
+    color: var(--accent);
+    line-height: 1;
+  }
+
+  .subtitle {
+    font-size: 0.7rem;
+    color: var(--muted);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+
+  main {
+    flex: 1;
+    padding: 24px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    max-width: 520px;
+    width: 100%;
+    margin: 0 auto;
+  }
+
+  .input-section {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  label {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+  }
+
+  .input-wrap {
+    position: relative;
+  }
+
+  input[type="text"] {
+    width: 100%;
+    background: var(--surface);
+    border: 1.5px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 48px 14px 16px;
+    font-family: 'DM Mono', monospace;
+    font-size: 1.4rem;
+    color: var(--text);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    outline: none;
+    transition: border-color 0.2s;
+    -webkit-appearance: none;
+  }
+
+  input[type="text"]:focus {
+    border-color: var(--accent);
+  }
+
+  input[type="text"]::placeholder {
+    color: var(--muted);
+    font-size: 1rem;
+    letter-spacing: 0.05em;
+    text-transform: none;
+  }
+
+  .char-count {
+    position: absolute;
+    right: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 0.7rem;
+    color: var(--muted);
+  }
+
+  .hint {
+    font-size: 0.68rem;
+    color: var(--muted);
+    line-height: 1.6;
+  }
+
+  .hint span {
+    color: var(--accent2);
+  }
+
+  .controls {
+    display: flex;
+    gap: 8px;
+  }
+
+  .filter-group {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .filter-btn {
+    background: var(--surface);
+    border: 1.5px solid var(--border);
+    border-radius: 20px;
+    padding: 6px 14px;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--muted);
+    cursor: pointer;
+    transition: all 0.15s;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    -webkit-appearance: none;
+  }
+
+  .filter-btn.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #0e0e0e;
+  }
+
+  .search-btn {
+    width: 100%;
+    background: var(--accent);
+    border: none;
+    border-radius: 10px;
+    padding: 16px;
+    font-family: 'DM Serif Display', serif;
+    font-size: 1.1rem;
+    color: #0e0e0e;
+    cursor: pointer;
+    transition: opacity 0.15s, transform 0.1s;
+    letter-spacing: 0.02em;
+    -webkit-appearance: none;
+  }
+
+  .search-btn:active {
+    transform: scale(0.98);
+    opacity: 0.85;
+  }
+
+  .search-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  #status {
+    font-size: 0.72rem;
+    color: var(--muted);
+    min-height: 1.2em;
+  }
+
+  #status.loading { color: var(--accent2); }
+  #status.error { color: var(--danger); }
+  #status.done { color: var(--accent); }
+
+  .results-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+  }
+
+  .results-label {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+  }
+
+  .results-count {
+    font-size: 0.72rem;
+    color: var(--accent);
+  }
+
+  .results-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+
+  .word-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 11px 16px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    animation: fadeIn 0.15s ease both;
+  }
+
+  .word-row:last-child { border-bottom: none; }
+  .word-row:nth-child(even) { background: var(--surface2); }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: none; }
+  }
+
+  .word-text {
+    font-size: 1rem;
+    letter-spacing: 0.05em;
+    font-weight: 500;
+  }
+
+  .word-len {
+    font-size: 0.65rem;
+    color: var(--muted);
+    background: var(--bg);
+    padding: 2px 7px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+  }
+
+  .no-results {
+    text-align: center;
+    padding: 32px 20px;
+    color: var(--muted);
+    font-size: 0.85rem;
+    line-height: 1.8;
+  }
+
+  .sort-bar {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+
+  .sort-label {
+    font-size: 0.65rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+
+  /* Loading spinner */
+  .spinner {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border: 1.5px solid var(--border);
+    border-top-color: var(--accent2);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    vertical-align: middle;
+    margin-right: 6px;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+
+  .divider {
+    height: 1px;
+    background: var(--border);
+  }
+
+  .show-more-btn {
+    width: 100%;
+    background: transparent;
+    border: 1.5px solid var(--border);
+    border-radius: 0 0 10px 10px;
+    padding: 12px;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--muted);
+    cursor: pointer;
+    transition: all 0.15s;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    -webkit-appearance: none;
+  }
+
+  .show-more-btn:hover { color: var(--text); border-color: var(--accent); }
+
+  .progress-bar {
+    height: 2px;
+    background: var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .progress-fill {
+    height: 100%;
+    background: var(--accent);
+    width: 0%;
+    transition: width 0.3s ease;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Ordletare</h1>
+  <span class="subtitle">DSSO • Svenska ord</span>
+</header>
+
+<main>
+  <div class="input-section">
+    <label for="letters">Dina bokstäver (max 10)</label>
+    <div class="input-wrap">
+      <input type="text" id="letters" maxlength="10" placeholder="t.ex. ABCDE eller AB*DE" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false">
+      <span class="char-count" id="charCount">0/10</span>
+    </div>
+    <p class="hint">
+      Använd <span>*</span> eller <span>?</span> som wildcard (valfri bokstav).<br>
+      Separera flera kombinationer med mellanslag.
+    </p>
+  </div>
+
+  <div>
+    <label style="margin-bottom:8px;display:block;">Minsta ordlängd</label>
+    <div class="filter-group" id="minLenGroup">
+      <button class="filter-btn" data-len="2">2+</button>
+      <button class="filter-btn active" data-len="3">3+</button>
+      <button class="filter-btn" data-len="4">4+</button>
+      <button class="filter-btn" data-len="5">5+</button>
+    </div>
+  </div>
+
+  <div>
+    <label style="margin-bottom:8px;display:block;">Sortera efter</label>
+    <div class="filter-group" id="sortGroup">
+      <button class="filter-btn active" data-sort="length">Längd ↓</button>
+      <button class="filter-btn" data-sort="alpha">A–Ö</button>
+    </div>
+  </div>
+
+  <button class="search-btn" id="searchBtn" disabled>Laddar ordlista…</button>
+
+  <div id="status"></div>
+  <div class="progress-bar" id="progressBar" style="display:none">
+    <div class="progress-fill" id="progressFill"></div>
+  </div>
+
+  <div id="results"></div>
+</main>
+
+<script>
+let wordList = null;
+let minLen = 3;
+let sortMode = 'length';
+const PAGE_SIZE = 50;
+let currentResults = [];
+let displayCount = PAGE_SIZE;
+
+// Load DSSO word list
+const STATUS_URLS = [
+  'https://raw.githubusercontent.com/almgru/svenska-ord.txt/master/svenska-ord.txt',
+  'https://cdn.jsdelivr.net/gh/almgru/svenska-ord.txt@master/svenska-ord.txt',
+];
+
+async function loadWordList() {
+  const status = document.getElementById('status');
+  const bar = document.getElementById('progressBar');
+  const fill = document.getElementById('progressFill');
+  const btn = document.getElementById('searchBtn');
+
+  status.className = 'loading';
+  status.innerHTML = '<span class="spinner"></span>Laddar DSSO ordlista…';
+  bar.style.display = 'block';
+
+  for (const url of STATUS_URLS) {
+    try {
+      const res = await fetch(url);
+      if (!res.ok) continue;
+
+      const reader = res.body.getReader();
+      const total = parseInt(res.headers.get('content-length') || '0');
+      let received = 0;
+      const chunks = [];
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks.push(value);
+        received += value.length;
+        if (total) {
+          fill.style.width = Math.round((received / total) * 100) + '%';
+        }
+      }
+
+      fill.style.width = '100%';
+      const text = new TextDecoder('utf-8').decode(
+        chunks.reduce((a, b) => {
+          const merged = new Uint8Array(a.length + b.length);
+          merged.set(a); merged.set(b, a.length); return merged;
+        })
+      );
+
+      wordList = text.split('\n').map(w => w.trim().toLowerCase()).filter(w => w.length >= 2);
+      status.className = 'done';
+      status.textContent = `✓ ${wordList.length.toLocaleString('sv')} ord inlästa`;
+      btn.disabled = false;
+      btn.textContent = 'Sök ord';
+      bar.style.display = 'none';
+      return;
+
+    } catch(e) {
+      continue;
+    }
+  }
+
+  // Fallback: small built-in list
+  status.className = 'error';
+  status.textContent = '⚠ Kunde inte ladda ordlistan. Kontrollera din internetanslutning.';
+  bar.style.display = 'none';
+  btn.textContent = 'Försök igen';
+  btn.disabled = false;
+  btn.onclick = () => { wordList = null; btn.onclick = search; loadWordList(); };
+}
+
+// Check if a word can be formed from available letters
+// letters: array of chars, some may be '*' (wildcard)
+function canForm(word, letters) {
+  const available = [...letters];
+  for (const ch of word) {
+    const idx = available.indexOf(ch);
+    if (idx !== -1) {
+      available.splice(idx, 1);
+    } else {
+      // try wildcard
+      const wIdx = available.indexOf('*');
+      if (wIdx !== -1) {
+        available.splice(wIdx, 1);
+      } else {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+function search() {
+  if (!wordList) { loadWordList(); return; }
+
+  const raw = document.getElementById('letters').value.trim().toUpperCase();
+  if (!raw) return;
+
+  // Normalize: treat ? as *, split by spaces
+  const groups = raw.replace(/\?/g, '*').split(/\s+/).filter(Boolean);
+  const letters = [...groups.join('')].map(c => c.toLowerCase());
+
+  if (letters.length === 0 || letters.length > 10) return;
+
+  const status = document.getElementById('status');
+  status.className = 'loading';
+  status.innerHTML = '<span class="spinner"></span>Söker…';
+
+  // Async so UI updates
+  setTimeout(() => {
+    const wildcardCount = letters.filter(c => c === '*').length;
+    const realLetters = letters.filter(c => c !== '*');
+
+    const matches = wordList.filter(word => {
+      if (word.length < minLen || word.length > letters.length) return false;
+      return canForm(word, letters);
+    });
+
+    if (sortMode === 'length') {
+      matches.sort((a, b) => b.length - a.length || a.localeCompare(b, 'sv'));
+    } else {
+      matches.sort((a, b) => a.localeCompare(b, 'sv'));
+    }
+
+    currentResults = matches;
+    displayCount = PAGE_SIZE;
+    renderResults();
+
+    status.className = matches.length > 0 ? 'done' : '';
+    status.textContent = matches.length > 0
+      ? `✓ Hittade ${matches.length} ord`
+      : matches.length === 0 ? 'Inga ord hittades.' : '';
+  }, 10);
+}
+
+function renderResults() {
+  const container = document.getElementById('results');
+  const slice = currentResults.slice(0, displayCount);
+
+  if (currentResults.length === 0) {
+    container.innerHTML = '<div class="no-results">Inga ord hittades.<br><span style="font-size:0.75em;color:#555">Prova med fler bokstäver eller wildcards (*)</span></div>';
+    return;
+  }
+
+  const rows = slice.map((w, i) =>
+    `<div class="word-row" style="animation-delay:${Math.min(i, 30) * 10}ms">
+      <span class="word-text">${w}</span>
+      <span class="word-len">${w.length}</span>
+    </div>`
+  ).join('');
+
+  const showMore = currentResults.length > displayCount
+    ? `<button class="show-more-btn" id="showMoreBtn">Visa fler (${currentResults.length - displayCount} kvar)</button>`
+    : '';
+
+  container.innerHTML = `
+    <div style="margin-bottom:10px;display:flex;justify-content:space-between;align-items:baseline">
+      <span class="results-label">Resultat</span>
+      <span class="results-count">${currentResults.length} ord</span>
+    </div>
+    <div class="results-grid">${rows}</div>
+    ${showMore}
+  `;
+
+  if (document.getElementById('showMoreBtn')) {
+    document.getElementById('showMoreBtn').addEventListener('click', () => {
+      displayCount += PAGE_SIZE;
+      renderResults();
+    });
+  }
+}
+
+// Event listeners
+document.getElementById('letters').addEventListener('input', function() {
+  const len = this.value.replace(/\s/g, '').length;
+  document.getElementById('charCount').textContent = `${Math.min(len,10)}/10`;
+  if (len > 10) this.value = this.value.slice(0, this.value.length - (len - 10));
+});
+
+document.getElementById('letters').addEventListener('keydown', e => {
+  if (e.key === 'Enter') search();
+});
+
+document.getElementById('minLenGroup').addEventListener('click', e => {
+  const btn = e.target.closest('[data-len]');
+  if (!btn) return;
+  minLen = parseInt(btn.dataset.len);
+  document.querySelectorAll('[data-len]').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+});
+
+document.getElementById('sortGroup').addEventListener('click', e => {
+  const btn = e.target.closest('[data-sort]');
+  if (!btn) return;
+  sortMode = btn.dataset.sort;
+  document.querySelectorAll('[data-sort]').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  if (currentResults.length > 0) {
+    if (sortMode === 'length') {
+      currentResults.sort((a, b) => b.length - a.length || a.localeCompare(b, 'sv'));
+    } else {
+      currentResults.sort((a, b) => a.localeCompare(b, 'sv'));
+    }
+    displayCount = PAGE_SIZE;
+    renderResults();
+  }
+});
+
+document.getElementById('searchBtn').addEventListener('click', search);
+
+// Start loading
+loadWordList();
+</script>
+</body>
+</html>
