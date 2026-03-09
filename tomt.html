@@ -3,18 +3,19 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Solfjäder på tomt</title>
+  <title>Pacman solskiva</title>
 
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
     body { margin:0; font-family: Arial, Helvetica, sans-serif; }
     #topbar { padding:10px; background:#f7f7f7; display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
-    #map { height: calc(100vh - 120px); }
-    input[type="text"] { padding:6px; width:320px; }
+    #map { height: calc(100vh - 140px); }
+    input[type="text"], input[type="date"] { padding:6px; width:260px; }
     button { padding:6px 10px; }
-    #controls { padding:8px; display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
-    #timeLabel { min-width:220px; }
+    #controls { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
     .info { font-size:13px; color:#333; }
+    #meta { padding:8px; background:#fff; border-top:1px solid #ddd; }
+    label { font-size:13px; }
   </style>
 </head>
 <body>
@@ -22,22 +23,22 @@
   <div id="topbar">
     <input id="address" type="text" placeholder="Skriv adress, t.ex. Storgatan 1, Stockholm" />
     <button id="searchBtn">Sök adress</button>
+
     <div id="controls">
       <button id="placePointBtn">Placera punkt</button>
-      <label class="info">Radie (m)</label>
-      <input id="radius" type="number" value="50" style="width:80px;padding:6px" />
-      <label class="info">Spredd vinkel (°)</label>
-      <input id="spread" type="number" value="40" style="width:80px;padding:6px" />
-      <label class="info">Tid</label>
-      <input id="time" type="datetime-local" />
-      <button id="nowBtn">Nu</button>
-      <button id="playBtn">Spela</button>
-      <button id="stopBtn">Stoppa</button>
-      <div id="timeLabel" class="info"></div>
+      <label>Radie (m)</label>
+      <input id="radius" type="number" value="50" style="width:80px" />
+      <label>Fyllning</label>
+      <input id="spread" type="number" value="180" style="width:80px" />
+      <label>Datum</label>
+      <input id="dateInput" type="date" />
+      <input id="daySlider" type="range" min="1" max="366" value="1" style="width:220px" />
+      <div id="dateLabel" class="info"></div>
     </div>
   </div>
 
   <div id="map"></div>
+  <div id="meta"></div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
@@ -46,53 +47,51 @@
   <script>
     // Init map
     const map = L.map('map').setView([59.33, 18.07], 16);
-    const esri = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
       attribution: 'Tiles © Esri'
     }).addTo(map);
 
     // State
     let pointMarker = null;
-    let fanLayer = null;
-    let playInterval = null;
+    let pacmanLayer = null;
 
-    // UI elements
+    // UI
     const placePointBtn = document.getElementById('placePointBtn');
     const radiusInput = document.getElementById('radius');
     const spreadInput = document.getElementById('spread');
-    const timeInput = document.getElementById('time');
-    const timeLabel = document.getElementById('timeLabel');
-    const nowBtn = document.getElementById('nowBtn');
-    const playBtn = document.getElementById('playBtn');
-    const stopBtn = document.getElementById('stopBtn');
+    const dateInput = document.getElementById('dateInput');
+    const daySlider = document.getElementById('daySlider');
+    const dateLabel = document.getElementById('dateLabel');
+    const metaDiv = document.getElementById('meta');
 
-    // Set default time to now (local)
-    function setTimeToNow() {
-      const now = new Date();
-      // format to local datetime-local value
-      const tzOffset = now.getTimezoneOffset() * 60000;
-      const localISO = new Date(now - tzOffset).toISOString().slice(0,16);
-      timeInput.value = localISO;
-      updateTimeLabel();
+    // Set initial date to today
+    function setDate(d) {
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth()+1).padStart(2,'0');
+      const dd = String(d.getDate()).padStart(2,'0');
+      dateInput.value = `${yyyy}-${mm}-${dd}`;
+      const start = new Date(d.getFullYear(),0,1);
+      const dayOfYear = Math.floor((d - start) / (24*60*60*1000)) + 1;
+      daySlider.value = dayOfYear;
+      dateLabel.textContent = d.toLocaleDateString();
     }
-    setTimeToNow();
+    setDate(new Date());
 
-    function updateTimeLabel() {
-      const d = new Date(timeInput.value);
-      if (isNaN(d)) {
-        timeLabel.textContent = '';
-        return;
-      }
-      timeLabel.textContent = d.toLocaleString();
-    }
-
-    timeInput.addEventListener('change', () => {
-      updateTimeLabel();
-      drawFan();
+    // Slider -> date
+    daySlider.addEventListener('input', () => {
+      const year = (new Date()).getFullYear();
+      const day = Number(daySlider.value);
+      const newDate = new Date(year,0,1 + day - 1);
+      setDate(newDate);
+      drawPacman();
     });
 
-    nowBtn.addEventListener('click', () => {
-      setTimeToNow();
-      drawFan();
+    // Date input -> slider
+    dateInput.addEventListener('change', () => {
+      const d = new Date(dateInput.value);
+      if (isNaN(d)) return;
+      setDate(d);
+      drawPacman();
     });
 
     // Place point mode
@@ -115,124 +114,137 @@
     function setPoint(latlng) {
       if (pointMarker) map.removeLayer(pointMarker);
       pointMarker = L.marker(latlng, { draggable: true }).addTo(map);
-      pointMarker.on('dragend', drawFan);
-      drawFan();
+      pointMarker.on('dragend', drawPacman);
+      drawPacman();
     }
 
-    // Draw fan sector using Turf to compute arc points
-    function drawFan() {
+    // Build Pacman sector for whole day when sun is above horizon
+    function drawPacman() {
       if (!pointMarker) return;
-      if (fanLayer) map.removeLayer(fanLayer);
+      if (pacmanLayer) map.removeLayer(pacmanLayer);
 
       const latlng = pointMarker.getLatLng();
-      const radius = Number(radiusInput.value) || 50; // meters
-      const spread = Number(spreadInput.value) || 40; // degrees total spread
+      const radius = Number(radiusInput.value) || 50;
+      const spreadOverride = Number(spreadInput.value) || 180;
 
-      // parse time
-      const t = new Date(timeInput.value);
-      if (isNaN(t)) {
-        updateTimeLabel();
-        return;
+      // parse date from input, use local midnight as base
+      const dateStr = dateInput.value;
+      if (!dateStr) return;
+      const baseDate = new Date(dateStr + 'T12:00:00'); // midday to avoid timezone issues
+
+      // compute sunrise and sunset times using SunCalc
+      const times = SunCalc.getTimes(baseDate, latlng.lat, latlng.lng);
+      const sunrise = times.sunrise;
+      const sunset = times.sunset;
+
+      // handle polar cases
+      let infoHtml = '';
+      if (!sunrise || !sunset || isNaN(sunrise) || isNaN(sunset)) {
+        // sun does not rise or does not set
+        // determine if sun is always above or always below horizon
+        const noonPos = SunCalc.getPosition(new Date(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate(), 12), latlng.lat, latlng.lng);
+        if (noonPos.altitude > 0) {
+          infoHtml += '<strong>Sol alltid över horisonten denna dag</strong><br>';
+          // full circle
+          const circle = turf.circle([latlng.lng, latlng.lat], radius/1000, {steps:64, units:'kilometers'});
+          pacmanLayer = L.geoJSON(circle, {
+            style: { color:'rgba(255,180,40,0.9)', weight:1, fillColor:'rgba(255,200,50,0.45)', fillOpacity:1, interactive:false }
+          }).addTo(map);
+          metaDiv.innerHTML = infoHtml;
+          return;
+        } else {
+          infoHtml += '<strong>Sol under horisonten hela dagen</strong><br>';
+          metaDiv.innerHTML = infoHtml;
+          return;
+        }
       }
 
-      // compute sun position using SunCalc
-      // SunCalc.getPosition returns altitude (radians) and azimuth (radians, from south, negative west)
-      const sunPos = SunCalc.getPosition(t, latlng.lat, latlng.lng);
-      // convert to degrees and to compass bearing (0 = north, clockwise)
-      // SunCalc azimuth: measured from south, positive westwards. Convert:
-      // bearing = (180 + azimuth*180/PI) % 360  then convert so 0 = north
-      const azimuthRad = sunPos.azimuth;
-      let azimuthDeg = (180 + azimuthRad * 180 / Math.PI) % 360;
-      // ensure 0..360
-      if (azimuthDeg < 0) azimuthDeg += 360;
+      // get azimuths at sunrise and sunset
+      const sunRisePos = SunCalc.getPosition(sunrise, latlng.lat, latlng.lng);
+      const sunSetPos = SunCalc.getPosition(sunset, latlng.lat, latlng.lng);
 
-      const altitudeDeg = sunPos.altitude * 180 / Math.PI;
+      // convert SunCalc azimuth to compass bearing 0=north clockwise
+      function azimuthDegFromSunCalc(azRad) {
+        let deg = (180 + azRad * 180 / Math.PI) % 360;
+        if (deg < 0) deg += 360;
+        return deg;
+      }
+      const azRise = azimuthDegFromSunCalc(sunRisePos.azimuth);
+      const azSet = azimuthDegFromSunCalc(sunSetPos.azimuth);
 
-      // If sun is below horizon, draw a dim fan pointing to sun direction but with low opacity
-      const isAbove = sunPos.altitude > 0;
+      // Determine sector start and end angles going the short way across horizon where sun is above
+      // We want the sector that spans from azRise to azSet following the sun's path above horizon
+      // Determine direction: compute difference going clockwise
+      function angleDiffCW(a, b) {
+        return ( (b - a + 360) % 360 );
+      }
+      const cwDiff = angleDiffCW(azRise, azSet);
+      const ccwDiff = 360 - cwDiff;
+      let startAngle, endAngle;
+      if (cwDiff <= ccwDiff) {
+        startAngle = azRise;
+        endAngle = azSet;
+      } else {
+        startAngle = azSet;
+        endAngle = azRise;
+      }
 
-      // Build arc points
-      const half = spread / 2;
-      const startAngle = azimuthDeg - half;
-      const endAngle = azimuthDeg + half;
-      const steps = Math.max(8, Math.round(spread / 3)); // number of points along arc
+      // Optionally limit spread by user override: if user sets spread < computed span, center it on midday azimuth
+      const computedSpan = angleDiffCW(startAngle, endAngle);
+      let finalStart = startAngle;
+      let finalEnd = endAngle;
+      if (spreadOverride > 0 && spreadOverride < computedSpan) {
+        // center on sun azimuth at local solar noon
+        const noon = SunCalc.getTimes(baseDate, latlng.lat, latlng.lng).solarNoon || new Date(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate(), 12);
+        const noonPos = SunCalc.getPosition(noon, latlng.lat, latlng.lng);
+        const noonAz = azimuthDegFromSunCalc(noonPos.azimuth);
+        const half = spreadOverride / 2;
+        finalStart = (noonAz - half + 360) % 360;
+        finalEnd = (noonAz + half) % 360;
+      }
 
+      // Build arc coordinates from finalStart to finalEnd following the shorter arc that represents sun above horizon
+      // Determine step count
+      let span = angleDiffCW(finalStart, finalEnd);
+      if (span === 0) span = 360;
+      const steps = Math.max(12, Math.round(span / 2));
       const center = turf.point([latlng.lng, latlng.lat]);
       const arcCoords = [];
-      // start with center
       arcCoords.push([latlng.lng, latlng.lat]);
 
+      // iterate clockwise from finalStart to finalEnd
       for (let i = 0; i <= steps; i++) {
-        const angle = startAngle + (endAngle - startAngle) * (i / steps);
-        // turf.destination expects distance in kilometers
+        const frac = i / steps;
+        const angle = (finalStart + frac * span) % 360;
         const dest = turf.destination(center, radius / 1000, angle, { units: 'kilometers' });
-        const c = dest.geometry.coordinates;
-        arcCoords.push(c);
+        arcCoords.push(dest.geometry.coordinates);
       }
-      // close polygon back to center
       arcCoords.push([latlng.lng, latlng.lat]);
 
-      const fanGeoJson = {
-        "type": "Feature",
-        "geometry": {
-          "type": "Polygon",
-          "coordinates": [arcCoords]
-        }
-      };
+      const fanGeoJson = { type:'Feature', geometry:{ type:'Polygon', coordinates:[arcCoords] } };
 
-      // color and opacity based on altitude
-      const baseColor = '255,200,50'; // warm yellow
-      const opacity = isAbove ? Math.min(0.6, 0.15 + (altitudeDeg / 90) * 0.6) : 0.12;
-      const fillColor = `rgba(${baseColor}, ${opacity})`;
-      const borderColor = `rgba(${baseColor}, ${Math.min(0.9, opacity + 0.2)})`;
-
-      fanLayer = L.geoJSON(fanGeoJson, {
+      pacmanLayer = L.geoJSON(fanGeoJson, {
         style: {
-          color: borderColor,
+          color: 'rgba(255,160,30,0.9)',
           weight: 1,
-          fillColor: fillColor,
+          fillColor: 'rgba(255,200,50,0.45)',
           fillOpacity: 1,
           interactive: false
         }
       }).addTo(map);
 
-      // popup/info
-      const info = `Azimut: <strong>${azimuthDeg.toFixed(1)}°</strong> &nbsp; Höjd: <strong>${altitudeDeg.toFixed(1)}°</strong> &nbsp; ${isAbove ? '<span style="color:green">Över horisonten</span>' : '<span style="color:gray">Under horisonten</span>'}`;
-      pointMarker.bindPopup(info).openPopup();
-
-      updateTimeLabel();
+      // Meta info
+      const fmt = (d) => new Date(d).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+      infoHtml += `<strong>Datum</strong>: ${new Date(dateInput.value).toLocaleDateString()} &nbsp; <strong>Radie</strong>: ${radius} m<br>`;
+      infoHtml += `<strong>Soluppgång</strong>: ${fmt(sunrise)} &nbsp; Azimut ${azRise.toFixed(1)}°<br>`;
+      infoHtml += `<strong>Solnedgång</strong>: ${fmt(sunset)} &nbsp; Azimut ${azSet.toFixed(1)}°<br>`;
+      infoHtml += `<strong>Pacman span</strong>: ${span.toFixed(1)}° (beräknad)`;
+      metaDiv.innerHTML = infoHtml;
     }
 
-    // Play / animate time
-    playBtn.addEventListener('click', () => {
-      if (!pointMarker) {
-        alert('Placera först en punkt på kartan.');
-        return;
-      }
-      if (playInterval) return;
-      // step 10 minutes per tick by default
-      const stepMinutes = 10;
-      playInterval = setInterval(() => {
-        const cur = new Date(timeInput.value);
-        if (isNaN(cur)) {
-          setTimeToNow();
-          return;
-        }
-        const next = new Date(cur.getTime() + stepMinutes * 60000);
-        // set input value preserving local offset
-        const tzOffset = next.getTimezoneOffset() * 60000;
-        const localISO = new Date(next - tzOffset).toISOString().slice(0,16);
-        timeInput.value = localISO;
-        drawFan();
-      }, 300); // 300 ms per step (fast)
-    });
-
-    stopBtn.addEventListener('click', () => {
-      if (playInterval) {
-        clearInterval(playInterval);
-        playInterval = null;
-      }
-    });
+    // Update when inputs change
+    radiusInput.addEventListener('change', drawPacman);
+    spreadInput.addEventListener('change', drawPacman);
 
     // Geocoding (Nominatim)
     document.getElementById('searchBtn').addEventListener('click', async () => {
@@ -255,12 +267,8 @@
       }
     });
 
-    // update fan when radius/spread changed
-    radiusInput.addEventListener('change', drawFan);
-    spreadInput.addEventListener('change', drawFan);
-
-    // helper: draw fan when map moves (keeps visual consistent)
-    map.on('moveend', () => { drawFan(); });
+    // Keep pacman updated on map move and when marker dragged
+    map.on('moveend', drawPacman);
 
     // initial hint
     map.whenReady(() => {
@@ -269,15 +277,15 @@
       hint.onAdd = function() {
         const div = L.DomUtil.create('div','info');
         div.style.padding = '6px';
-        div.style.background = 'rgba(255,255,255,0.8)';
-        div.innerHTML = '<strong>Instruktion</strong>: Klicka "Placera punkt" och klicka på kartan där du vill se solfjädern. Använd tidsreglaget eller "Spela".';
+        div.style.background = 'rgba(255,255,255,0.9)';
+        div.innerHTML = '<strong>Instruktion</strong>: Klicka "Placera punkt" och klicka på kartan. Använd datum‑slider för att se hur Pacman ändras över året.';
         return div;
       };
       hint.addTo(map);
     });
 
-    // expose drawFan to global for debugging
-    window.drawFan = drawFan;
+    // Expose drawPacman for debugging
+    window.drawPacman = drawPacman;
   </script>
 </body>
 </html>
