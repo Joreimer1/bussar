@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Pacman solskiva — jämna etiketter och genomskinlig skiva</title>
+  <title>Pacman solskiva — rena textetiketter</title>
 
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
@@ -17,19 +17,18 @@
     #meta { padding:8px; background:#fff; border-top:1px solid #ddd; min-height:48px; }
     label { font-size:13px; }
 
-    /* Tidsetikett: vit ruta utanför bågen, horisontell text */
+    /* Tidsetikett: REN TEXT, ingen vit ruta */
     .time-label {
       font-size:12px;
-      font-weight:600;
-      color:#111;
-      padding:4px 8px;
-      background: rgba(255,255,255,0.96);
-      border-radius:6px;
-      border: 1px solid rgba(0,0,0,0.08);
-      box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+      font-weight:700;
+      color:#000000;                     /* svart text */
+      padding:0;
+      background: transparent;
       white-space:nowrap;
       pointer-events: none;
       transform: translate(-50%, -50%);
+      -webkit-text-stroke: 0.6px rgba(255,255,255,0.85); /* tunn ljus kant för läsbarhet mot gula ytor */
+      text-shadow: 0 1px 0 rgba(255,255,255,0.6);
     }
   </style>
 </head>
@@ -139,7 +138,6 @@
       return 'kl ' + String(h).padStart(2,'0');
     }
 
-    // collision test in pixel space
     function collides(box, boxes) {
       return boxes.some(b => !(box.x + box.w < b.x || box.x > b.x + b.w || box.y + box.h < b.y || box.y > b.y + b.h));
     }
@@ -165,7 +163,7 @@
         const noonPos = SunCalc.getPosition(new Date(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate(), 12), latlng.lat, latlng.lng);
         if (noonPos.altitude > 0) {
           const circle = turf.circle([latlng.lng, latlng.lat], radius/1000, {steps:128, units:'kilometers'});
-          pacmanLayer = L.geoJSON(circle, { style: { color:'rgba(255,160,30,0.9)', weight:1, fillColor:'rgba(255,200,50,0.35)', fillOpacity:1, interactive:false } }).addTo(map);
+          pacmanLayer = L.geoJSON(circle, { style: { color:'rgba(255,160,30,0.9)', weight:1, fillColor:'rgba(255,200,50,0.25)', fillOpacity:0.25, interactive:false } }).addTo(map);
           metaDiv.innerHTML = '<strong>Sol alltid över horisonten denna dag</strong>';
           return;
         } else {
@@ -181,17 +179,20 @@
       const stepMin = Math.max(1, Math.round(totalMinutes / targetSamples));
 
       const azimuths = [];
+      const timePoints = [];
       for (let t = start.getTime(); t <= end.getTime(); t += stepMin * 60000) {
         const dt = new Date(t);
         const pos = SunCalc.getPosition(dt, latlng.lat, latlng.lng);
         let az = (180 + pos.azimuth * 180 / Math.PI) % 360;
         if (az < 0) az += 360;
         azimuths.push(az);
+        timePoints.push(dt);
       }
       const posEnd = SunCalc.getPosition(end, latlng.lat, latlng.lng);
       let azEnd = (180 + posEnd.azimuth * 180 / Math.PI) % 360;
       if (azEnd < 0) azEnd += 360;
       azimuths.push(azEnd);
+      timePoints.push(end);
 
       let finalAzimuths = azimuths.slice();
       if (spreadOverride > 0) {
@@ -238,32 +239,25 @@
         style: {
           color: 'rgba(255,160,30,0.9)',
           weight: 1,
-          fillColor: 'rgba(255,200,50,0.35)',
-          fillOpacity: 0.35,
+          fillColor: 'rgba(255,200,50,0.25)',
+          fillOpacity: 0.25,
           interactive: false
         }
       }).addTo(map);
 
-      // Place labels evenly along the arc (by angle), not by time, to avoid clumping
-      // Determine arc angles in increasing order (handle wrap)
+      // Place labels evenly along the arc (by angle)
       let angles = finalAzimuths.slice();
-      // ensure monotonic sequence across wrap
       for (let i = 1; i < angles.length; i++) {
         while (angles[i] - angles[i-1] > 180) angles[i] -= 360;
         while (angles[i] - angles[i-1] < -180) angles[i] += 360;
       }
-      // normalize to 0-360
       angles = angles.map(a => (a % 360 + 360) % 360);
 
-      // choose number of labels based on zoom and arc length
       const zoom = map.getZoom();
       const approxLabels = zoom >= 18 ? 10 : zoom >= 16 ? 8 : 6;
-      // compute evenly spaced fractions along the arc
       const n = Math.min(approxLabels, Math.max(2, Math.floor(angles.length / 2)));
-      // build a list of evenly spaced angles between start and end of arc
       let startAngle = angles[0];
       let endAngle = angles[angles.length - 1];
-      // handle wrap if end < start
       if (endAngle < startAngle) endAngle += 360;
       const labelAngles = [];
       for (let i = 0; i < n; i++) {
@@ -275,8 +269,6 @@
       // collision avoidance in pixel space
       const placedBoxes = [];
       const approxW = 56, approxH = 22;
-
-      // place labels slightly outside the arc
       const labelRadiusFactor = 1.06;
       for (const ang of labelAngles) {
         const dest = turf.destination(center, (radius * labelRadiusFactor) / 1000, ang, { units: 'kilometers' });
@@ -284,12 +276,10 @@
         const lat = coords[1], lng = coords[0];
         const px = map.latLngToLayerPoint([lat, lng]);
         const box = { x: px.x - approxW/2, y: px.y - approxH/2, w: approxW, h: approxH };
-        if (collides(box, placedBoxes)) continue; // skip if collision
+        if (collides(box, placedBoxes)) continue;
         placedBoxes.push(box);
 
-        // determine a representative time for label: find nearest timePoint azimuth
-        // fallback: compute approximate time by interpolating between sunrise and sunset
-        // We'll compute a time by mapping angle fraction to time fraction
+        // compute representative time by interpolating along day
         let angStart = startAngle, angEnd = endAngle;
         if (angEnd < angStart) angEnd += 360;
         let angNorm = ang;
@@ -309,7 +299,7 @@
         hourLabelMarkers.push(marker);
       }
 
-      // also add sunrise and sunset labels (outside, but allow overlap)
+      // sunrise/sunset labels (outside)
       const sunriseAz = finalAzimuths.length ? finalAzimuths[0] : null;
       const sunsetAz = finalAzimuths.length ? finalAzimuths[finalAzimuths.length-1] : null;
       if (sunriseAz !== null) {
@@ -368,7 +358,7 @@
         const div = L.DomUtil.create('div','info');
         div.style.padding = '6px';
         div.style.background = 'rgba(255,255,255,0.9)';
-        div.innerHTML = '<strong>Instruktion</strong>: Klicka "Placera punkt" och klicka på kartan. Använd datum‑slider för att se Pacman med jämnt fördelade klockslag.';
+        div.innerHTML = '<strong>Instruktion</strong>: Klicka "Placera punkt" och klicka på kartan. Använd datum‑slider för att se Pacman med rena textetiketter.';
         return div;
       };
       hint.addTo(map);
@@ -378,3 +368,4 @@
   </script>
 </body>
 </html>
+
