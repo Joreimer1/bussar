@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Solfjäder på tomt</title>
+
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    body { margin:0; font-family: Arial, Helvetica, sans-serif; }
+    #topbar { padding:10px; background:#f7f7f7; display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+    #map { height: calc(100vh - 120px); }
+    input[type="text"] { padding:6px; width:320px; }
+    button { padding:6px 10px; }
+    #controls { padding:8px; display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+    #timeLabel { min-width:220px; }
+    .info { font-size:13px; color:#333; }
+  </style>
+</head>
+<body>
+
+  <div id="topbar">
+    <input id="address" type="text" placeholder="Skriv adress, t.ex. Storgatan 1, Stockholm" />
+    <button id="searchBtn">Sök adress</button>
+    <div id="controls">
+      <button id="placePointBtn">Placera punkt</button>
+      <label class="info">Radie (m)</label>
+      <input id="radius" type="number" value="50" style="width:80px;padding:6px" />
+      <label class="info">Spredd vinkel (°)</label>
+      <input id="spread" type="number" value="40" style="width:80px;padding:6px" />
+      <label class="info">Tid</label>
+      <input id="time" type="datetime-local" />
+      <button id="nowBtn">Nu</button>
+      <button id="playBtn">Spela</button>
+      <button id="stopBtn">Stoppa</button>
+      <div id="timeLabel" class="info"></div>
+    </div>
+  </div>
+
+  <div id="map"></div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/suncalc/1.9.0/suncalc.min.js"></script>
+
+  <script>
+    // Init map
+    const map = L.map('map').setView([59.33, 18.07], 16);
+    const esri = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+      attribution: 'Tiles © Esri'
+    }).addTo(map);
+
+    // State
+    let pointMarker = null;
+    let fanLayer = null;
+    let playInterval = null;
+
+    // UI elements
+    const placePointBtn = document.getElementById('placePointBtn');
+    const radiusInput = document.getElementById('radius');
+    const spreadInput = document.getElementById('spread');
+    const timeInput = document.getElementById('time');
+    const timeLabel = document.getElementById('timeLabel');
+    const nowBtn = document.getElementById('nowBtn');
+    const playBtn = document.getElementById('playBtn');
+    const stopBtn = document.getElementById('stopBtn');
+
+    // Set default time to now (local)
+    function setTimeToNow() {
+      const now = new Date();
+      // format to local datetime-local value
+      const tzOffset = now.getTimezoneOffset() * 60000;
+      const localISO = new Date(now - tzOffset).toISOString().slice(0,16);
+      timeInput.value = localISO;
+      updateTimeLabel();
+    }
+    setTimeToNow();
+
+    function updateTimeLabel() {
+      const d = new Date(timeInput.value);
+      if (isNaN(d)) {
+        timeLabel.textContent = '';
+        return;
+      }
+      timeLabel.textContent = d.toLocaleString();
+    }
+
+    timeInput.addEventListener('change', () => {
+      updateTimeLabel();
+      drawFan();
+    });
+
+    nowBtn.addEventListener('click', () => {
+      setTimeToNow();
+      drawFan();
+    });
+
+    // Place point mode
+    let placing = false;
+    placePointBtn.addEventListener('click', () => {
+      placing = true;
+      placePointBtn.textContent = 'Klicka på kartan';
+      map.getContainer().style.cursor = 'crosshair';
+    });
+
+    map.on('click', (e) => {
+      if (placing) {
+        placing = false;
+        placePointBtn.textContent = 'Placera punkt';
+        map.getContainer().style.cursor = '';
+        setPoint(e.latlng);
+      }
+    });
+
+    function setPoint(latlng) {
+      if (pointMarker) map.removeLayer(pointMarker);
+      pointMarker = L.marker(latlng, { draggable: true }).addTo(map);
+      pointMarker.on('dragend', drawFan);
+      drawFan();
+    }
+
+    // Draw fan sector using Turf to compute arc points
+    function drawFan() {
+      if (!pointMarker) return;
+      if (fanLayer) map.removeLayer(fanLayer);
+
+      const latlng = pointMarker.getLatLng();
+      const radius = Number(radiusInput.value) || 50; // meters
+      const spread = Number(spreadInput.value) || 40; // degrees total spread
+
+      // parse time
+      const t = new Date(timeInput.value);
+      if (isNaN(t)) {
+        updateTimeLabel();
+        return;
+      }
+
+      // compute sun position using SunCalc
+      // SunCalc.getPosition returns altitude (radians) and azimuth (radians, from south, negative west)
+      const sunPos = SunCalc.getPosition(t, latlng.lat, latlng.lng);
+      // convert to degrees and to compass bearing (0 = north, clockwise)
+      // SunCalc azimuth: measured from south, positive westwards. Convert:
+      // bearing = (180 + azimuth*180/PI) % 360  then convert so 0 = north
+      const azimuthRad = sunPos.azimuth;
+      let azimuthDeg = (180 + azimuthRad * 180 / Math.PI) % 360;
+      // ensure 0..360
+      if (azimuthDeg < 0) azimuthDeg += 360;
+
+      const altitudeDeg = sunPos.altitude * 180 / Math.PI;
+
+      // If sun is below horizon, draw a dim fan pointing to sun direction but with low opacity
+      const isAbove = sunPos.altitude > 0;
+
+      // Build arc points
+      const half = spread / 2;
+      const startAngle = azimuthDeg - half;
+      const endAngle = azimuthDeg + half;
+      const steps = Math.max(8, Math.round(spread / 3)); // number of points along arc
+
+      const center = turf.point([latlng.lng, latlng.lat]);
+      const arcCoords = [];
+      // start with center
+      arcCoords.push([latlng.lng, latlng.lat]);
+
+      for (let i = 0; i <= steps; i++) {
+        const angle = startAngle + (endAngle - startAngle) * (i / steps);
+        // turf.destination expects distance in kilometers
+        const dest = turf.destination(center, radius / 1000, angle, { units: 'kilometers' });
+        const c = dest.geometry.coordinates;
+        arcCoords.push(c);
+      }
+      // close polygon back to center
+      arcCoords.push([latlng.lng, latlng.lat]);
+
+      const fanGeoJson = {
+        "type": "Feature",
+        "geometry": {
+          "type": "Polygon",
+          "coordinates": [arcCoords]
+        }
+      };
+
+      // color and opacity based on altitude
+      const baseColor = '255,200,50'; // warm yellow
+      const opacity = isAbove ? Math.min(0.6, 0.15 + (altitudeDeg / 90) * 0.6) : 0.12;
+      const fillColor = `rgba(${baseColor}, ${opacity})`;
+      const borderColor = `rgba(${baseColor}, ${Math.min(0.9, opacity + 0.2)})`;
+
+      fanLayer = L.geoJSON(fanGeoJson, {
+        style: {
+          color: borderColor,
+          weight: 1,
+          fillColor: fillColor,
+          fillOpacity: 1,
+          interactive: false
+        }
+      }).addTo(map);
+
+      // popup/info
+      const info = `Azimut: <strong>${azimuthDeg.toFixed(1)}°</strong> &nbsp; Höjd: <strong>${altitudeDeg.toFixed(1)}°</strong> &nbsp; ${isAbove ? '<span style="color:green">Över horisonten</span>' : '<span style="color:gray">Under horisonten</span>'}`;
+      pointMarker.bindPopup(info).openPopup();
+
+      updateTimeLabel();
+    }
+
+    // Play / animate time
+    playBtn.addEventListener('click', () => {
+      if (!pointMarker) {
+        alert('Placera först en punkt på kartan.');
+        return;
+      }
+      if (playInterval) return;
+      // step 10 minutes per tick by default
+      const stepMinutes = 10;
+      playInterval = setInterval(() => {
+        const cur = new Date(timeInput.value);
+        if (isNaN(cur)) {
+          setTimeToNow();
+          return;
+        }
+        const next = new Date(cur.getTime() + stepMinutes * 60000);
+        // set input value preserving local offset
+        const tzOffset = next.getTimezoneOffset() * 60000;
+        const localISO = new Date(next - tzOffset).toISOString().slice(0,16);
+        timeInput.value = localISO;
+        drawFan();
+      }, 300); // 300 ms per step (fast)
+    });
+
+    stopBtn.addEventListener('click', () => {
+      if (playInterval) {
+        clearInterval(playInterval);
+        playInterval = null;
+      }
+    });
+
+    // Geocoding (Nominatim)
+    document.getElementById('searchBtn').addEventListener('click', async () => {
+      const q = document.getElementById('address').value.trim();
+      if (!q) return;
+      try {
+        const url = 'https://nominatim.openstreetmap.org/search?format=json&limit=1&q=' + encodeURIComponent(q);
+        const res = await fetch(url, { headers: { 'Accept-Language': 'sv' }});
+        const data = await res.json();
+        if (data && data.length) {
+          const lat = parseFloat(data[0].lat);
+          const lon = parseFloat(data[0].lon);
+          map.setView([lat, lon], 19);
+        } else {
+          alert('Adress hittades inte. Försök med mer detaljer.');
+        }
+      } catch (err) {
+        console.error(err);
+        alert('Fel vid sökning.');
+      }
+    });
+
+    // update fan when radius/spread changed
+    radiusInput.addEventListener('change', drawFan);
+    spreadInput.addEventListener('change', drawFan);
+
+    // helper: draw fan when map moves (keeps visual consistent)
+    map.on('moveend', () => { drawFan(); });
+
+    // initial hint
+    map.whenReady(() => {
+      L.control.scale().addTo(map);
+      const hint = L.control({position:'bottomleft'});
+      hint.onAdd = function() {
+        const div = L.DomUtil.create('div','info');
+        div.style.padding = '6px';
+        div.style.background = 'rgba(255,255,255,0.8)';
+        div.innerHTML = '<strong>Instruktion</strong>: Klicka "Placera punkt" och klicka på kartan där du vill se solfjädern. Använd tidsreglaget eller "Spela".';
+        return div;
+      };
+      hint.addTo(map);
+    });
+
+    // expose drawFan to global for debugging
+    window.drawFan = drawFan;
+  </script>
+</body>
+</html>
