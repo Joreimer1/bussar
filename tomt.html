@@ -119,128 +119,111 @@
     }
 
     // Build Pacman sector for whole day when sun is above horizon
-    function drawPacman() {
-      if (!pointMarker) return;
-      if (pacmanLayer) map.removeLayer(pacmanLayer);
+    async function drawPacman() {
+  if (!pointMarker) return;
+  if (pacmanLayer) map.removeLayer(pacmanLayer);
 
-      const latlng = pointMarker.getLatLng();
-      const radius = Number(radiusInput.value) || 50;
-      const spreadOverride = Number(spreadInput.value) || 180;
+  const latlng = pointMarker.getLatLng();
+  const radius = Number(radiusInput.value) || 50;
+  const spreadOverride = Number(spreadInput.value) || 0; // 0 = använd hela solperioden
 
-      // parse date from input, use local midnight as base
-      const dateStr = dateInput.value;
-      if (!dateStr) return;
-      const baseDate = new Date(dateStr + 'T12:00:00'); // midday to avoid timezone issues
+  const dateStr = dateInput.value;
+  if (!dateStr) return;
+  // Use local date midday as base to avoid timezone midnight issues
+  const baseDate = new Date(dateStr + 'T12:00:00');
 
-      // compute sunrise and sunset times using SunCalc
-      const times = SunCalc.getTimes(baseDate, latlng.lat, latlng.lng);
-      const sunrise = times.sunrise;
-      const sunset = times.sunset;
+  // Get sunrise/sunset times
+  const times = SunCalc.getTimes(baseDate, latlng.lat, latlng.lng);
+  const sunrise = times.sunrise;
+  const sunset = times.sunset;
 
-      // handle polar cases
-      let infoHtml = '';
-      if (!sunrise || !sunset || isNaN(sunrise) || isNaN(sunset)) {
-        // sun does not rise or does not set
-        // determine if sun is always above or always below horizon
-        const noonPos = SunCalc.getPosition(new Date(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate(), 12), latlng.lat, latlng.lng);
-        if (noonPos.altitude > 0) {
-          infoHtml += '<strong>Sol alltid över horisonten denna dag</strong><br>';
-          // full circle
-          const circle = turf.circle([latlng.lng, latlng.lat], radius/1000, {steps:64, units:'kilometers'});
-          pacmanLayer = L.geoJSON(circle, {
-            style: { color:'rgba(255,180,40,0.9)', weight:1, fillColor:'rgba(255,200,50,0.45)', fillOpacity:1, interactive:false }
-          }).addTo(map);
-          metaDiv.innerHTML = infoHtml;
-          return;
-        } else {
-          infoHtml += '<strong>Sol under horisonten hela dagen</strong><br>';
-          metaDiv.innerHTML = infoHtml;
-          return;
-        }
-      }
-
-      // get azimuths at sunrise and sunset
-      const sunRisePos = SunCalc.getPosition(sunrise, latlng.lat, latlng.lng);
-      const sunSetPos = SunCalc.getPosition(sunset, latlng.lat, latlng.lng);
-
-      // convert SunCalc azimuth to compass bearing 0=north clockwise
-      function azimuthDegFromSunCalc(azRad) {
-        let deg = (180 + azRad * 180 / Math.PI) % 360;
-        if (deg < 0) deg += 360;
-        return deg;
-      }
-      const azRise = azimuthDegFromSunCalc(sunRisePos.azimuth);
-      const azSet = azimuthDegFromSunCalc(sunSetPos.azimuth);
-
-      // Determine sector start and end angles going the short way across horizon where sun is above
-      // We want the sector that spans from azRise to azSet following the sun's path above horizon
-      // Determine direction: compute difference going clockwise
-      function angleDiffCW(a, b) {
-        return ( (b - a + 360) % 360 );
-      }
-      const cwDiff = angleDiffCW(azRise, azSet);
-      const ccwDiff = 360 - cwDiff;
-      let startAngle, endAngle;
-      if (cwDiff <= ccwDiff) {
-        startAngle = azRise;
-        endAngle = azSet;
-      } else {
-        startAngle = azSet;
-        endAngle = azRise;
-      }
-
-      // Optionally limit spread by user override: if user sets spread < computed span, center it on midday azimuth
-      const computedSpan = angleDiffCW(startAngle, endAngle);
-      let finalStart = startAngle;
-      let finalEnd = endAngle;
-      if (spreadOverride > 0 && spreadOverride < computedSpan) {
-        // center on sun azimuth at local solar noon
-        const noon = SunCalc.getTimes(baseDate, latlng.lat, latlng.lng).solarNoon || new Date(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate(), 12);
-        const noonPos = SunCalc.getPosition(noon, latlng.lat, latlng.lng);
-        const noonAz = azimuthDegFromSunCalc(noonPos.azimuth);
-        const half = spreadOverride / 2;
-        finalStart = (noonAz - half + 360) % 360;
-        finalEnd = (noonAz + half) % 360;
-      }
-
-      // Build arc coordinates from finalStart to finalEnd following the shorter arc that represents sun above horizon
-      // Determine step count
-      let span = angleDiffCW(finalStart, finalEnd);
-      if (span === 0) span = 360;
-      const steps = Math.max(12, Math.round(span / 2));
-      const center = turf.point([latlng.lng, latlng.lat]);
-      const arcCoords = [];
-      arcCoords.push([latlng.lng, latlng.lat]);
-
-      // iterate clockwise from finalStart to finalEnd
-      for (let i = 0; i <= steps; i++) {
-        const frac = i / steps;
-        const angle = (finalStart + frac * span) % 360;
-        const dest = turf.destination(center, radius / 1000, angle, { units: 'kilometers' });
-        arcCoords.push(dest.geometry.coordinates);
-      }
-      arcCoords.push([latlng.lng, latlng.lat]);
-
-      const fanGeoJson = { type:'Feature', geometry:{ type:'Polygon', coordinates:[arcCoords] } };
-
-      pacmanLayer = L.geoJSON(fanGeoJson, {
-        style: {
-          color: 'rgba(255,160,30,0.9)',
-          weight: 1,
-          fillColor: 'rgba(255,200,50,0.45)',
-          fillOpacity: 1,
-          interactive: false
-        }
+  // Handle polar cases
+  if (!sunrise || !sunset || isNaN(sunrise) || isNaN(sunset)) {
+    const noonPos = SunCalc.getPosition(new Date(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate(), 12), latlng.lat, latlng.lng);
+    if (noonPos.altitude > 0) {
+      // Sun above horizon whole day -> full circle
+      const circle = turf.circle([latlng.lng, latlng.lat], radius/1000, {steps:64, units:'kilometers'});
+      pacmanLayer = L.geoJSON(circle, {
+        style: { color:'rgba(255,160,30,0.9)', weight:1, fillColor:'rgba(255,200,50,0.45)', fillOpacity:1, interactive:false }
       }).addTo(map);
-
-      // Meta info
-      const fmt = (d) => new Date(d).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
-      infoHtml += `<strong>Datum</strong>: ${new Date(dateInput.value).toLocaleDateString()} &nbsp; <strong>Radie</strong>: ${radius} m<br>`;
-      infoHtml += `<strong>Soluppgång</strong>: ${fmt(sunrise)} &nbsp; Azimut ${azRise.toFixed(1)}°<br>`;
-      infoHtml += `<strong>Solnedgång</strong>: ${fmt(sunset)} &nbsp; Azimut ${azSet.toFixed(1)}°<br>`;
-      infoHtml += `<strong>Pacman span</strong>: ${span.toFixed(1)}° (beräknad)`;
-      metaDiv.innerHTML = infoHtml;
+      metaDiv.innerHTML = '<strong>Sol alltid över horisonten denna dag</strong>';
+      return;
+    } else {
+      metaDiv.innerHTML = '<strong>Sol under horisonten hela dagen</strong>';
+      return;
     }
+  }
+
+  // Sample times between sunrise and sunset
+  const start = new Date(sunrise.getTime());
+  const end = new Date(sunset.getTime());
+  const totalMinutes = Math.max(1, Math.round((end - start) / 60000));
+  // Choose sampling interval: aim for ~60-180 samples depending on day length
+  const targetSamples = 120;
+  const stepMin = Math.max(1, Math.round(totalMinutes / targetSamples));
+
+  const azimuths = [];
+  const timePoints = [];
+  for (let t = start.getTime(); t <= end.getTime(); t += stepMin * 60000) {
+    const dt = new Date(t);
+    const pos = SunCalc.getPosition(dt, latlng.lat, latlng.lng);
+    // convert SunCalc azimuth to compass bearing 0=north clockwise
+    let az = (180 + pos.azimuth * 180 / Math.PI) % 360;
+    if (az < 0) az += 360;
+    azimuths.push(az);
+    timePoints.push(dt);
+  }
+  // ensure last point is sunset exactly
+  const posEnd = SunCalc.getPosition(end, latlng.lat, latlng.lng);
+  let azEnd = (180 + posEnd.azimuth * 180 / Math.PI) % 360;
+  if (azEnd < 0) azEnd += 360;
+  azimuths.push(azEnd);
+  timePoints.push(end);
+
+  // If user provided a manual spreadOverride > 0, center it on solar noon azimuth
+  let finalAzimuths = azimuths.slice();
+  if (spreadOverride > 0) {
+    const noon = SunCalc.getTimes(baseDate, latlng.lat, latlng.lng).solarNoon || new Date(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate(), 12);
+    const noonPos = SunCalc.getPosition(noon, latlng.lat, latlng.lng);
+    let noonAz = (180 + noonPos.azimuth * 180 / Math.PI) % 360;
+    if (noonAz < 0) noonAz += 360;
+    const half = spreadOverride / 2;
+    // build azimuth list from noonAz-half to noonAz+half (clockwise)
+    finalAzimuths = [];
+    const steps = Math.max(12, Math.round(spreadOverride / 2));
+    for (let i = 0; i <= steps; i++) {
+      const angle = (noonAz - half + (i / steps) * spreadOverride + 360) % 360;
+      finalAzimuths.push(angle);
+    }
+  }
+
+  // Build polygon coordinates by projecting from center along each azimuth
+  const center = turf.point([latlng.lng, latlng.lat]);
+  const arcCoords = [];
+  arcCoords.push([latlng.lng, latlng.lat]);
+  for (let i = 0; i < finalAzimuths.length; i++) {
+    const angle = finalAzimuths[i];
+    const dest = turf.destination(center, radius / 1000, angle, { units: 'kilometers' });
+    arcCoords.push(dest.geometry.coordinates);
+  }
+  arcCoords.push([latlng.lng, latlng.lat]);
+
+  const fanGeoJson = { type:'Feature', geometry:{ type:'Polygon', coordinates:[arcCoords] } };
+  pacmanLayer = L.geoJSON(fanGeoJson, {
+    style: {
+      color: 'rgba(255,160,30,0.9)',
+      weight: 1,
+      fillColor: 'rgba(255,200,50,0.45)',
+      fillOpacity: 1,
+      interactive: false
+    }
+  }).addTo(map);
+
+  // Meta info: sunrise/sunset and sample count
+  const fmt = (d) => new Date(d).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+  metaDiv.innerHTML = `<strong>Datum</strong>: ${new Date(dateInput.value).toLocaleDateString()} &nbsp; <strong>Radie</strong>: ${radius} m<br>
+    <strong>Soluppgång</strong>: ${fmt(sunrise)} &nbsp; <strong>Solnedgång</strong>: ${fmt(sunset)} &nbsp; <strong>Samples</strong>: ${finalAzimuths.length}`;
+}
 
     // Update when inputs change
     radiusInput.addEventListener('change', drawPacman);
