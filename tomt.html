@@ -3,25 +3,49 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Pacman solskiva (uppdaterad slider)</title>
+  <title>Pacman solskiva med klockslag</title>
 
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
     body { margin:0; font-family: Arial, Helvetica, sans-serif; }
     #topbar { padding:10px; background:#f7f7f7; display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
-    #map { height: calc(100vh - 140px); }
+    #map { height: calc(100vh - 160px); }
     input[type="text"], input[type="date"] { padding:6px; width:260px; }
     button { padding:6px 10px; }
     #controls { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
     .info { font-size:13px; color:#333; }
-    #meta { padding:8px; background:#fff; border-top:1px solid #ddd; }
+    #meta { padding:8px; background:#fff; border-top:1px solid #ddd; min-height:48px; }
     label { font-size:13px; }
+    /* time label styling */
+    .time-label {
+      font-size:12px;
+      font-weight:600;
+      color:#222;
+      padding:2px 6px;
+      background: rgba(255,255,255,0.85);
+      border-radius:4px;
+      border: 1px solid rgba(0,0,0,0.12);
+      box-shadow: 0 1px 2px rgba(0,0,0,0.15);
+      white-space:nowrap;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+    }
+    /* small dot marker for time points (optional) */
+    .time-dot {
+      width:6px;
+      height:6px;
+      background: rgba(0,0,0,0.6);
+      border-radius:50%;
+      display:block;
+      margin:0 auto 3px auto;
+      box-shadow: 0 0 2px rgba(0,0,0,0.6);
+    }
   </style>
 </head>
 <body>
 
   <div id="topbar">
-    <input id="address" type="text" placeholder="Skriv adress, t.ex. Storgatan 2, Stockholm" />
+    <input id="address" type="text" placeholder="Skriv adress, t.ex. Storgatan 1, Stockholm" />
     <button id="searchBtn">Sök adress</button>
 
     <div id="controls">
@@ -54,6 +78,7 @@
     // State
     let pointMarker = null;
     let pacmanLayer = null;
+    let timeLabelMarkers = []; // markers for clock labels
 
     // UI
     const placePointBtn = document.getElementById('placePointBtn');
@@ -84,7 +109,6 @@
       const year = (new Date()).getFullYear();
       const day = Number(daySlider.value);
       const newDate = new Date(year,0,1 + day - 1);
-      // update UI immediately but avoid double draw calls
       setDate(newDate, false);
 
       if (sliderDebounceTimer) clearTimeout(sliderDebounceTimer);
@@ -126,10 +150,24 @@
       drawPacman();
     }
 
+    // Remove existing time label markers
+    function clearTimeLabels() {
+      for (const m of timeLabelMarkers) {
+        if (map.hasLayer(m)) map.removeLayer(m);
+      }
+      timeLabelMarkers = [];
+    }
+
+    // Helper: format time as HH:MM
+    function fmtTime(d) {
+      return new Date(d).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+    }
+
     // Robust drawPacman: sample azimuths along the sun's path between sunrise and sunset
     function drawPacman() {
       if (!pointMarker) return;
       if (pacmanLayer) map.removeLayer(pacmanLayer);
+      clearTimeLabels();
 
       const latlng = pointMarker.getLatLng();
       const radius = Number(radiusInput.value) || 50;
@@ -174,6 +212,7 @@
         azimuths.push(az);
         timePoints.push(dt);
       }
+      // ensure last point is sunset exactly
       const posEnd = SunCalc.getPosition(end, latlng.lat, latlng.lng);
       let azEnd = (180 + posEnd.azimuth * 180 / Math.PI) % 360;
       if (azEnd < 0) azEnd += 360;
@@ -209,6 +248,7 @@
         }
       }
 
+      // Build polygon coordinates by projecting from center along each azimuth
       const center = turf.point([latlng.lng, latlng.lat]);
       const arcCoords = [];
       arcCoords.push([latlng.lng, latlng.lat]);
@@ -230,6 +270,54 @@
         }
       }).addTo(map);
 
+      // Create time labels along the arc
+      // Choose label interval to aim for ~6-10 labels
+      const approxLabels = 8;
+      let labelStepMin = Math.max(15, Math.round(totalMinutes / approxLabels));
+      // round labelStepMin to nearest 15
+      labelStepMin = Math.round(labelStepMin / 15) * 15;
+      if (labelStepMin < 15) labelStepMin = 15;
+
+      // Start from sunrise, place labels every labelStepMin minutes until sunset
+      for (let t = start.getTime(); t <= end.getTime(); t += labelStepMin * 60000) {
+        const dt = new Date(t);
+        const pos = SunCalc.getPosition(dt, latlng.lat, latlng.lng);
+        let az = (180 + pos.azimuth * 180 / Math.PI) % 360;
+        if (az < 0) az += 360;
+        // project point at radius distance along azimuth
+        const dest = turf.destination(center, radius / 1000, az, { units: 'kilometers' });
+        const coords = dest.geometry.coordinates; // [lng, lat]
+        // create a small marker with time label
+        const labelHtml = `<div class="time-label"><div style="text-align:center">${fmtTime(dt)}</div></div>`;
+        const icon = L.divIcon({
+          className: '',
+          html: labelHtml,
+          iconSize: [0,0],
+          iconAnchor: [0,0]
+        });
+        const marker = L.marker([coords[1], coords[0]], { icon: icon, interactive: false }).addTo(map);
+        timeLabelMarkers.push(marker);
+      }
+
+      // Also add label at exact sunrise and sunset for clarity
+      const sunriseAz = finalAzimuths.length ? finalAzimuths[0] : null;
+      const sunsetAz = finalAzimuths.length ? finalAzimuths[finalAzimuths.length-1] : null;
+      if (sunriseAz !== null) {
+        const destS = turf.destination(center, radius / 1000, sunriseAz, { units: 'kilometers' });
+        const c = destS.geometry.coordinates;
+        const iconS = L.divIcon({ className:'', html:`<div class="time-label">${fmtTime(sunrise)}</div>`, iconSize:[0,0] });
+        const mS = L.marker([c[1], c[0]], { icon: iconS, interactive:false }).addTo(map);
+        timeLabelMarkers.push(mS);
+      }
+      if (sunsetAz !== null) {
+        const destE = turf.destination(center, radius / 1000, sunsetAz, { units: 'kilometers' });
+        const c2 = destE.geometry.coordinates;
+        const iconE = L.divIcon({ className:'', html:`<div class="time-label">${fmtTime(sunset)}</div>`, iconSize:[0,0] });
+        const mE = L.marker([c2[1], c2[0]], { icon: iconE, interactive:false }).addTo(map);
+        timeLabelMarkers.push(mE);
+      }
+
+      // Meta info: sunrise/sunset and sample count
       const fmt = (d) => new Date(d).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
       const azStart = finalAzimuths.length ? finalAzimuths[0] : NaN;
       const azStop = finalAzimuths.length ? finalAzimuths[finalAzimuths.length-1] : NaN;
@@ -274,7 +362,7 @@
         const div = L.DomUtil.create('div','info');
         div.style.padding = '6px';
         div.style.background = 'rgba(255,255,255,0.9)';
-        div.innerHTML = '<strong>Instruktion</strong>: Klicka "Placera punkt" och klicka på kartan. Använd datum‑slider för att se hur Pacman ändras över året.';
+        div.innerHTML = '<strong>Instruktion</strong>: Klicka "Placera punkt" och klicka på kartan. Använd datum‑slider för att se hur Pacman och klockslagen ändras över året.';
         return div;
       };
       hint.addTo(map);
