@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Pacman solskiva — klockslag inuti skivan</title>
+  <title>Pacman solskiva — jämna etiketter och genomskinlig skiva</title>
 
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
@@ -17,18 +17,19 @@
     #meta { padding:8px; background:#fff; border-top:1px solid #ddd; min-height:48px; }
     label { font-size:13px; }
 
-    /* Tidsetikett: ingen vit ruta, svart text placerad inuti skivan */
+    /* Tidsetikett: vit ruta utanför bågen, horisontell text */
     .time-label {
       font-size:12px;
-      font-weight:700;
-      color:#000000;                     /* svart text för bra kontrast mot gul skiva */
-      padding:0;
-      background: transparent;
+      font-weight:600;
+      color:#111;
+      padding:4px 8px;
+      background: rgba(255,255,255,0.96);
+      border-radius:6px;
+      border: 1px solid rgba(0,0,0,0.08);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.12);
       white-space:nowrap;
       pointer-events: none;
       transform: translate(-50%, -50%);
-      /* lätt ljus halo för att stå ut mot mörka partier i bakgrunden */
-      text-shadow: 0 1px 0 rgba(255,255,255,0.6);
     }
   </style>
 </head>
@@ -42,7 +43,7 @@
       <button id="placePointBtn">Placera punkt</button>
       <label>Radie (m)</label>
       <input id="radius" type="number" value="50" style="width:80px" />
-      <label>Max spridning (°) 0 = använd hela solperioden</label>
+      <label>Max spridning ° 0 = använd hela solperioden</label>
       <input id="spread" type="number" value="0" style="width:80px" />
       <label>Datum</label>
       <input id="dateInput" type="date" />
@@ -59,23 +60,20 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/suncalc/1.9.0/suncalc.min.js"></script>
 
   <script>
-    // Init map
     const map = L.map('map').setView([59.33, 18.07], 16);
     L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
       attribution: 'Tiles © Esri'
     }).addTo(map);
 
-    // skapa pane för etiketter så texten alltid ligger över kartan
+    // pane för etiketter så de ligger över kartan
     map.createPane('labelPane');
     map.getPane('labelPane').style.zIndex = 650;
     map.getPane('labelPane').style.pointerEvents = 'none';
 
-    // State
     let pointMarker = null;
     let pacmanLayer = null;
     let hourLabelMarkers = [];
 
-    // UI
     const placePointBtn = document.getElementById('placePointBtn');
     const radiusInput = document.getElementById('radius');
     const spreadInput = document.getElementById('spread');
@@ -84,7 +82,6 @@
     const dateLabel = document.getElementById('dateLabel');
     const metaDiv = document.getElementById('meta');
 
-    // Set initial date to today
     function setDate(d, callDraw = true) {
       const yyyy = d.getFullYear();
       const mm = String(d.getMonth()+1).padStart(2,'0');
@@ -98,37 +95,24 @@
     }
     setDate(new Date());
 
-    // Slider handler: update date immediately, debounce heavy redraws
     let sliderDebounceTimer = null;
     function onSliderInput() {
       const year = (new Date()).getFullYear();
       const day = Number(daySlider.value);
       const newDate = new Date(year,0,1 + day - 1);
       setDate(newDate, false);
-
       if (sliderDebounceTimer) clearTimeout(sliderDebounceTimer);
-      sliderDebounceTimer = setTimeout(() => {
-        drawPacman();
-        sliderDebounceTimer = null;
-      }, 60);
+      sliderDebounceTimer = setTimeout(() => { drawPacman(); sliderDebounceTimer = null; }, 60);
     }
     daySlider.addEventListener('input', onSliderInput);
+    dateInput.addEventListener('change', () => { const d = new Date(dateInput.value); if (!isNaN(d)) setDate(d, true); });
 
-    // Date input -> immediate update
-    dateInput.addEventListener('change', () => {
-      const d = new Date(dateInput.value);
-      if (isNaN(d)) return;
-      setDate(d, true);
-    });
-
-    // Place point mode
     let placing = false;
     placePointBtn.addEventListener('click', () => {
       placing = true;
       placePointBtn.textContent = 'Klicka på kartan';
       map.getContainer().style.cursor = 'crosshair';
     });
-
     map.on('click', (e) => {
       if (placing) {
         placing = false;
@@ -145,21 +129,21 @@
       drawPacman();
     }
 
-    // Clear hour labels
     function clearHourLabels() {
-      for (const m of hourLabelMarkers) {
-        if (map.hasLayer(m)) map.removeLayer(m);
-      }
+      for (const m of hourLabelMarkers) if (map.hasLayer(m)) map.removeLayer(m);
       hourLabelMarkers = [];
     }
 
-    // Format "kl 07"
     function formatHourLabel(date) {
       const h = date.getHours();
       return 'kl ' + String(h).padStart(2,'0');
     }
 
-    // Robust drawPacman with hour labels as plain black text placed inside the arc
+    // collision test in pixel space
+    function collides(box, boxes) {
+      return boxes.some(b => !(box.x + box.w < b.x || box.x > b.x + b.w || box.y + box.h < b.y || box.y > b.y + b.h));
+    }
+
     function drawPacman() {
       if (!pointMarker) return;
       if (pacmanLayer) map.removeLayer(pacmanLayer);
@@ -167,7 +151,7 @@
 
       const latlng = pointMarker.getLatLng();
       const radius = Number(radiusInput.value) || 50;
-      const spreadOverride = Number(spreadInput.value) || 0; // 0 = use full sun period
+      const spreadOverride = Number(spreadInput.value) || 0;
 
       const dateStr = dateInput.value;
       if (!dateStr) return;
@@ -181,9 +165,7 @@
         const noonPos = SunCalc.getPosition(new Date(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate(), 12), latlng.lat, latlng.lng);
         if (noonPos.altitude > 0) {
           const circle = turf.circle([latlng.lng, latlng.lat], radius/1000, {steps:128, units:'kilometers'});
-          pacmanLayer = L.geoJSON(circle, {
-            style: { color:'rgba(255,160,30,0.9)', weight:1, fillColor:'rgba(255,200,50,0.45)', fillOpacity:1, interactive:false }
-          }).addTo(map);
+          pacmanLayer = L.geoJSON(circle, { style: { color:'rgba(255,160,30,0.9)', weight:1, fillColor:'rgba(255,200,50,0.35)', fillOpacity:1, interactive:false } }).addTo(map);
           metaDiv.innerHTML = '<strong>Sol alltid över horisonten denna dag</strong>';
           return;
         } else {
@@ -199,21 +181,17 @@
       const stepMin = Math.max(1, Math.round(totalMinutes / targetSamples));
 
       const azimuths = [];
-      const timePoints = [];
       for (let t = start.getTime(); t <= end.getTime(); t += stepMin * 60000) {
         const dt = new Date(t);
         const pos = SunCalc.getPosition(dt, latlng.lat, latlng.lng);
         let az = (180 + pos.azimuth * 180 / Math.PI) % 360;
         if (az < 0) az += 360;
         azimuths.push(az);
-        timePoints.push(dt);
       }
-      // ensure last point is sunset exactly
       const posEnd = SunCalc.getPosition(end, latlng.lat, latlng.lng);
       let azEnd = (180 + posEnd.azimuth * 180 / Math.PI) % 360;
       if (azEnd < 0) azEnd += 360;
       azimuths.push(azEnd);
-      timePoints.push(end);
 
       let finalAzimuths = azimuths.slice();
       if (spreadOverride > 0) {
@@ -244,7 +222,7 @@
         }
       }
 
-      // Build polygon coordinates by projecting from center along each azimuth
+      // Build polygon coordinates
       const center = turf.point([latlng.lng, latlng.lat]);
       const arcCoords = [];
       arcCoords.push([latlng.lng, latlng.lat]);
@@ -255,69 +233,101 @@
       }
       arcCoords.push([latlng.lng, latlng.lat]);
 
-      const fanGeoJson = { type:'Feature', geometry:{ type:'Polygon', coordinates:[arcCoords] } };
-      pacmanLayer = L.geoJSON(fanGeoJson, {
+      // More transparent fill so ground shows through
+      pacmanLayer = L.geoJSON({ type:'Feature', geometry:{ type:'Polygon', coordinates:[arcCoords] } }, {
         style: {
           color: 'rgba(255,160,30,0.9)',
           weight: 1,
-          fillColor: 'rgba(255,200,50,0.95)', // slightly more opaque so black text stands out
-          fillOpacity: 0.95,
+          fillColor: 'rgba(255,200,50,0.35)',
+          fillOpacity: 0.35,
           interactive: false
         }
       }).addTo(map);
 
-      // Create hour labels on whole hours (kl 07) placed slightly inside the arc
-      const firstHour = new Date(sunrise);
-      if (firstHour.getMinutes() > 0 || firstHour.getSeconds() > 0) {
-        firstHour.setHours(firstHour.getHours() + 1, 0, 0, 0);
-      } else {
-        firstHour.setMinutes(0,0,0);
+      // Place labels evenly along the arc (by angle), not by time, to avoid clumping
+      // Determine arc angles in increasing order (handle wrap)
+      let angles = finalAzimuths.slice();
+      // ensure monotonic sequence across wrap
+      for (let i = 1; i < angles.length; i++) {
+        while (angles[i] - angles[i-1] > 180) angles[i] -= 360;
+        while (angles[i] - angles[i-1] < -180) angles[i] += 360;
       }
-      const lastHour = new Date(sunset);
-      lastHour.setMinutes(0,0,0,0);
+      // normalize to 0-360
+      angles = angles.map(a => (a % 360 + 360) % 360);
 
-      // labelRadius factor < 1 to place labels inside the disk
-      const labelInnerFactor = 0.70; // 70% of radius from center; adjust if you want labels closer to center
-      if (lastHour >= firstHour) {
-        for (let dt = new Date(firstHour); dt <= lastHour; dt.setHours(dt.getHours() + 1)) {
-          const pos = SunCalc.getPosition(new Date(dt), latlng.lat, latlng.lng);
-          let az = (180 + pos.azimuth * 180 / Math.PI) % 360;
-          if (az < 0) az += 360;
-          // place label inside radius
-          const labelRadius = radius * labelInnerFactor;
-          const dest = turf.destination(center, labelRadius / 1000, az, { units: 'kilometers' });
-          const coords = dest.geometry.coordinates; // [lng, lat]
-          const labelText = formatHourLabel(new Date(dt));
-          const icon = L.divIcon({
-            className: '',
-            html: `<div class="time-label">${labelText}</div>`,
-            iconSize: [0,0],
-            iconAnchor: [0,0]
-          });
-          const marker = L.marker([coords[1], coords[0]], { icon: icon, interactive: false, pane: 'labelPane' }).addTo(map);
-          hourLabelMarkers.push(marker);
-        }
+      // choose number of labels based on zoom and arc length
+      const zoom = map.getZoom();
+      const approxLabels = zoom >= 18 ? 10 : zoom >= 16 ? 8 : 6;
+      // compute evenly spaced fractions along the arc
+      const n = Math.min(approxLabels, Math.max(2, Math.floor(angles.length / 2)));
+      // build a list of evenly spaced angles between start and end of arc
+      let startAngle = angles[0];
+      let endAngle = angles[angles.length - 1];
+      // handle wrap if end < start
+      if (endAngle < startAngle) endAngle += 360;
+      const labelAngles = [];
+      for (let i = 0; i < n; i++) {
+        const frac = i / (n - 1);
+        const ang = startAngle + frac * (endAngle - startAngle);
+        labelAngles.push((ang % 360 + 360) % 360);
       }
 
-      // Also add sunrise and sunset labels (placed just inside the arc near the edge)
+      // collision avoidance in pixel space
+      const placedBoxes = [];
+      const approxW = 56, approxH = 22;
+
+      // place labels slightly outside the arc
+      const labelRadiusFactor = 1.06;
+      for (const ang of labelAngles) {
+        const dest = turf.destination(center, (radius * labelRadiusFactor) / 1000, ang, { units: 'kilometers' });
+        const coords = dest.geometry.coordinates;
+        const lat = coords[1], lng = coords[0];
+        const px = map.latLngToLayerPoint([lat, lng]);
+        const box = { x: px.x - approxW/2, y: px.y - approxH/2, w: approxW, h: approxH };
+        if (collides(box, placedBoxes)) continue; // skip if collision
+        placedBoxes.push(box);
+
+        // determine a representative time for label: find nearest timePoint azimuth
+        // fallback: compute approximate time by interpolating between sunrise and sunset
+        // We'll compute a time by mapping angle fraction to time fraction
+        let angStart = startAngle, angEnd = endAngle;
+        if (angEnd < angStart) angEnd += 360;
+        let angNorm = ang;
+        if (angNorm < angStart) angNorm += 360;
+        const frac = (angNorm - angStart) / (angEnd - angStart || 1);
+        const tMillis = start.getTime() + frac * (end.getTime() - start.getTime());
+        const dt = new Date(tMillis);
+        const labelText = formatHourLabel(dt);
+
+        const icon = L.divIcon({
+          className: '',
+          html: `<div class="time-label">${labelText}</div>`,
+          iconSize: [0,0],
+          iconAnchor: [0,0]
+        });
+        const marker = L.marker([lat, lng], { icon: icon, interactive: false, pane: 'labelPane' }).addTo(map);
+        hourLabelMarkers.push(marker);
+      }
+
+      // also add sunrise and sunset labels (outside, but allow overlap)
       const sunriseAz = finalAzimuths.length ? finalAzimuths[0] : null;
       const sunsetAz = finalAzimuths.length ? finalAzimuths[finalAzimuths.length-1] : null;
       if (sunriseAz !== null) {
-        const destS = turf.destination(center, (radius * 0.92) / 1000, sunriseAz, { units: 'kilometers' });
+        const destS = turf.destination(center, (radius * 1.06) / 1000, sunriseAz, { units: 'kilometers' });
         const c = destS.geometry.coordinates;
         const iconS = L.divIcon({ className:'', html:`<div class="time-label">${formatHourLabel(sunrise)}</div>`, iconSize:[0,0] });
         const mS = L.marker([c[1], c[0]], { icon: iconS, interactive:false, pane: 'labelPane' }).addTo(map);
         hourLabelMarkers.push(mS);
       }
       if (sunsetAz !== null) {
-        const destE = turf.destination(center, (radius * 0.92) / 1000, sunsetAz, { units: 'kilometers' });
+        const destE = turf.destination(center, (radius * 1.06) / 1000, sunsetAz, { units: 'kilometers' });
         const c2 = destE.geometry.coordinates;
         const iconE = L.divIcon({ className:'', html:`<div class="time-label">${formatHourLabel(sunset)}</div>`, iconSize:[0,0] });
         const mE = L.marker([c2[1], c2[0]], { icon: iconE, interactive:false, pane: 'labelPane' }).addTo(map);
         hourLabelMarkers.push(mE);
       }
 
-      // Meta info
+      // meta info
       const fmt = (d) => new Date(d).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
       const azStart = finalAzimuths.length ? finalAzimuths[0] : NaN;
       const azStop = finalAzimuths.length ? finalAzimuths[finalAzimuths.length-1] : NaN;
@@ -326,11 +336,9 @@
         <strong>Start azimut</strong>: ${azStart.toFixed(1)}° &nbsp; <strong>Slut azimut</strong>: ${azStop.toFixed(1)}°`;
     }
 
-    // Update when inputs change
     radiusInput.addEventListener('change', drawPacman);
     spreadInput.addEventListener('change', drawPacman);
 
-    // Geocoding (Nominatim)
     document.getElementById('searchBtn').addEventListener('click', async () => {
       const q = document.getElementById('address').value.trim();
       if (!q) return;
@@ -351,10 +359,8 @@
       }
     });
 
-    // Keep pacman updated on map move and when marker dragged
     map.on('moveend', drawPacman);
 
-    // initial hint
     map.whenReady(() => {
       L.control.scale().addTo(map);
       const hint = L.control({position:'bottomleft'});
@@ -362,15 +368,13 @@
         const div = L.DomUtil.create('div','info');
         div.style.padding = '6px';
         div.style.background = 'rgba(255,255,255,0.9)';
-        div.innerHTML = '<strong>Instruktion</strong>: Klicka "Placera punkt" och klicka på kartan. Använd datum‑slider för att se Pacman och klockslag (svart text inuti skivan).';
+        div.innerHTML = '<strong>Instruktion</strong>: Klicka "Placera punkt" och klicka på kartan. Använd datum‑slider för att se Pacman med jämnt fördelade klockslag.';
         return div;
       };
       hint.addTo(map);
     });
 
-    // Expose drawPacman for debugging
     window.drawPacman = drawPacman;
   </script>
 </body>
 </html>
-
