@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Pacman solskiva</title>
+  <title>Pacman solskiva (uppdaterad slider)</title>
 
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
@@ -21,15 +21,15 @@
 <body>
 
   <div id="topbar">
-    <input id="address" type="text" placeholder="Skriv adress, t.ex. Storgatan 1, Stockholm" />
+    <input id="address" type="text" placeholder="Skriv adress, t.ex. Storgatan 2, Stockholm" />
     <button id="searchBtn">Sök adress</button>
 
     <div id="controls">
       <button id="placePointBtn">Placera punkt</button>
       <label>Radie (m)</label>
       <input id="radius" type="number" value="50" style="width:80px" />
-      <label>Fyllning</label>
-      <input id="spread" type="number" value="180" style="width:80px" />
+      <label>Max spridning (°) 0 = använd hela solperioden</label>
+      <input id="spread" type="number" value="0" style="width:80px" />
       <label>Datum</label>
       <input id="dateInput" type="date" />
       <input id="daySlider" type="range" min="1" max="366" value="1" style="width:220px" />
@@ -65,7 +65,7 @@
     const metaDiv = document.getElementById('meta');
 
     // Set initial date to today
-    function setDate(d) {
+    function setDate(d, callDraw = true) {
       const yyyy = d.getFullYear();
       const mm = String(d.getMonth()+1).padStart(2,'0');
       const dd = String(d.getDate()).padStart(2,'0');
@@ -74,24 +74,32 @@
       const dayOfYear = Math.floor((d - start) / (24*60*60*1000)) + 1;
       daySlider.value = dayOfYear;
       dateLabel.textContent = d.toLocaleDateString();
+      if (callDraw) drawPacman();
     }
     setDate(new Date());
 
-    // Slider -> date
-    daySlider.addEventListener('input', () => {
+    // Slider handler: update date immediately, debounce heavy redraws
+    let sliderDebounceTimer = null;
+    function onSliderInput() {
       const year = (new Date()).getFullYear();
       const day = Number(daySlider.value);
       const newDate = new Date(year,0,1 + day - 1);
-      setDate(newDate);
-      drawPacman();
-    });
+      // update UI immediately but avoid double draw calls
+      setDate(newDate, false);
 
-    // Date input -> slider
+      if (sliderDebounceTimer) clearTimeout(sliderDebounceTimer);
+      sliderDebounceTimer = setTimeout(() => {
+        drawPacman();
+        sliderDebounceTimer = null;
+      }, 60);
+    }
+    daySlider.addEventListener('input', onSliderInput);
+
+    // Date input -> immediate update
     dateInput.addEventListener('change', () => {
       const d = new Date(dateInput.value);
       if (isNaN(d)) return;
-      setDate(d);
-      drawPacman();
+      setDate(d, true);
     });
 
     // Place point mode
@@ -118,112 +126,117 @@
       drawPacman();
     }
 
-    // Build Pacman sector for whole day when sun is above horizon
-    async function drawPacman() {
-  if (!pointMarker) return;
-  if (pacmanLayer) map.removeLayer(pacmanLayer);
+    // Robust drawPacman: sample azimuths along the sun's path between sunrise and sunset
+    function drawPacman() {
+      if (!pointMarker) return;
+      if (pacmanLayer) map.removeLayer(pacmanLayer);
 
-  const latlng = pointMarker.getLatLng();
-  const radius = Number(radiusInput.value) || 50;
-  const spreadOverride = Number(spreadInput.value) || 0; // 0 = använd hela solperioden
+      const latlng = pointMarker.getLatLng();
+      const radius = Number(radiusInput.value) || 50;
+      const spreadOverride = Number(spreadInput.value) || 0; // 0 = use full sun period
 
-  const dateStr = dateInput.value;
-  if (!dateStr) return;
-  // Use local date midday as base to avoid timezone midnight issues
-  const baseDate = new Date(dateStr + 'T12:00:00');
+      const dateStr = dateInput.value;
+      if (!dateStr) return;
+      const baseDate = new Date(dateStr + 'T12:00:00');
 
-  // Get sunrise/sunset times
-  const times = SunCalc.getTimes(baseDate, latlng.lat, latlng.lng);
-  const sunrise = times.sunrise;
-  const sunset = times.sunset;
+      const times = SunCalc.getTimes(baseDate, latlng.lat, latlng.lng);
+      const sunrise = times.sunrise;
+      const sunset = times.sunset;
 
-  // Handle polar cases
-  if (!sunrise || !sunset || isNaN(sunrise) || isNaN(sunset)) {
-    const noonPos = SunCalc.getPosition(new Date(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate(), 12), latlng.lat, latlng.lng);
-    if (noonPos.altitude > 0) {
-      // Sun above horizon whole day -> full circle
-      const circle = turf.circle([latlng.lng, latlng.lat], radius/1000, {steps:64, units:'kilometers'});
-      pacmanLayer = L.geoJSON(circle, {
-        style: { color:'rgba(255,160,30,0.9)', weight:1, fillColor:'rgba(255,200,50,0.45)', fillOpacity:1, interactive:false }
+      if (!sunrise || !sunset || isNaN(sunrise) || isNaN(sunset)) {
+        const noonPos = SunCalc.getPosition(new Date(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate(), 12), latlng.lat, latlng.lng);
+        if (noonPos.altitude > 0) {
+          const circle = turf.circle([latlng.lng, latlng.lat], radius/1000, {steps:128, units:'kilometers'});
+          pacmanLayer = L.geoJSON(circle, {
+            style: { color:'rgba(255,160,30,0.9)', weight:1, fillColor:'rgba(255,200,50,0.45)', fillOpacity:1, interactive:false }
+          }).addTo(map);
+          metaDiv.innerHTML = '<strong>Sol alltid över horisonten denna dag</strong>';
+          return;
+        } else {
+          metaDiv.innerHTML = '<strong>Sol under horisonten hela dagen</strong>';
+          return;
+        }
+      }
+
+      const start = new Date(sunrise.getTime());
+      const end = new Date(sunset.getTime());
+      const totalMinutes = Math.max(1, Math.round((end - start) / 60000));
+      const targetSamples = 120;
+      const stepMin = Math.max(1, Math.round(totalMinutes / targetSamples));
+
+      const azimuths = [];
+      const timePoints = [];
+      for (let t = start.getTime(); t <= end.getTime(); t += stepMin * 60000) {
+        const dt = new Date(t);
+        const pos = SunCalc.getPosition(dt, latlng.lat, latlng.lng);
+        let az = (180 + pos.azimuth * 180 / Math.PI) % 360;
+        if (az < 0) az += 360;
+        azimuths.push(az);
+        timePoints.push(dt);
+      }
+      const posEnd = SunCalc.getPosition(end, latlng.lat, latlng.lng);
+      let azEnd = (180 + posEnd.azimuth * 180 / Math.PI) % 360;
+      if (azEnd < 0) azEnd += 360;
+      azimuths.push(azEnd);
+      timePoints.push(end);
+
+      let finalAzimuths = azimuths.slice();
+      if (spreadOverride > 0) {
+        const noon = SunCalc.getTimes(baseDate, latlng.lat, latlng.lng).solarNoon || new Date(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate(), 12);
+        const noonPos = SunCalc.getPosition(noon, latlng.lat, latlng.lng);
+        let noonAz = (180 + noonPos.azimuth * 180 / Math.PI) % 360;
+        if (noonAz < 0) noonAz += 360;
+        const half = spreadOverride / 2;
+        const steps = Math.max(12, Math.round(spreadOverride / 2));
+        finalAzimuths = [];
+        for (let i = 0; i <= steps; i++) {
+          const angle = (noonAz - half + (i / steps) * spreadOverride + 360) % 360;
+          finalAzimuths.push(angle);
+        }
+      } else {
+        finalAzimuths = [];
+        if (azimuths.length > 0) {
+          let prev = azimuths[0];
+          finalAzimuths.push(prev);
+          for (let i = 1; i < azimuths.length; i++) {
+            let cur = azimuths[i];
+            while (cur - prev > 180) cur -= 360;
+            while (cur - prev < -180) cur += 360;
+            finalAzimuths.push(cur);
+            prev = cur;
+          }
+          finalAzimuths = finalAzimuths.map(a => (a % 360 + 360) % 360);
+        }
+      }
+
+      const center = turf.point([latlng.lng, latlng.lat]);
+      const arcCoords = [];
+      arcCoords.push([latlng.lng, latlng.lat]);
+      for (let i = 0; i < finalAzimuths.length; i++) {
+        const angle = finalAzimuths[i];
+        const dest = turf.destination(center, radius / 1000, angle, { units: 'kilometers' });
+        arcCoords.push(dest.geometry.coordinates);
+      }
+      arcCoords.push([latlng.lng, latlng.lat]);
+
+      const fanGeoJson = { type:'Feature', geometry:{ type:'Polygon', coordinates:[arcCoords] } };
+      pacmanLayer = L.geoJSON(fanGeoJson, {
+        style: {
+          color: 'rgba(255,160,30,0.9)',
+          weight: 1,
+          fillColor: 'rgba(255,200,50,0.45)',
+          fillOpacity: 1,
+          interactive: false
+        }
       }).addTo(map);
-      metaDiv.innerHTML = '<strong>Sol alltid över horisonten denna dag</strong>';
-      return;
-    } else {
-      metaDiv.innerHTML = '<strong>Sol under horisonten hela dagen</strong>';
-      return;
+
+      const fmt = (d) => new Date(d).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+      const azStart = finalAzimuths.length ? finalAzimuths[0] : NaN;
+      const azStop = finalAzimuths.length ? finalAzimuths[finalAzimuths.length-1] : NaN;
+      metaDiv.innerHTML = `<strong>Datum</strong>: ${new Date(dateInput.value).toLocaleDateString()} &nbsp; <strong>Radie</strong>: ${radius} m<br>
+        <strong>Soluppgång</strong>: ${fmt(sunrise)} &nbsp; <strong>Solnedgång</strong>: ${fmt(sunset)} &nbsp; <strong>Samples</strong>: ${finalAzimuths.length}<br>
+        <strong>Start azimut</strong>: ${azStart.toFixed(1)}° &nbsp; <strong>Slut azimut</strong>: ${azStop.toFixed(1)}°`;
     }
-  }
-
-  // Sample times between sunrise and sunset
-  const start = new Date(sunrise.getTime());
-  const end = new Date(sunset.getTime());
-  const totalMinutes = Math.max(1, Math.round((end - start) / 60000));
-  // Choose sampling interval: aim for ~60-180 samples depending on day length
-  const targetSamples = 120;
-  const stepMin = Math.max(1, Math.round(totalMinutes / targetSamples));
-
-  const azimuths = [];
-  const timePoints = [];
-  for (let t = start.getTime(); t <= end.getTime(); t += stepMin * 60000) {
-    const dt = new Date(t);
-    const pos = SunCalc.getPosition(dt, latlng.lat, latlng.lng);
-    // convert SunCalc azimuth to compass bearing 0=north clockwise
-    let az = (180 + pos.azimuth * 180 / Math.PI) % 360;
-    if (az < 0) az += 360;
-    azimuths.push(az);
-    timePoints.push(dt);
-  }
-  // ensure last point is sunset exactly
-  const posEnd = SunCalc.getPosition(end, latlng.lat, latlng.lng);
-  let azEnd = (180 + posEnd.azimuth * 180 / Math.PI) % 360;
-  if (azEnd < 0) azEnd += 360;
-  azimuths.push(azEnd);
-  timePoints.push(end);
-
-  // If user provided a manual spreadOverride > 0, center it on solar noon azimuth
-  let finalAzimuths = azimuths.slice();
-  if (spreadOverride > 0) {
-    const noon = SunCalc.getTimes(baseDate, latlng.lat, latlng.lng).solarNoon || new Date(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate(), 12);
-    const noonPos = SunCalc.getPosition(noon, latlng.lat, latlng.lng);
-    let noonAz = (180 + noonPos.azimuth * 180 / Math.PI) % 360;
-    if (noonAz < 0) noonAz += 360;
-    const half = spreadOverride / 2;
-    // build azimuth list from noonAz-half to noonAz+half (clockwise)
-    finalAzimuths = [];
-    const steps = Math.max(12, Math.round(spreadOverride / 2));
-    for (let i = 0; i <= steps; i++) {
-      const angle = (noonAz - half + (i / steps) * spreadOverride + 360) % 360;
-      finalAzimuths.push(angle);
-    }
-  }
-
-  // Build polygon coordinates by projecting from center along each azimuth
-  const center = turf.point([latlng.lng, latlng.lat]);
-  const arcCoords = [];
-  arcCoords.push([latlng.lng, latlng.lat]);
-  for (let i = 0; i < finalAzimuths.length; i++) {
-    const angle = finalAzimuths[i];
-    const dest = turf.destination(center, radius / 1000, angle, { units: 'kilometers' });
-    arcCoords.push(dest.geometry.coordinates);
-  }
-  arcCoords.push([latlng.lng, latlng.lat]);
-
-  const fanGeoJson = { type:'Feature', geometry:{ type:'Polygon', coordinates:[arcCoords] } };
-  pacmanLayer = L.geoJSON(fanGeoJson, {
-    style: {
-      color: 'rgba(255,160,30,0.9)',
-      weight: 1,
-      fillColor: 'rgba(255,200,50,0.45)',
-      fillOpacity: 1,
-      interactive: false
-    }
-  }).addTo(map);
-
-  // Meta info: sunrise/sunset and sample count
-  const fmt = (d) => new Date(d).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
-  metaDiv.innerHTML = `<strong>Datum</strong>: ${new Date(dateInput.value).toLocaleDateString()} &nbsp; <strong>Radie</strong>: ${radius} m<br>
-    <strong>Soluppgång</strong>: ${fmt(sunrise)} &nbsp; <strong>Solnedgång</strong>: ${fmt(sunset)} &nbsp; <strong>Samples</strong>: ${finalAzimuths.length}`;
-}
 
     // Update when inputs change
     radiusInput.addEventListener('change', drawPacman);
