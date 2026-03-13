@@ -259,8 +259,15 @@
   }
 
   .chart-wrap {
-    height: 130px;
+    height: 160px;
     position: relative;
+    width: 100%;
+  }
+
+  .chart-wrap canvas {
+    width: 100% !important;
+    height: 100% !important;
+    display: block;
   }
 
   /* FX cards */
@@ -304,8 +311,15 @@
   }
 
   .fx-chart {
-    height: 80px;
+    height: 110px;
     margin-top: 14px;
+    width: 100%;
+  }
+
+  .fx-chart canvas {
+    width: 100% !important;
+    height: 100% !important;
+    display: block;
   }
 
   /* Section label */
@@ -384,6 +398,177 @@
     margin-top: 1px;
   }
 
+  /* Loading bar */
+  #loading-bar-wrap {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 100;
+    height: 3px;
+    background: var(--bg-2);
+  }
+  #loading-bar {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, var(--accent-green), var(--accent-blue));
+    transition: width 0.3s ease;
+    box-shadow: 0 0 8px var(--accent-green);
+  }
+  #loading-status {
+    position: fixed;
+    top: 10px; right: 16px;
+    font-size: 10px;
+    color: var(--text-dim);
+    z-index: 100;
+    letter-spacing: 0.08em;
+    transition: opacity 0.5s;
+  }
+
+  /* News grid */
+  .grid-news {
+    grid-template-columns: repeat(auto-fill, minmax(480px, 1fr));
+    margin-top: 0;
+  }
+
+  .news-card {
+    background: var(--bg-1);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    position: relative;
+    overflow: hidden;
+    min-height: 280px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .news-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: var(--accent-green);
+    opacity: 0.5;
+  }
+
+  #news-geo::before { background: var(--accent-red); }
+
+  .news-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+  }
+
+  .news-card-title {
+    font-family: 'Syne', sans-serif;
+    font-weight: 600;
+    font-size: 13px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .news-icon {
+    color: var(--accent-green);
+    font-size: 14px;
+  }
+
+  .news-refresh-btn {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    cursor: pointer;
+    font-size: 14px;
+    width: 28px; height: 28px;
+    border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.2s;
+    line-height: 1;
+  }
+
+  .news-refresh-btn:hover {
+    border-color: var(--border-bright);
+    color: var(--text-secondary);
+  }
+
+  .news-refresh-btn.spinning { animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .news-content {
+    flex: 1;
+    font-size: 12.5px;
+    line-height: 1.7;
+    color: var(--text-secondary);
+  }
+
+  .news-loading {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--text-dim);
+    font-size: 12px;
+    margin-top: 8px;
+  }
+
+  .news-spinner {
+    width: 14px; height: 14px;
+    border: 2px solid var(--border-bright);
+    border-top-color: var(--accent-green);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    flex-shrink: 0;
+  }
+
+  .news-item {
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .news-item:last-child { border-bottom: none; }
+
+  .news-item-headline {
+    color: var(--text-primary);
+    font-size: 12.5px;
+    font-weight: 500;
+    margin-bottom: 4px;
+    line-height: 1.5;
+  }
+
+  .news-item-summary {
+    color: var(--text-secondary);
+    font-size: 11.5px;
+    line-height: 1.6;
+  }
+
+  .news-item-impact {
+    display: inline-block;
+    margin-top: 5px;
+    font-size: 10px;
+    padding: 1px 7px;
+    border-radius: 3px;
+    letter-spacing: 0.06em;
+  }
+
+  .impact-high { background: rgba(255,77,109,0.12); color: var(--accent-red); border: 1px solid rgba(255,77,109,0.25); }
+  .impact-med  { background: rgba(245,200,66,0.10); color: var(--accent-gold); border: 1px solid rgba(245,200,66,0.2); }
+  .impact-low  { background: rgba(61,158,255,0.10); color: var(--accent-blue); border: 1px solid rgba(61,158,255,0.2); }
+
+  .news-timestamp {
+    font-size: 10px;
+    color: var(--text-dim);
+    margin-top: 12px;
+    text-align: right;
+  }
+
+  .news-error {
+    color: var(--accent-red);
+    font-size: 12px;
+    opacity: 0.7;
+  }
+
   /* Footer */
   footer {
     margin-top: 40px;
@@ -404,6 +589,8 @@
 </style>
 </head>
 <body>
+<div id="loading-bar-wrap"><div id="loading-bar"></div></div>
+<div id="loading-status">Hämtar data…</div>
 <div class="container">
 
   <header>
@@ -436,6 +623,38 @@
   <div class="section-label" style="margin-top:28px;">Valutor</div>
   <div class="grid grid-fx" id="fx-grid"></div>
 
+  <div class="section-label" style="margin-top:28px;">Nyhetsanalys · AI</div>
+  <div class="grid grid-news" id="news-grid">
+    <div class="news-card" id="news-finance">
+      <div class="news-card-header">
+        <div class="news-card-title">
+          <span class="news-icon">◈</span> Finansiella marknader
+        </div>
+        <button class="news-refresh-btn" onclick="loadNews('finance')" title="Uppdatera">↻</button>
+      </div>
+      <div class="news-content" id="news-finance-content">
+        <div class="news-loading">
+          <div class="news-spinner"></div>
+          <span>Claude analyserar marknadsläget…</span>
+        </div>
+      </div>
+    </div>
+    <div class="news-card" id="news-geo">
+      <div class="news-card-header">
+        <div class="news-card-title">
+          <span class="news-icon" style="color:var(--accent-red)">◈</span> Geopolitiska risker
+        </div>
+        <button class="news-refresh-btn" onclick="loadNews('geo')" title="Uppdatera">↻</button>
+      </div>
+      <div class="news-content" id="news-geo-content">
+        <div class="news-loading">
+          <div class="news-spinner"></div>
+          <span>Claude analyserar geopolitiska risker…</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <footer>
     Datakälla: Yahoo Finance (via public API) &nbsp;·&nbsp; Kurser är fördröjda 15 min &nbsp;·&nbsp; Ej finansiell rådgivning
   </footer>
@@ -446,9 +665,7 @@
 // DATA FETCHING — Yahoo Finance query2 (no key needed)
 // ──────────────────────────────────────────────
 
-const PROXY = 'https://query2.finance.yahoo.com/v8/finance/chart/';
-
-let usdSek = null; // will be fetched first
+let usdSek = null;
 
 const INSTRUMENTS = {
   commodities: [
@@ -470,26 +687,38 @@ const INSTRUMENTS = {
 
 const chartInstances = {};
 
+// Progress tracking
+let progressDone = 0;
+let progressTotal = 0;
+function updateProgress(label) {
+  progressDone++;
+  const pct = Math.round((progressDone / progressTotal) * 100);
+  document.getElementById('loading-bar').style.width = pct + '%';
+  document.getElementById('loading-status').textContent = label;
+  if (progressDone >= progressTotal) {
+    setTimeout(() => {
+      document.getElementById('loading-bar-wrap').style.opacity = '0';
+      document.getElementById('loading-status').style.opacity = '0';
+    }, 800);
+  }
+}
+
 function yahooURL(symbol, range='5d', interval='1h') {
-  return `${PROXY}${encodeURIComponent(symbol)}?range=${range}&interval=${interval}&includePrePost=false`;
+  const base = `https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}`;
+  return `${base}?range=${range}&interval=${interval}&includePrePost=false`;
 }
 
 async function fetchYahoo(symbol, range='5d', interval='1h') {
   const url = yahooURL(symbol, range, interval);
-  // Try direct, then CORS proxy
+  // Go straight to allorigins — avoids double-wait from failed direct attempt
   try {
-    const res = await fetch(url, { mode: 'cors' });
-    if (!res.ok) throw new Error('direct fail');
+    const proxy = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+    const res = await fetch(proxy, { signal: AbortSignal.timeout(8000) });
+    if (!res.ok) throw new Error('proxy fail');
     const d = await res.json();
     return parseYahoo(d);
   } catch {
-    // fallback: allOrigins proxy
-    try {
-      const proxy = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
-      const res2 = await fetch(proxy);
-      const d = await res2.json();
-      return parseYahoo(d);
-    } catch { return null; }
+    return null;
   }
 }
 
@@ -574,8 +803,41 @@ function buildChart(canvasId, points, accentColor, mini=false) {
         }
       }},
       scales: {
-        x: { display: false },
-        y: { display: false }
+        x: {
+          display: true,
+          ticks: {
+            color: '#3d5470',
+            font: { family: 'DM Mono', size: 9 },
+            maxTicksLimit: 5,
+            maxRotation: 0,
+            callback: function(val, index) {
+              const pt = points[index];
+              if (!pt) return '';
+              const d = new Date(pt.t * 1000);
+              return d.toLocaleDateString('sv-SE', { month: 'numeric', day: 'numeric' })
+                + ' ' + d.toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit' });
+            }
+          },
+          grid: { color: 'rgba(30,45,61,0.6)', drawBorder: false },
+          border: { display: false }
+        },
+        y: {
+          display: true,
+          position: 'right',
+          ticks: {
+            color: '#3d5470',
+            font: { family: 'DM Mono', size: 9 },
+            maxTicksLimit: 4,
+            callback: function(val) {
+              if (val >= 10000) return (val/1000).toFixed(0) + 'k';
+              if (val >= 1000) return val.toLocaleString('sv-SE', { maximumFractionDigits: 0 });
+              if (val >= 10) return val.toFixed(1);
+              return val.toFixed(3);
+            }
+          },
+          grid: { color: 'rgba(30,45,61,0.6)', drawBorder: false },
+          border: { display: false }
+        }
       }
     }
   });
@@ -684,6 +946,100 @@ function buildTicker(allData) {
 }
 
 // ──────────────────────────────────────────────
+// CLAUDE NEWS ANALYSIS
+// ──────────────────────────────────────────────
+
+const NEWS_PROMPTS = {
+  finance: {
+    system: `Du är en senior finansanalytiker. Använd web_search för att hitta de 4-5 viktigaste finansiella nyheterna just nu som påverkar globala marknader. 
+Svara ENDAST med giltig JSON i detta format, inga förklaringar eller markdown utanför JSON:
+{
+  "items": [
+    {
+      "headline": "Kort rubrik på svenska (max 80 tecken)",
+      "summary": "2-3 meningar som förklarar nyheten och dess marknadseffekt",
+      "impact": "high|med|low"
+    }
+  ]
+}
+Prioritera: centralbanker, inflation, BNP-data, stora bolagsresultat, råvarumarknader, valutarörelser.`,
+    prompt: `Sök och analysera de viktigaste finansiella marknadsnyheterna idag. Returnera JSON.`
+  },
+  geo: {
+    system: `Du är en geopolitisk riskanalytiker. Använd web_search för att hitta de 4-5 viktigaste pågående geopolitiska riskerna och händelserna som kan påverka finansiella marknader.
+Svara ENDAST med giltig JSON i detta format, inga förklaringar eller markdown utanför JSON:
+{
+  "items": [
+    {
+      "headline": "Kort rubrik på svenska (max 80 tecken)",
+      "summary": "2-3 meningar som förklarar risken och dess potentiella marknadseffekt",
+      "impact": "high|med|low"
+    }
+  ]
+}
+Prioritera: konflikter, sanktioner, handelskrig, politisk instabilitet, energiförsörjning, Kina/Taiwan, Ryssland/Ukraina.`,
+    prompt: `Sök och analysera de viktigaste geopolitiska riskerna just nu som påverkar finansiella marknader. Returnera JSON.`
+  }
+};
+
+async function loadNews(type) {
+  const contentEl = document.getElementById(`news-${type}-content`);
+  const btn = document.querySelector(`#news-${type} .news-refresh-btn`);
+
+  contentEl.innerHTML = `<div class="news-loading"><div class="news-spinner"></div><span>Claude söker och analyserar nyheter…</span></div>`;
+  if (btn) btn.classList.add('spinning');
+
+  const { system, prompt } = NEWS_PROMPTS[type];
+
+  try {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1000,
+        tools: [{ type: 'web_search_20250305', name: 'web_search' }],
+        system,
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+
+    if (!response.ok) throw new Error(`API ${response.status}`);
+    const data = await response.json();
+
+    // Extract JSON from text blocks
+    const text = data.content
+      .filter(b => b.type === 'text')
+      .map(b => b.text)
+      .join('');
+
+    // Strip possible markdown fences
+    const clean = text.replace(/```json|```/g, '').trim();
+    const json = JSON.parse(clean);
+
+    const impactLabel = { high: 'HÖG', med: 'MEDEL', low: 'LÅG' };
+    const impactClass = { high: 'impact-high', med: 'impact-med', low: 'impact-low' };
+
+    const items = json.items.map(item => `
+      <div class="news-item">
+        <div class="news-item-headline">${item.headline}</div>
+        <div class="news-item-summary">${item.summary}</div>
+        <span class="news-item-impact ${impactClass[item.impact] || 'impact-low'}">
+          RISK: ${impactLabel[item.impact] || item.impact}
+        </span>
+      </div>`).join('');
+
+    const ts = new Date().toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit' });
+    contentEl.innerHTML = items + `<div class="news-timestamp">Analyserad av Claude · ${ts}</div>`;
+
+  } catch (err) {
+    contentEl.innerHTML = `<div class="news-error">Kunde inte hämta nyhetsanalys: ${err.message}</div>`;
+  } finally {
+    if (btn) btn.classList.remove('spinning');
+  }
+}
+
+// ──────────────────────────────────────────────
 // CLOCK
 // ──────────────────────────────────────────────
 
@@ -701,20 +1057,32 @@ updateClock();
 // ──────────────────────────────────────────────
 
 async function loadAll() {
-  // First fetch USD/SEK so we can convert
-  const fxData = await fetchYahoo('SEK=X', '5d', '1h');
-  if (fxData) usdSek = fxData.price;
-
-  // Fetch all in parallel
   const allInstruments = [
     ...INSTRUMENTS.commodities,
     ...INSTRUMENTS.indices,
     ...INSTRUMENTS.fx
   ];
 
+  // Set total = all instruments (USD/SEK is already in fx list)
+  progressDone = 0;
+  progressTotal = allInstruments.length;
+  document.getElementById('loading-bar').style.width = '0%';
+  document.getElementById('loading-bar-wrap').style.opacity = '1';
+  document.getElementById('loading-status').style.opacity = '1';
+
+  // Fetch everything in parallel, update progress as each resolves
   const results = await Promise.all(
-    allInstruments.map(inst => fetchYahoo(inst.symbol, '5d', '1h').then(data => ({ inst, data })))
+    allInstruments.map(inst =>
+      fetchYahoo(inst.symbol, '5d', '1h').then(data => {
+        updateProgress(inst.label);
+        return { inst, data };
+      })
+    )
   );
+
+  // Extract USD/SEK for conversion
+  const sekResult = results.find(r => r.inst.symbol === 'SEK=X');
+  if (sekResult?.data) usdSek = sekResult.data.price;
 
   const valid = results.filter(r => r.data);
 
@@ -742,8 +1110,8 @@ async function loadAll() {
   idxGrid.innerHTML = idxHtml || '<div style="color:var(--text-dim);font-size:13px">Kunde ej hämta indexdata.</div>';
   fxGrid.innerHTML = fxHtml || '<div style="color:var(--text-dim);font-size:13px">Kunde ej hämta valutadata.</div>';
 
-  // Draw charts after DOM is updated
-  requestAnimationFrame(() => {
+  // Draw charts — setTimeout ensures layout is fully calculated (fixes file:// sizing)
+  setTimeout(() => {
     for (const { inst, data } of valid) {
       const isCommodity = INSTRUMENTS.commodities.some(c => c.symbol === inst.symbol);
       const isIndex = INSTRUMENTS.indices.some(c => c.symbol === inst.symbol);
@@ -751,9 +1119,17 @@ async function loadAll() {
 
       let prefix = isCommodity ? 'c_' : isIndex ? 'i_' : 'fx_';
       const id = prefix + inst.symbol.replace(/[^a-z0-9]/gi, '_');
+
+      // Force canvas to inherit parent dimensions before Chart.js measures it
+      const canvas = document.getElementById(id);
+      if (canvas && canvas.parentElement) {
+        canvas.width = canvas.parentElement.offsetWidth;
+        canvas.height = canvas.parentElement.offsetHeight;
+      }
+
       buildChart(id, data.points, inst.accent || '#3d9eff');
     }
-  });
+  }, 100);
 
   // Timestamp
   document.getElementById('update-time').textContent =
@@ -763,6 +1139,12 @@ async function loadAll() {
 // Auto-refresh every 5 min
 loadAll();
 setInterval(loadAll, 5 * 60 * 1000);
+
+// Load news on startup, refresh every 30 min
+loadNews('finance');
+loadNews('geo');
+setInterval(() => loadNews('finance'), 30 * 60 * 1000);
+setInterval(() => loadNews('geo'), 30 * 60 * 1000);
 </script>
 </body>
 </html>
