@@ -535,6 +535,17 @@
     font-weight: 500;
     margin-bottom: 4px;
     line-height: 1.5;
+    text-decoration: none;
+    display: block;
+    transition: color 0.2s;
+  }
+
+  .news-item-headline:hover { color: var(--accent-blue); }
+
+  .news-item-time {
+    font-size: 10px;
+    color: var(--text-dim);
+    margin-top: 4px;
   }
 
   .news-item-summary {
@@ -635,7 +646,7 @@
       <div class="news-content" id="news-finance-content">
         <div class="news-loading">
           <div class="news-spinner"></div>
-          <span>Claude analyserar marknadsläget…</span>
+          <span>Hämtar finansnyheter…</span>
         </div>
       </div>
     </div>
@@ -649,7 +660,7 @@
       <div class="news-content" id="news-geo-content">
         <div class="news-loading">
           <div class="news-spinner"></div>
-          <span>Claude analyserar geopolitiska risker…</span>
+          <span>Hämtar världsnyheter…</span>
         </div>
       </div>
     </div>
@@ -949,91 +960,83 @@ function buildTicker(allData) {
 // CLAUDE NEWS ANALYSIS
 // ──────────────────────────────────────────────
 
-const NEWS_PROMPTS = {
-  finance: {
-    system: `Du är en senior finansanalytiker. Använd web_search för att hitta de 4-5 viktigaste finansiella nyheterna just nu som påverkar globala marknader. 
-Svara ENDAST med giltig JSON i detta format, inga förklaringar eller markdown utanför JSON:
-{
-  "items": [
-    {
-      "headline": "Kort rubrik på svenska (max 80 tecken)",
-      "summary": "2-3 meningar som förklarar nyheten och dess marknadseffekt",
-      "impact": "high|med|low"
-    }
+// ──────────────────────────────────────────────
+// RSS NEWS
+// ──────────────────────────────────────────────
+
+const RSS_FEEDS = {
+  finance: [
+    'https://feeds.reuters.com/reuters/businessNews',
+    'https://feeds.bbci.co.uk/news/business/rss.xml',
+  ],
+  geo: [
+    'https://feeds.reuters.com/Reuters/worldNews',
+    'https://feeds.bbci.co.uk/news/world/rss.xml',
   ]
-}
-Prioritera: centralbanker, inflation, BNP-data, stora bolagsresultat, råvarumarknader, valutarörelser.`,
-    prompt: `Sök och analysera de viktigaste finansiella marknadsnyheterna idag. Returnera JSON.`
-  },
-  geo: {
-    system: `Du är en geopolitisk riskanalytiker. Använd web_search för att hitta de 4-5 viktigaste pågående geopolitiska riskerna och händelserna som kan påverka finansiella marknader.
-Svara ENDAST med giltig JSON i detta format, inga förklaringar eller markdown utanför JSON:
-{
-  "items": [
-    {
-      "headline": "Kort rubrik på svenska (max 80 tecken)",
-      "summary": "2-3 meningar som förklarar risken och dess potentiella marknadseffekt",
-      "impact": "high|med|low"
-    }
-  ]
-}
-Prioritera: konflikter, sanktioner, handelskrig, politisk instabilitet, energiförsörjning, Kina/Taiwan, Ryssland/Ukraina.`,
-    prompt: `Sök och analysera de viktigaste geopolitiska riskerna just nu som påverkar finansiella marknader. Returnera JSON.`
-  }
 };
+
+async function fetchRSS(url) {
+  const proxy = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+  const res = await fetch(proxy, { signal: AbortSignal.timeout(8000) });
+  if (!res.ok) throw new Error('rss fail');
+  const text = await res.text();
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(text, 'text/xml');
+  return Array.from(doc.querySelectorAll('item')).slice(0, 8).map(item => ({
+    title: item.querySelector('title')?.textContent?.trim() || '',
+    desc:  item.querySelector('description')?.textContent?.replace(/<[^>]+>/g, '').trim() || '',
+    link:  item.querySelector('link')?.textContent?.trim() || '#',
+    date:  item.querySelector('pubDate')?.textContent?.trim() || '',
+  }));
+}
+
+function timeAgo(dateStr) {
+  if (!dateStr) return '';
+  const diff = Math.floor((Date.now() - new Date(dateStr)) / 60000);
+  if (diff < 1) return 'Just nu';
+  if (diff < 60) return `${diff} min sedan`;
+  const h = Math.floor(diff / 60);
+  if (h < 24) return `${h} tim sedan`;
+  return `${Math.floor(h/24)} dag sedan`;
+}
 
 async function loadNews(type) {
   const contentEl = document.getElementById(`news-${type}-content`);
   const btn = document.querySelector(`#news-${type} .news-refresh-btn`);
 
-  contentEl.innerHTML = `<div class="news-loading"><div class="news-spinner"></div><span>Claude söker och analyserar nyheter…</span></div>`;
+  contentEl.innerHTML = `<div class="news-loading"><div class="news-spinner"></div><span>Hämtar nyheter…</span></div>`;
   if (btn) btn.classList.add('spinning');
 
-  const { system, prompt } = NEWS_PROMPTS[type];
-
   try {
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 1000,
-        tools: [{ type: 'web_search_20250305', name: 'web_search' }],
-        system,
-        messages: [{ role: 'user', content: prompt }]
-      })
-    });
+    // Fetch both feeds in parallel, merge and deduplicate
+    const results = await Promise.allSettled(RSS_FEEDS[type].map(fetchRSS));
+    const allItems = results
+      .filter(r => r.status === 'fulfilled')
+      .flatMap(r => r.value);
 
-    if (!response.ok) throw new Error(`API ${response.status}`);
-    const data = await response.json();
+    // Deduplicate by title similarity, keep max 8
+    const seen = new Set();
+    const unique = allItems.filter(item => {
+      const key = item.title.slice(0, 40).toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    }).slice(0, 8);
 
-    // Extract JSON from text blocks
-    const text = data.content
-      .filter(b => b.type === 'text')
-      .map(b => b.text)
-      .join('');
+    if (unique.length === 0) throw new Error('Inga nyheter hittades');
 
-    // Strip possible markdown fences
-    const clean = text.replace(/```json|```/g, '').trim();
-    const json = JSON.parse(clean);
-
-    const impactLabel = { high: 'HÖG', med: 'MEDEL', low: 'LÅG' };
-    const impactClass = { high: 'impact-high', med: 'impact-med', low: 'impact-low' };
-
-    const items = json.items.map(item => `
+    const items = unique.map(item => `
       <div class="news-item">
-        <div class="news-item-headline">${item.headline}</div>
-        <div class="news-item-summary">${item.summary}</div>
-        <span class="news-item-impact ${impactClass[item.impact] || 'impact-low'}">
-          RISK: ${impactLabel[item.impact] || item.impact}
-        </span>
+        <a class="news-item-headline" href="${item.link}" target="_blank" rel="noopener">${item.title}</a>
+        ${item.desc ? `<div class="news-item-summary">${item.desc.slice(0, 160)}${item.desc.length > 160 ? '…' : ''}</div>` : ''}
+        <div class="news-item-time">${timeAgo(item.date)}</div>
       </div>`).join('');
 
     const ts = new Date().toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit' });
-    contentEl.innerHTML = items + `<div class="news-timestamp">Analyserad av Claude · ${ts}</div>`;
+    contentEl.innerHTML = items + `<div class="news-timestamp">Reuters · BBC · ${ts}</div>`;
 
   } catch (err) {
-    contentEl.innerHTML = `<div class="news-error">Kunde inte hämta nyhetsanalys: ${err.message}</div>`;
+    contentEl.innerHTML = `<div class="news-error">Kunde inte hämta nyheter: ${err.message}</div>`;
   } finally {
     if (btn) btn.classList.remove('spinning');
   }
