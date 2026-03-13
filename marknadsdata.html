@@ -1,0 +1,768 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Marknadsöversikt</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-0: #080b10;
+    --bg-1: #0d1117;
+    --bg-2: #131920;
+    --bg-3: #1a2330;
+    --border: #1e2d3d;
+    --border-bright: #2a3f55;
+    --text-primary: #e8edf3;
+    --text-secondary: #7a9ab5;
+    --text-dim: #3d5470;
+    --accent-green: #00e5a0;
+    --accent-red: #ff4d6d;
+    --accent-gold: #f5c842;
+    --accent-blue: #3d9eff;
+    --accent-silver: #9ab8d0;
+    --accent-oil: #ff8c42;
+    --glow-green: rgba(0, 229, 160, 0.15);
+    --glow-red: rgba(255, 77, 109, 0.15);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg-0);
+    color: var(--text-primary);
+    font-family: 'DM Mono', monospace;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Subtle grid bg */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(30, 45, 61, 0.3) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(30, 45, 61, 0.3) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .container {
+    position: relative;
+    z-index: 1;
+    max-width: 1600px;
+    margin: 0 auto;
+    padding: 0 24px 48px;
+  }
+
+  /* Header */
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 28px 0 20px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 32px;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .logo {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+  }
+
+  .logo-title {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: 22px;
+    letter-spacing: -0.5px;
+    color: var(--text-primary);
+  }
+
+  .logo-dot {
+    width: 7px; height: 7px;
+    background: var(--accent-green);
+    border-radius: 50%;
+    display: inline-block;
+    margin-left: 2px;
+    box-shadow: 0 0 10px var(--accent-green);
+    animation: pulse 2s infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; box-shadow: 0 0 10px var(--accent-green); }
+    50% { opacity: 0.5; box-shadow: 0 0 4px var(--accent-green); }
+  }
+
+  .header-meta {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 4px;
+  }
+
+  .header-time {
+    font-size: 13px;
+    color: var(--text-secondary);
+    letter-spacing: 0.05em;
+  }
+
+  .header-status {
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+
+  #update-time {
+    color: var(--accent-green);
+  }
+
+  /* Ticker strip */
+  .ticker-wrap {
+    overflow: hidden;
+    background: var(--bg-1);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 0;
+    margin-bottom: 32px;
+    position: relative;
+  }
+
+  .ticker-track {
+    display: flex;
+    gap: 48px;
+    animation: scroll-ticker 40s linear infinite;
+    white-space: nowrap;
+    width: max-content;
+  }
+
+  @keyframes scroll-ticker {
+    0% { transform: translateX(0); }
+    100% { transform: translateX(-50%); }
+  }
+
+  .ticker-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 12px;
+  }
+
+  .ticker-label {
+    color: var(--text-dim);
+    letter-spacing: 0.08em;
+    font-size: 10px;
+  }
+
+  .ticker-value {
+    color: var(--text-primary);
+    font-weight: 500;
+  }
+
+  .ticker-change.pos { color: var(--accent-green); }
+  .ticker-change.neg { color: var(--accent-red); }
+
+  /* Grid layout */
+  .grid {
+    display: grid;
+    gap: 20px;
+  }
+
+  .grid-main {
+    grid-template-columns: repeat(auto-fill, minmax(480px, 1fr));
+  }
+
+  .grid-fx {
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    margin-top: 20px;
+  }
+
+  /* Cards */
+  .card {
+    background: var(--bg-1);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    position: relative;
+    overflow: hidden;
+    transition: border-color 0.3s;
+  }
+
+  .card:hover { border-color: var(--border-bright); }
+
+  .card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: var(--card-accent, var(--accent-blue));
+    opacity: 0.7;
+  }
+
+  .card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 16px;
+  }
+
+  .card-title {
+    font-family: 'Syne', sans-serif;
+    font-weight: 600;
+    font-size: 13px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+  }
+
+  .card-badge {
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: 3px;
+    border: 1px solid var(--border-bright);
+    color: var(--text-dim);
+    letter-spacing: 0.05em;
+  }
+
+  .price-row {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    margin-bottom: 4px;
+    flex-wrap: wrap;
+  }
+
+  .price-main {
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 26px;
+    letter-spacing: -0.5px;
+    color: var(--text-primary);
+  }
+
+  .price-change {
+    font-size: 13px;
+    font-weight: 500;
+  }
+
+  .price-change.pos { color: var(--accent-green); }
+  .price-change.neg { color: var(--accent-red); }
+
+  .price-sub {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-bottom: 16px;
+  }
+
+  .chart-wrap {
+    height: 130px;
+    position: relative;
+  }
+
+  /* FX cards */
+  .fx-card {
+    background: var(--bg-1);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    position: relative;
+    overflow: hidden;
+    transition: border-color 0.3s;
+  }
+
+  .fx-card:hover { border-color: var(--border-bright); }
+
+  .fx-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: var(--card-accent, var(--accent-blue));
+    opacity: 0.7;
+  }
+
+  .fx-rate {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: 36px;
+    letter-spacing: -1px;
+    color: var(--text-primary);
+    margin: 8px 0 4px;
+  }
+
+  .fx-label {
+    font-family: 'Syne', sans-serif;
+    font-size: 12px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    font-weight: 600;
+  }
+
+  .fx-chart {
+    height: 80px;
+    margin-top: 14px;
+  }
+
+  /* Section label */
+  .section-label {
+    font-family: 'Syne', sans-serif;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .section-label::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  /* Loading state */
+  .skeleton {
+    background: linear-gradient(90deg, var(--bg-2) 25%, var(--bg-3) 50%, var(--bg-2) 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+    border-radius: 4px;
+    height: 24px;
+    width: 120px;
+  }
+
+  @keyframes shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+
+  /* Error badge */
+  .error-badge {
+    font-size: 11px;
+    color: var(--accent-red);
+    opacity: 0.7;
+  }
+
+  /* Dual currency display */
+  .dual-price {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+    margin-bottom: 14px;
+  }
+
+  .dual-price-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .dual-price-currency {
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  .dual-price-value {
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 20px;
+    color: var(--text-primary);
+  }
+
+  .dual-price-change {
+    font-size: 11px;
+    margin-top: 1px;
+  }
+
+  /* Footer */
+  footer {
+    margin-top: 40px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border);
+    font-size: 11px;
+    color: var(--text-dim);
+    text-align: center;
+    line-height: 1.8;
+  }
+
+  /* Responsive */
+  @media (max-width: 600px) {
+    .grid-main { grid-template-columns: 1fr; }
+    .grid-fx { grid-template-columns: 1fr; }
+    .price-main { font-size: 20px; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <header>
+    <div class="logo">
+      <span class="logo-title">MARKNAD</span>
+      <span class="logo-dot"></span>
+    </div>
+    <div class="header-meta">
+      <div class="header-time" id="clock">—</div>
+      <div class="header-status">Uppdaterad <span id="update-time">—</span></div>
+    </div>
+  </header>
+
+  <!-- Ticker -->
+  <div class="ticker-wrap">
+    <div class="ticker-track" id="ticker-track">
+      <!-- filled by JS -->
+    </div>
+  </div>
+
+  <!-- Råvaror & Börser -->
+  <div class="section-label">Råvaror</div>
+  <div class="grid grid-main" id="commodity-grid">
+    <!-- Cards injected -->
+  </div>
+
+  <div class="section-label" style="margin-top:28px;">Börsindex</div>
+  <div class="grid grid-main" id="index-grid"></div>
+
+  <div class="section-label" style="margin-top:28px;">Valutor</div>
+  <div class="grid grid-fx" id="fx-grid"></div>
+
+  <footer>
+    Datakälla: Yahoo Finance (via public API) &nbsp;·&nbsp; Kurser är fördröjda 15 min &nbsp;·&nbsp; Ej finansiell rådgivning
+  </footer>
+</div>
+
+<script>
+// ──────────────────────────────────────────────
+// DATA FETCHING — Yahoo Finance query2 (no key needed)
+// ──────────────────────────────────────────────
+
+const PROXY = 'https://query2.finance.yahoo.com/v8/finance/chart/';
+
+let usdSek = null; // will be fetched first
+
+const INSTRUMENTS = {
+  commodities: [
+    { symbol: 'CL=F',  label: 'Råolja (WTI)',  badge: 'USD/fat',  accent: '#ff8c42', dualSek: true },
+    { symbol: 'GC=F',  label: 'Guld',           badge: 'USD/troy oz', accent: '#f5c842', dualSek: true },
+    { symbol: 'SI=F',  label: 'Silver',          badge: 'USD/troy oz', accent: '#9ab8d0', dualSek: true },
+  ],
+  indices: [
+    { symbol: '^OMX',    label: 'OMX Stockholm 30', badge: 'SEK',  accent: '#3d9eff', dualSek: false },
+    { symbol: '^OMXSGI', label: 'OMX Stockholm GI', badge: 'SEK',  accent: '#00c8e0', dualSek: false },
+    { symbol: '^DJI',    label: 'Dow Jones',         badge: 'USD',  accent: '#a78bfa', dualSek: false },
+    { symbol: '^IXIC',   label: 'Nasdaq Composite',  badge: 'USD',  accent: '#00e5a0', dualSek: false },
+  ],
+  fx: [
+    { symbol: 'SEK=X',  label: 'USD/SEK', accent: '#3d9eff' },
+    { symbol: 'EURSEK=X', label: 'EUR/SEK', accent: '#f5c842' },
+  ]
+};
+
+const chartInstances = {};
+
+function yahooURL(symbol, range='5d', interval='1h') {
+  return `${PROXY}${encodeURIComponent(symbol)}?range=${range}&interval=${interval}&includePrePost=false`;
+}
+
+async function fetchYahoo(symbol, range='5d', interval='1h') {
+  const url = yahooURL(symbol, range, interval);
+  // Try direct, then CORS proxy
+  try {
+    const res = await fetch(url, { mode: 'cors' });
+    if (!res.ok) throw new Error('direct fail');
+    const d = await res.json();
+    return parseYahoo(d);
+  } catch {
+    // fallback: allOrigins proxy
+    try {
+      const proxy = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+      const res2 = await fetch(proxy);
+      const d = await res2.json();
+      return parseYahoo(d);
+    } catch { return null; }
+  }
+}
+
+function parseYahoo(data) {
+  try {
+    const result = data.chart.result[0];
+    const meta = result.meta;
+    const closes = result.indicators.quote[0].close;
+    const timestamps = result.timestamp;
+    // Filter nulls
+    const points = timestamps.map((t, i) => ({ t, v: closes[i] })).filter(p => p.v != null);
+    return {
+      price: meta.regularMarketPrice,
+      prevClose: meta.chartPreviousClose || meta.previousClose,
+      currency: meta.currency,
+      points
+    };
+  } catch { return null; }
+}
+
+function fmtNum(n, decimals=2) {
+  if (n == null) return '—';
+  return n.toLocaleString('sv-SE', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+}
+
+function changeStr(price, prev) {
+  if (!prev) return { str: '—', cls: '' };
+  const diff = price - prev;
+  const pct = (diff / prev) * 100;
+  const cls = diff >= 0 ? 'pos' : 'neg';
+  const sign = diff >= 0 ? '+' : '';
+  return { str: `${sign}${fmtNum(pct, 2)}%`, cls };
+}
+
+// ──────────────────────────────────────────────
+// CHART RENDERING
+// ──────────────────────────────────────────────
+
+function buildChart(canvasId, points, accentColor, mini=false) {
+  if (chartInstances[canvasId]) {
+    chartInstances[canvasId].destroy();
+  }
+  const canvas = document.getElementById(canvasId);
+  if (!canvas || !points || points.length < 2) return;
+
+  const labels = points.map(p => '');
+  const values = points.map(p => p.v);
+  const isUp = values[values.length - 1] >= values[0];
+
+  const ctx = canvas.getContext('2d');
+  const grad = ctx.createLinearGradient(0, 0, 0, canvas.offsetHeight || 130);
+  grad.addColorStop(0, accentColor + '40');
+  grad.addColorStop(1, accentColor + '00');
+
+  chartInstances[canvasId] = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        data: values,
+        borderColor: accentColor,
+        borderWidth: 1.5,
+        backgroundColor: grad,
+        fill: true,
+        tension: 0.3,
+        pointRadius: 0,
+        pointHoverRadius: 4,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: { duration: 600, easing: 'easeOutQuart' },
+      plugins: { legend: { display: false }, tooltip: {
+        backgroundColor: '#0d1117',
+        borderColor: accentColor + '60',
+        borderWidth: 1,
+        titleColor: '#7a9ab5',
+        bodyColor: '#e8edf3',
+        callbacks: {
+          label: ctx => ' ' + fmtNum(ctx.raw)
+        }
+      }},
+      scales: {
+        x: { display: false },
+        y: { display: false }
+      }
+    }
+  });
+}
+
+// ──────────────────────────────────────────────
+// CARD BUILDERS
+// ──────────────────────────────────────────────
+
+function commodityCard(inst, data) {
+  const { label, badge, accent, symbol, dualSek } = inst;
+  const { price, prevClose, points } = data;
+  const chg = changeStr(price, prevClose);
+  const id = 'c_' + symbol.replace(/[^a-z0-9]/gi, '_');
+
+  const sekPrice = (usdSek && dualSek) ? price * usdSek : null;
+  const sekPrevClose = (usdSek && dualSek && prevClose) ? prevClose * usdSek : null;
+  const sekChg = sekPrice ? changeStr(sekPrice, sekPrevClose) : null;
+
+  return `
+  <div class="card" style="--card-accent:${accent}">
+    <div class="card-header">
+      <div class="card-title">${label}</div>
+      <div class="card-badge">${badge}</div>
+    </div>
+    <div class="dual-price">
+      <div class="dual-price-item">
+        <div class="dual-price-currency">USD</div>
+        <div class="dual-price-value">${fmtNum(price)}</div>
+        <div class="dual-price-change price-change ${chg.cls}">${chg.str}</div>
+      </div>
+      ${sekPrice ? `
+      <div class="dual-price-item">
+        <div class="dual-price-currency">SEK</div>
+        <div class="dual-price-value">${fmtNum(sekPrice, 2)}</div>
+        <div class="dual-price-change price-change ${sekChg.cls}">${sekChg.str}</div>
+      </div>` : ''}
+    </div>
+    <div class="chart-wrap">
+      <canvas id="${id}"></canvas>
+    </div>
+  </div>`;
+}
+
+function indexCard(inst, data) {
+  const { label, badge, accent, symbol } = inst;
+  const { price, prevClose, points } = data;
+  const chg = changeStr(price, prevClose);
+  const id = 'i_' + symbol.replace(/[^a-z0-9]/gi, '_');
+
+  // for USD indices, show SEK equiv
+  const isUSD = badge === 'USD';
+  const sekEquiv = (isUSD && usdSek) ? price * usdSek : null;
+
+  return `
+  <div class="card" style="--card-accent:${accent}">
+    <div class="card-header">
+      <div class="card-title">${label}</div>
+      <div class="card-badge">${badge}</div>
+    </div>
+    <div class="price-row">
+      <div class="price-main">${fmtNum(price, price > 1000 ? 0 : 2)}</div>
+      <div class="price-change ${chg.cls}">${chg.str}</div>
+    </div>
+    ${sekEquiv ? `<div class="price-sub">≈ ${fmtNum(sekEquiv, 0)} SEK</div>` : '<div class="price-sub">&nbsp;</div>'}
+    <div class="chart-wrap">
+      <canvas id="${id}"></canvas>
+    </div>
+  </div>`;
+}
+
+function fxCard(inst, data) {
+  const { label, accent, symbol } = inst;
+  const { price, prevClose, points } = data;
+  const chg = changeStr(price, prevClose);
+  const id = 'fx_' + symbol.replace(/[^a-z0-9]/gi, '_');
+
+  return `
+  <div class="fx-card" style="--card-accent:${accent}">
+    <div class="fx-label">${label}</div>
+    <div class="fx-rate">${fmtNum(price, 4)}</div>
+    <div class="price-change ${chg.cls}" style="font-size:13px">${chg.str}</div>
+    <div class="fx-chart">
+      <canvas id="${id}"></canvas>
+    </div>
+  </div>`;
+}
+
+// ──────────────────────────────────────────────
+// TICKER
+// ──────────────────────────────────────────────
+
+function buildTicker(allData) {
+  const items = allData.map(({ inst, data }) => {
+    const chg = changeStr(data.price, data.prevClose);
+    return `<div class="ticker-item">
+      <span class="ticker-label">${inst.label.toUpperCase()}</span>
+      <span class="ticker-value">${fmtNum(data.price, data.price > 100 ? 2 : 4)}</span>
+      <span class="ticker-change ${chg.cls}">${chg.str}</span>
+    </div>`;
+  }).join('');
+
+  // Duplicate for seamless loop
+  const track = document.getElementById('ticker-track');
+  track.innerHTML = items + items;
+}
+
+// ──────────────────────────────────────────────
+// CLOCK
+// ──────────────────────────────────────────────
+
+function updateClock() {
+  const now = new Date();
+  document.getElementById('clock').textContent =
+    now.toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) +
+    ' — ' + now.toLocaleDateString('sv-SE', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+// ──────────────────────────────────────────────
+// MAIN
+// ──────────────────────────────────────────────
+
+async function loadAll() {
+  // First fetch USD/SEK so we can convert
+  const fxData = await fetchYahoo('SEK=X', '5d', '1h');
+  if (fxData) usdSek = fxData.price;
+
+  // Fetch all in parallel
+  const allInstruments = [
+    ...INSTRUMENTS.commodities,
+    ...INSTRUMENTS.indices,
+    ...INSTRUMENTS.fx
+  ];
+
+  const results = await Promise.all(
+    allInstruments.map(inst => fetchYahoo(inst.symbol, '5d', '1h').then(data => ({ inst, data })))
+  );
+
+  const valid = results.filter(r => r.data);
+
+  // Build ticker
+  buildTicker(valid);
+
+  // Inject cards
+  const commGrid = document.getElementById('commodity-grid');
+  const idxGrid = document.getElementById('index-grid');
+  const fxGrid = document.getElementById('fx-grid');
+
+  let commHtml = '', idxHtml = '', fxHtml = '';
+
+  for (const { inst, data } of valid) {
+    const isCommodity = INSTRUMENTS.commodities.some(c => c.symbol === inst.symbol);
+    const isIndex = INSTRUMENTS.indices.some(c => c.symbol === inst.symbol);
+    const isFX = INSTRUMENTS.fx.some(c => c.symbol === inst.symbol);
+
+    if (isCommodity) commHtml += commodityCard(inst, data);
+    else if (isIndex) idxHtml += indexCard(inst, data);
+    else if (isFX) fxHtml += fxCard(inst, data);
+  }
+
+  commGrid.innerHTML = commHtml || '<div style="color:var(--text-dim);font-size:13px">Kunde ej hämta råvarudata.</div>';
+  idxGrid.innerHTML = idxHtml || '<div style="color:var(--text-dim);font-size:13px">Kunde ej hämta indexdata.</div>';
+  fxGrid.innerHTML = fxHtml || '<div style="color:var(--text-dim);font-size:13px">Kunde ej hämta valutadata.</div>';
+
+  // Draw charts after DOM is updated
+  requestAnimationFrame(() => {
+    for (const { inst, data } of valid) {
+      const isCommodity = INSTRUMENTS.commodities.some(c => c.symbol === inst.symbol);
+      const isIndex = INSTRUMENTS.indices.some(c => c.symbol === inst.symbol);
+      const isFX = INSTRUMENTS.fx.some(c => c.symbol === inst.symbol);
+
+      let prefix = isCommodity ? 'c_' : isIndex ? 'i_' : 'fx_';
+      const id = prefix + inst.symbol.replace(/[^a-z0-9]/gi, '_');
+      buildChart(id, data.points, inst.accent || '#3d9eff');
+    }
+  });
+
+  // Timestamp
+  document.getElementById('update-time').textContent =
+    new Date().toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit' });
+}
+
+// Auto-refresh every 5 min
+loadAll();
+setInterval(loadAll, 5 * 60 * 1000);
+</script>
+</body>
+</html>
