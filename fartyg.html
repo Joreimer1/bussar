@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fartygsradar</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;600;700&display=swap');
+
+  :root {
+    --bg: #050d14;
+    --surface: #0a1a26;
+    --panel: #0d2035;
+    --accent: #00e5ff;
+    --accent2: #00ff9d;
+    --warn: #ff6b35;
+    --text: #c8dde8;
+    --dim: #4a6a7a;
+    --grid: rgba(0,229,255,0.04);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Rajdhani', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ── HEADER ── */
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 16px;
+    background: var(--surface);
+    border-bottom: 1px solid rgba(0,229,255,0.15);
+    flex-shrink: 0;
+    z-index: 1000;
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .logo svg { width: 28px; height: 28px; }
+
+  h1 {
+    font-size: 1.3rem;
+    font-weight: 700;
+    letter-spacing: 3px;
+    color: var(--accent);
+    text-transform: uppercase;
+  }
+
+  .status-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.7rem;
+  }
+
+  .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--dim);
+    transition: background 0.3s;
+    flex-shrink: 0;
+  }
+  .dot.live { background: var(--accent2); box-shadow: 0 0 8px var(--accent2); animation: pulse 2s infinite; }
+  .dot.error { background: var(--warn); }
+
+  @keyframes pulse {
+    0%,100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  #status-text { color: var(--dim); }
+  #vessel-count { color: var(--accent2); font-weight: bold; }
+
+  /* ── MAP ── */
+  #map {
+    flex: 1;
+    position: relative;
+  }
+
+  /* Dark Leaflet tiles via CSS invert trick */
+  .leaflet-tile { filter: invert(1) hue-rotate(180deg) brightness(0.85) saturate(0.8); }
+  .leaflet-container { background: var(--bg); }
+
+  /* ── INFO PANEL ── */
+  #info-panel {
+    position: absolute;
+    bottom: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 900;
+    background: var(--panel);
+    border: 1px solid rgba(0,229,255,0.25);
+    border-radius: 4px;
+    padding: 12px 16px;
+    min-width: 280px;
+    max-width: 90vw;
+    display: none;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.72rem;
+    box-shadow: 0 0 30px rgba(0,0,0,0.6), 0 0 1px var(--accent);
+  }
+  #info-panel.visible { display: block; }
+
+  #info-title {
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: 2px;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+  }
+
+  .info-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px 12px;
+  }
+
+  .info-row { display: contents; }
+  .info-label { color: var(--dim); }
+  .info-val { color: var(--text); }
+
+  .close-btn {
+    position: absolute;
+    top: 8px; right: 10px;
+    background: none; border: none;
+    color: var(--dim); cursor: pointer;
+    font-size: 1rem; line-height: 1;
+  }
+  .close-btn:hover { color: var(--warn); }
+
+  /* ── API KEY MODAL ── */
+  #api-modal {
+    position: fixed; inset: 0;
+    background: rgba(5,13,20,0.96);
+    z-index: 2000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+
+  .modal-box {
+    background: var(--panel);
+    border: 1px solid rgba(0,229,255,0.3);
+    border-radius: 6px;
+    padding: 28px 24px;
+    max-width: 400px;
+    width: 100%;
+    box-shadow: 0 0 60px rgba(0,229,255,0.08);
+  }
+
+  .modal-box h2 {
+    font-size: 1.1rem;
+    font-weight: 700;
+    letter-spacing: 2px;
+    color: var(--accent);
+    text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+
+  .modal-box p {
+    color: var(--dim);
+    font-size: 0.85rem;
+    line-height: 1.6;
+    margin-bottom: 16px;
+  }
+
+  .modal-box a { color: var(--accent); }
+
+  #api-key-input {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid rgba(0,229,255,0.2);
+    border-radius: 3px;
+    color: var(--text);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.8rem;
+    padding: 10px 12px;
+    outline: none;
+    margin-bottom: 12px;
+    letter-spacing: 1px;
+  }
+  #api-key-input:focus { border-color: var(--accent); }
+  #api-key-input::placeholder { color: var(--dim); }
+
+  .modal-actions { display: flex; gap: 10px; }
+
+  .btn {
+    flex: 1;
+    padding: 10px;
+    border: none;
+    border-radius: 3px;
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 0.95rem;
+    font-weight: 700;
+    letter-spacing: 1px;
+    cursor: pointer;
+    text-transform: uppercase;
+    transition: opacity 0.15s;
+  }
+  .btn:hover { opacity: 0.85; }
+  .btn-primary { background: var(--accent); color: var(--bg); }
+  .btn-secondary { background: var(--surface); color: var(--dim); border: 1px solid var(--dim); }
+
+  /* ── LEGEND ── */
+  #legend {
+    position: absolute;
+    top: 12px; right: 12px;
+    z-index: 900;
+    background: var(--panel);
+    border: 1px solid rgba(0,229,255,0.15);
+    border-radius: 4px;
+    padding: 10px 12px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.65rem;
+  }
+
+  .legend-item { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+  .legend-item:last-child { margin-bottom: 0; }
+  .legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+
+  /* ── CONTROLS ── */
+  #controls {
+    position: absolute;
+    top: 12px; left: 12px;
+    z-index: 900;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .ctrl-btn {
+    background: var(--panel);
+    border: 1px solid rgba(0,229,255,0.2);
+    color: var(--accent);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.65rem;
+    padding: 6px 10px;
+    border-radius: 3px;
+    cursor: pointer;
+    letter-spacing: 1px;
+  }
+  .ctrl-btn:hover { background: var(--surface); border-color: var(--accent); }
+
+  /* Leaflet dark popup */
+  .leaflet-popup-content-wrapper {
+    background: var(--panel) !important;
+    color: var(--text) !important;
+    border: 1px solid rgba(0,229,255,0.25) !important;
+    border-radius: 4px !important;
+    box-shadow: 0 0 20px rgba(0,0,0,0.5) !important;
+  }
+  .leaflet-popup-tip { background: var(--panel) !important; }
+</style>
+</head>
+<body>
+
+<!-- API KEY MODAL -->
+<div id="api-modal">
+  <div class="modal-box">
+    <h2>🛳 Fartygsradar</h2>
+    <p>
+      Realtidsdata hämtas via <strong>aisstream.io</strong> WebSocket API.<br><br>
+      Skapa ett gratis konto på <a href="https://aisstream.io" target="_blank">aisstream.io</a>
+      och klistra in din API-nyckel nedan.
+    </p>
+    <input id="api-key-input" type="text" placeholder="Din aisstream.io API-nyckel…" autocomplete="off" spellcheck="false"/>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="useDemoMode()">Demo-läge</button>
+      <button class="btn btn-primary" onclick="startWithKey()">Anslut</button>
+    </div>
+  </div>
+</div>
+
+<!-- HEADER -->
+<header>
+  <div class="logo">
+    <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M4 22 L16 8 L28 22 L4 22Z" fill="none" stroke="#00e5ff" stroke-width="1.5"/>
+      <path d="M4 22 Q16 28 28 22" stroke="#00e5ff" stroke-width="1.5" fill="none"/>
+      <line x1="16" y1="8" x2="16" y2="4" stroke="#00e5ff" stroke-width="1.5"/>
+      <line x1="16" y1="4" x2="22" y2="6" stroke="#00e5ff" stroke-width="1"/>
+    </svg>
+    <h1>Fartygsradar</h1>
+  </div>
+  <div class="status-bar">
+    <div class="dot" id="conn-dot"></div>
+    <span id="status-text">Väntar…</span>
+    <span>|</span>
+    <span id="vessel-count">0</span> fartyg
+  </div>
+</header>
+
+<!-- MAP -->
+<div id="map">
+  <!-- Controls -->
+  <div id="controls">
+    <button class="ctrl-btn" onclick="centerOnSweden()">📍 Hormuz</button>
+    <button class="ctrl-btn" onclick="clearVessels()">🗑 Rensa</button>
+  </div>
+
+  <!-- Legend -->
+  <div id="legend">
+    <div class="legend-item"><div class="legend-dot" style="background:#00e5ff"></div> Cargo</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#00ff9d"></div> Tanker</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#ffdd00"></div> Passagerar</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#ff6b35"></div> Fiskebåt</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#cc88ff"></div> Övrigt</div>
+  </div>
+
+  <!-- Info panel -->
+  <div id="info-panel">
+    <button class="close-btn" onclick="closePanel()">✕</button>
+    <div id="info-title">–</div>
+    <div class="info-grid" id="info-grid"></div>
+  </div>
+</div>
+
+<script>
+// ── STATE ──
+let map, vessels = {}, ws = null, demoInterval = null;
+const MAX_VESSELS = 500;
+
+// ── SHIP TYPE COLORS ──
+function vesselColor(shipType) {
+  if (!shipType) return '#cc88ff';
+  if (shipType >= 70 && shipType <= 79) return '#00e5ff'; // cargo
+  if (shipType >= 80 && shipType <= 89) return '#00ff9d'; // tanker
+  if (shipType >= 60 && shipType <= 69) return '#ffdd00'; // passenger
+  if (shipType >= 30 && shipType <= 39) return '#ff6b35'; // fishing
+  return '#cc88ff';
+}
+
+function vesselType(shipType) {
+  if (!shipType) return 'Okänd';
+  if (shipType >= 70 && shipType <= 79) return 'Cargo';
+  if (shipType >= 80 && shipType <= 89) return 'Tanker';
+  if (shipType >= 60 && shipType <= 69) return 'Passagerar';
+  if (shipType >= 30 && shipType <= 39) return 'Fiskebåt';
+  if (shipType >= 20 && shipType <= 29) return 'WIG';
+  if (shipType >= 50 && shipType <= 59) return 'Servicefartyg';
+  return 'Övrigt';
+}
+
+// ── SVG ARROW MARKER ──
+function arrowIcon(color, heading) {
+  const h = (heading != null && heading !== 511) ? heading : 0;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20">
+    <g transform="rotate(${h},10,10)">
+      <polygon points="10,2 14,16 10,13 6,16" fill="${color}" opacity="0.9" stroke="#000" stroke-width="0.5"/>
+    </g>
+  </svg>`;
+  return L.divIcon({
+    html: svg,
+    className: '',
+    iconSize: [20, 20],
+    iconAnchor: [10, 10]
+  });
+}
+
+// ── MAP INIT ──
+function initMap() {
+  map = L.map('map', { zoomControl: false }).setView([26.5, 56.5], 8);
+  L.control.zoom({ position: 'bottomright' }).addTo(map);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap',
+    maxZoom: 19
+  }).addTo(map);
+}
+
+// ── UPDATE / ADD VESSEL ──
+function upsertVessel(mmsi, lat, lon, data) {
+  const color = vesselColor(data.shipType);
+  const heading = data.heading ?? data.cog ?? null;
+
+  if (vessels[mmsi]) {
+    vessels[mmsi].marker.setLatLng([lat, lon]);
+    vessels[mmsi].marker.setIcon(arrowIcon(color, heading));
+    vessels[mmsi].data = { ...vessels[mmsi].data, ...data };
+  } else {
+    if (Object.keys(vessels).length >= MAX_VESSELS) return;
+    const marker = L.marker([lat, lon], { icon: arrowIcon(color, heading) })
+      .addTo(map)
+      .on('click', () => showPanel(mmsi));
+    vessels[mmsi] = { marker, data: { mmsi, lat, lon, ...data } };
+  }
+  vessels[mmsi].data.lat = lat;
+  vessels[mmsi].data.lon = lon;
+  updateCount();
+}
+
+function updateCount() {
+  document.getElementById('vessel-count').textContent = Object.keys(vessels).length;
+}
+
+// ── INFO PANEL ──
+function showPanel(mmsi) {
+  const v = vessels[mmsi]?.data;
+  if (!v) return;
+  document.getElementById('info-title').textContent =
+    v.name || v.callsign || `MMSI ${mmsi}`;
+
+  const rows = [
+    ['MMSI', mmsi],
+    ['Typ', vesselType(v.shipType)],
+    ['Kurs', v.cog != null ? `${Math.round(v.cog)}°` : '–'],
+    ['Fart', v.sog != null ? `${v.sog.toFixed(1)} kn` : '–'],
+    ['Destination', v.destination || '–'],
+    ['Flagga', v.flag || '–'],
+    ['Position', `${v.lat?.toFixed(4)}, ${v.lon?.toFixed(4)}`],
+    ['Längd', v.length ? `${v.length} m` : '–'],
+  ];
+
+  const grid = document.getElementById('info-grid');
+  grid.innerHTML = rows.map(([l, val]) =>
+    `<span class="info-label">${l}</span><span class="info-val">${val}</span>`
+  ).join('');
+
+  document.getElementById('info-panel').classList.add('visible');
+}
+
+function closePanel() {
+  document.getElementById('info-panel').classList.remove('visible');
+}
+
+// ── CONTROLS ──
+function centerOnSweden() { map.setView([26.5, 56.5], 8); }
+function clearVessels() {
+  Object.values(vessels).forEach(v => map.removeLayer(v.marker));
+  vessels = {};
+  updateCount();
+}
+
+function setStatus(state, text) {
+  const dot = document.getElementById('conn-dot');
+  dot.className = 'dot' + (state ? ' ' + state : '');
+  document.getElementById('status-text').textContent = text;
+}
+
+// ── AISSTREAM WEBSOCKET ──
+function connectAIS(apiKey) {
+  setStatus('', 'Ansluter…');
+  ws = new WebSocket('wss://stream.aisstream.io/v0/stream');
+
+  ws.onopen = () => {
+    setStatus('live', 'Live');
+    const sub = {
+      APIKey: apiKey,
+      BoundingBoxes: [[[22.0, 54.0], [28.0, 60.0]]], // Hormuzsundet
+      FilterMessageTypes: ['PositionReport', 'ShipStaticData']
+    };
+    ws.send(JSON.stringify(sub));
+  };
+
+  ws.onmessage = (evt) => {
+    try {
+      const msg = JSON.parse(evt.data);
+      const meta = msg.MetaData;
+      if (!meta) return;
+
+      const mmsi = String(meta.MMSI);
+      const lat = meta.latitude;
+      const lon = meta.longitude;
+      if (!lat || !lon || lat === 0) return;
+
+      const data = {};
+
+      if (msg.Message?.PositionReport) {
+        const p = msg.Message.PositionReport;
+        data.cog = p.Cog;
+        data.sog = p.Sog;
+        data.heading = p.TrueHeading;
+        data.name = meta.ShipName?.trim();
+      }
+
+      if (msg.Message?.ShipStaticData) {
+        const s = msg.Message.ShipStaticData;
+        data.name = s.Name?.trim() || meta.ShipName?.trim();
+        data.callsign = s.CallSign?.trim();
+        data.destination = s.Destination?.trim();
+        data.shipType = s.Type;
+        data.length = s.Dimension?.A + s.Dimension?.B || null;
+        data.flag = s.ImoNumber ? `IMO ${s.ImoNumber}` : null;
+      }
+
+      upsertVessel(mmsi, lat, lon, data);
+    } catch (e) { /* ignore */ }
+  };
+
+  ws.onerror = () => setStatus('error', 'Fel');
+  ws.onclose = () => {
+    setStatus('error', 'Frånkopplad');
+    setTimeout(() => connectAIS(apiKey), 5000);
+  };
+}
+
+// ── DEMO MODE ──
+const DEMO_SHIPS = [
+  { mmsi: '3660001', name: 'GULF PIONEER', lat: 26.55, lon: 56.25, shipType: 80, cog: 280, sog: 12.4 },
+  { mmsi: '3660002', name: 'HORMUZ STAR', lat: 26.38, lon: 56.60, shipType: 80, cog: 100, sog: 11.8 },
+  { mmsi: '3660003', name: 'AL SALAM', lat: 26.80, lon: 55.90, shipType: 70, cog: 230, sog: 9.5 },
+  { mmsi: '3660004', name: 'IRAN MEHR', lat: 27.10, lon: 56.95, shipType: 70, cog: 185, sog: 10.2 },
+  { mmsi: '3660005', name: 'MUSCAT EXPRESS', lat: 25.95, lon: 57.20, shipType: 60, cog: 320, sog: 15.1 },
+  { mmsi: '3660006', name: 'BAHRAIN GLORY', lat: 26.60, lon: 55.60, shipType: 80, cog: 90, sog: 13.7 },
+  { mmsi: '3660007', name: 'DUBAI TRADER', lat: 25.70, lon: 56.80, shipType: 70, cog: 45, sog: 8.9 },
+  { mmsi: '3660008', name: 'PEARL OF GULF', lat: 27.30, lon: 57.40, shipType: 50, cog: 200, sog: 6.2 },
+  { mmsi: '3660009', name: 'KHOR FAKKAN', lat: 25.42, lon: 56.35, shipType: 70, cog: 310, sog: 11.0 },
+  { mmsi: '3660010', name: 'ZAGROS CARRIER', lat: 27.05, lon: 55.20, shipType: 80, cog: 135, sog: 14.3 },
+  { mmsi: '3660011', name: 'QESHM NAVIGATOR', lat: 26.95, lon: 56.10, shipType: 30, cog: 70, sog: 5.5 },
+  { mmsi: '3660012', name: 'STRAIT RUNNER', lat: 26.30, lon: 57.00, shipType: 80, cog: 265, sog: 16.0 },
+];
+
+function useDemoMode() {
+  document.getElementById('api-modal').style.display = 'none';
+  setStatus('live', 'Demo-läge');
+
+  // seed
+  DEMO_SHIPS.forEach(s => upsertVessel(s.mmsi, s.lat, s.lon, s));
+
+  // animate slowly
+  demoInterval = setInterval(() => {
+    DEMO_SHIPS.forEach(s => {
+      const rad = (s.cog * Math.PI) / 180;
+      s.lat += Math.cos(rad) * 0.008;
+      s.lon += Math.sin(rad) * 0.012;
+      upsertVessel(s.mmsi, s.lat, s.lon, s);
+    });
+  }, 1500);
+}
+
+function startWithKey() {
+  const key = document.getElementById('api-key-input').value.trim();
+  if (!key) { document.getElementById('api-key-input').focus(); return; }
+  document.getElementById('api-modal').style.display = 'none';
+  connectAIS(key);
+}
+
+// ── BOOT ──
+initMap();
+</script>
+</body>
+</html>
