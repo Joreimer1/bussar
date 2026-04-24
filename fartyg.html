@@ -463,7 +463,7 @@ function connectAIS(apiKey) {
   ws.onopen = () => {
     setStatus('live', 'Ansluten – väntar på data…');
     const sub = {
-      APIKey: apiKey,
+      Apikey: apiKey,
       BoundingBoxes: [[[22.0, 54.0], [28.0, 60.0]]],
       FilterMessageTypes: ['PositionReport', 'ShipStaticData']
     };
