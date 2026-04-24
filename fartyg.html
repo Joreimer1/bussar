@@ -461,25 +461,42 @@ function connectAIS(apiKey) {
   ws = new WebSocket('wss://stream.aisstream.io/v0/stream');
 
   ws.onopen = () => {
-    setStatus('live', 'Live');
+    setStatus('live', 'Ansluten – väntar på data…');
     const sub = {
       APIKey: apiKey,
-      BoundingBoxes: [[[22.0, 54.0], [28.0, 60.0]]], // Hormuzsundet
+      BoundingBoxes: [[[22.0, 54.0], [28.0, 60.0]]],
       FilterMessageTypes: ['PositionReport', 'ShipStaticData']
     };
+    console.log('[AIS] WebSocket öppen, skickar prenumeration:', sub);
     ws.send(JSON.stringify(sub));
   };
 
+  let msgCount = 0;
   ws.onmessage = (evt) => {
     try {
+      msgCount++;
       const msg = JSON.parse(evt.data);
+      console.log(`[AIS] Meddelande #${msgCount}:`, msg);
+
+      // Felmeddelande från servern?
+      if (msg.error || msg.Error) {
+        setStatus('error', 'API-fel: ' + (msg.error || msg.Error));
+        console.error('[AIS] Serverfel:', msg);
+        return;
+      }
+
       const meta = msg.MetaData;
-      if (!meta) return;
+      if (!meta) {
+        console.warn('[AIS] Inget MetaData:', msg);
+        return;
+      }
 
       const mmsi = String(meta.MMSI);
       const lat = meta.latitude;
       const lon = meta.longitude;
       if (!lat || !lon || lat === 0) return;
+
+      if (msgCount === 1) setStatus('live', 'Live');
 
       const data = {};
 
@@ -502,12 +519,18 @@ function connectAIS(apiKey) {
       }
 
       upsertVessel(mmsi, lat, lon, data);
-    } catch (e) { /* ignore */ }
+    } catch (e) {
+      console.error('[AIS] Parse-fel:', e, evt.data);
+    }
   };
 
-  ws.onerror = () => setStatus('error', 'Fel');
-  ws.onclose = () => {
-    setStatus('error', 'Frånkopplad');
+  ws.onerror = (e) => {
+    console.error('[AIS] WebSocket-fel:', e);
+    setStatus('error', 'Anslutningsfel – se konsolen');
+  };
+  ws.onclose = (e) => {
+    console.warn('[AIS] WebSocket stängd:', e.code, e.reason);
+    setStatus('error', `Frånkopplad (${e.code}) – återansluter…`);
     setTimeout(() => connectAIS(apiKey), 5000);
   };
 }
