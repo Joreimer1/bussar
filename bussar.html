@@ -217,7 +217,7 @@
         function updateDisplay() {
             // Update the title with current time
             const now = new Date();
-            const timeString = now.toLocaleTimeString('sv-SE');
+            const timeString = now.toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit' });
             document.getElementById('title').textContent = timeString;
             
             let html = '';
