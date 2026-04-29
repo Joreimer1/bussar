@@ -138,7 +138,7 @@
     <div class="container">
         <div class="header">
             <div class="header-text">
-                <h1 id="title">Bussar &nbsp;<span id="weather-info" style="font-size:24px;font-weight:600;color:#666;margin-left:40px;"></span></h1>
+                <h1><span id="title">Bussar</span>&nbsp;<span id="weather-info" style="font-size:24px;font-weight:600;color:#666;margin-left:40px;"></span></h1>
             </div>
         </div>
         
@@ -218,7 +218,7 @@
             // Update the title with current time
             const now = new Date();
             const timeString = now.toLocaleTimeString('sv-SE');
-            document.getElementById('title').textContent = timeString + ' \u00A0';
+            document.getElementById('title').textContent = timeString;
             
             let html = '';
             
