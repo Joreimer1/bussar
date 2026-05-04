@@ -48,7 +48,8 @@
   // SMHI Open Data API – Norra Hammarbyhamnen
   const LAT = 59.3075;
   const LON = 18.0810;
-  const URL = `https://opendata-download-metfcst.smhi.se/api/category/pmp3g/version/2/geotype/point/lon/${LON}/lat/${LAT}/data.json`;
+  const SMHI = `https://opendata-download-metfcst.smhi.se/api/category/pmp3g/version/2/geotype/point/lon/${LON}/lat/${LAT}/data.json`;
+  const URL = `https://api.allorigins.win/get?url=${encodeURIComponent(SMHI)}`;
 
   // SMHI Wsymb2 symbol mapping → emoji
   // https://opendata.smhi.se/apidocs/metfcst/parameters.html
@@ -85,9 +86,12 @@
   async function fetchWeather() {
     const el = document.getElementById('icon');
     try {
-      const res = await fetch(URL);
+      const SMHI = `https://opendata-download-metfcst.smhi.se/api/category/pmp3g/version/2/geotype/point/lon/${LON}/lat/${LAT}/data.json`;
+      const proxy = `https://api.allorigins.win/get?url=${encodeURIComponent(SMHI)}`;
+      const res = await fetch(proxy);
       if (!res.ok) throw new Error('HTTP ' + res.status);
-      const data = await res.json();
+      const wrapper = await res.json();
+      const data = JSON.parse(wrapper.contents);
 
       // First timeSerie = closest forecast to now
       const ts = data.timeSeries[0];
