@@ -76,12 +76,10 @@
   .weather-icon {
     font-size: 48px;
     line-height: 1;
-    opacity: 0;
-    transition: opacity 0.6s ease;
+    opacity: 1;
     filter: drop-shadow(0 0 12px rgba(255,255,255,0.15));
     user-select: none;
   }
-  .weather-icon.visible { opacity: 1; }
   .weather-icon.pulse { animation: wi-pulse 4s ease-in-out infinite; }
   @keyframes wi-pulse {
     0%, 100% { filter: drop-shadow(0 0 12px rgba(255,200,50,0.25)); }
@@ -538,11 +536,9 @@
                 const sym = wmoToEmoji(code);
                 el.textContent = sym.e;
                 if (sym.pulse) el.classList.add('pulse');
-                el.classList.add('visible');
             } catch (err) {
                 el.textContent = '❓';
-                el.classList.add('visible');
-                console.error('Väderikon fel:', err);
+                console.error('Väderikon fel:', err.message, err);
             }
         }
 
