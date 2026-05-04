@@ -6,106 +6,63 @@
 <title>Väder</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
-
   body {
-    width: 100vw;
-    height: 100vh;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: #0d1b2a;
-    overflow: hidden;
+    width: 100vw; height: 100vh;
+    display: flex; align-items: center; justify-content: center;
+    background: #0d1b2a; overflow: hidden;
   }
-
   #icon {
-    font-size: min(60vw, 60vh);
-    line-height: 1;
-    opacity: 0;
-    transition: opacity 0.6s ease;
+    font-size: min(60vw, 60vh); line-height: 1;
+    opacity: 0; transition: opacity 0.6s ease;
     filter: drop-shadow(0 0 40px rgba(255,255,255,0.15));
     user-select: none;
   }
-
-  #icon.visible {
-    opacity: 1;
-  }
-
-  /* Subtle pulse on sun/clear */
-  #icon.pulse {
-    animation: pulse 4s ease-in-out infinite;
-  }
-
+  #icon.visible { opacity: 1; }
+  #icon.pulse { animation: pulse 4s ease-in-out infinite; }
   @keyframes pulse {
     0%, 100% { filter: drop-shadow(0 0 40px rgba(255,200,50,0.25)); }
-    50% { filter: drop-shadow(0 0 60px rgba(255,200,50,0.5)); }
+    50%       { filter: drop-shadow(0 0 60px rgba(255,200,50,0.5));  }
   }
 </style>
 </head>
 <body>
 <div id="icon">⏳</div>
-
 <script>
-  // SMHI Open Data API – Norra Hammarbyhamnen
+  // Open-Meteo – Norra Hammarbyhamnen (har öppet CORS, ingen API-nyckel)
   const LAT = 59.3075;
   const LON = 18.0810;
-  const SMHI = `https://opendata-download-metfcst.smhi.se/api/category/pmp3g/version/2/geotype/point/lon/${LON}/lat/${LAT}/data.json`;
-  const URL = `https://api.allorigins.win/get?url=${encodeURIComponent(SMHI)}`;
+  const URL = `https://api.open-meteo.com/v1/forecast?latitude=${LAT}&longitude=${LON}&current=weathercode&models=best_match`;
 
-  // SMHI Wsymb2 symbol mapping → emoji
-  // https://opendata.smhi.se/apidocs/metfcst/parameters.html
-  const SYMBOLS = {
-    1:  { e: '☀️',  pulse: true  },  // Klart
-    2:  { e: '🌤️',  pulse: true  },  // Nästan klart
-    3:  { e: '⛅',  pulse: false },  // Halvklart
-    4:  { e: '🌥️',  pulse: false },  // Molnigt
-    5:  { e: '☁️',  pulse: false },  // Mulet
-    6:  { e: '🌫️',  pulse: false },  // Dimma
-    7:  { e: '🌦️',  pulse: false },  // Lätt regnskur
-    8:  { e: '🌧️',  pulse: false },  // Regnskur
-    9:  { e: '⛈️',  pulse: false },  // Kraftig regnskur
-    10: { e: '🌨️',  pulse: false },  // Lätt snöblandad regnskur (slask)
-    11: { e: '🌨️',  pulse: false },  // Snöblandad regnskur
-    12: { e: '❄️',  pulse: false },  // Snöskur
-    13: { e: '🌦️',  pulse: false },  // Lätt regn
-    14: { e: '🌧️',  pulse: false },  // Regn
-    15: { e: '⛈️',  pulse: false },  // Kraftigt regn
-    16: { e: '🌩️',  pulse: false },  // Åska
-    17: { e: '🌨️',  pulse: false },  // Lätt snöblandat regn
-    18: { e: '🌨️',  pulse: false },  // Snöblandat regn
-    19: { e: '❄️',  pulse: false },  // Lätt snöfall
-    20: { e: '❄️',  pulse: false },  // Snöfall
-    21: { e: '❄️',  pulse: false },  // Kraftigt snöfall
-    22: { e: '🌩️',  pulse: false },  // Åska
-    23: { e: '⛈️',  pulse: false },  // Åska med regn
-    24: { e: '🌨️',  pulse: false },  // Lätt slask
-    25: { e: '🌨️',  pulse: false },  // Slask
-    26: { e: '🌨️',  pulse: false },  // Kraftig slask
-    27: { e: '❄️',  pulse: false },  // Snöby
-  };
+  // WMO-koder → emoji
+  function wmoToEmoji(code) {
+    if (code === 0)                 return { e: '☀️',  pulse: true  };
+    if (code <= 2)                  return { e: '🌤️',  pulse: true  };
+    if (code === 3)                 return { e: '☁️',  pulse: false };
+    if (code === 45 || code === 48) return { e: '🌫️',  pulse: false };
+    if (code <= 57)                 return { e: '🌦️',  pulse: false };
+    if (code <= 67)                 return { e: '🌧️',  pulse: false };
+    if (code <= 77)                 return { e: '❄️',  pulse: false };
+    if (code <= 82)                 return { e: '🌦️',  pulse: false };
+    if (code <= 86)                 return { e: '🌨️',  pulse: false };
+    if (code >= 95)                 return { e: '⛈️',  pulse: false };
+    return { e: '❓', pulse: false };
+  }
 
   async function fetchWeather() {
     const el = document.getElementById('icon');
     try {
-      const SMHI = `https://opendata-download-metfcst.smhi.se/api/category/pmp3g/version/2/geotype/point/lon/${LON}/lat/${LAT}/data.json`;
-      const proxy = `https://api.allorigins.win/get?url=${encodeURIComponent(SMHI)}`;
-      const res = await fetch(proxy);
+      const res = await fetch(URL);
       if (!res.ok) throw new Error('HTTP ' + res.status);
-      const wrapper = await res.json();
-      const data = JSON.parse(wrapper.contents);
-
-      // First timeSerie = closest forecast to now
-      const ts = data.timeSeries[0];
-      const param = ts.parameters.find(p => p.name === 'Wsymb2');
-      const code = param ? param.values[0] : null;
-
-      const sym = SYMBOLS[code] || { e: '❓', pulse: false };
+      const data = await res.json();
+      const code = data.current.weathercode;
+      const sym = wmoToEmoji(code);
       el.textContent = sym.e;
       if (sym.pulse) el.classList.add('pulse');
       el.classList.add('visible');
     } catch (err) {
       el.textContent = '❓';
       el.classList.add('visible');
-      console.error('SMHI fetch failed:', err);
+      console.error('Fetch failed:', err);
     }
   }
 
