@@ -1,0 +1,412 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Team Spinner</title>
+<style>
+  :root{
+    --bg:#0f1720;
+    --panel:#0b1220;
+    --muted:#9aa6b2;
+    --accent:#2dd4bf;
+    --accent-2:#fb7185;
+    --ball-bg:#ffffff;
+    --glass: rgba(255,255,255,0.04);
+    --glass-2: rgba(255,255,255,0.02);
+    --shadow: 0 8px 24px rgba(2,6,23,0.6);
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+  }
+
+  html,body{height:100%;margin:0;background:linear-gradient(180deg,var(--bg),#07101a 60%);color:#e6eef6}
+  .wrap{
+    max-width:1100px;margin:28px auto;padding:22px;border-radius:14px;background:linear-gradient(180deg,var(--panel),#07101a);box-shadow:var(--shadow);overflow:visible;
+    border:1px solid rgba(255,255,255,0.03);
+  }
+
+  header{display:flex;align-items:center;gap:18px;margin-bottom:18px}
+  h1{font-size:20px;margin:0;font-weight:600;letter-spacing:-0.2px}
+  p.lead{margin:0;color:var(--muted);font-size:13px}
+
+  .controls{display:flex;gap:16px;align-items:flex-start;margin-bottom:18px}
+  .left{
+    flex:0 0 360px;background:linear-gradient(180deg,var(--glass),var(--glass-2));padding:14px;border-radius:10px;border:1px solid rgba(255,255,255,0.03);
+  }
+  label{display:block;font-size:13px;color:var(--muted);margin-bottom:6px}
+  textarea{width:100%;height:180px;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:inherit;resize:vertical;font-size:14px}
+  .row{display:flex;gap:10px;align-items:center;margin-top:10px}
+  input[type=number]{width:84px;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:inherit}
+  .btn{
+    background:linear-gradient(90deg,var(--accent),#34d399);border:none;padding:10px 14px;border-radius:10px;color:#042027;font-weight:700;cursor:pointer;box-shadow:0 6px 18px rgba(45,212,191,0.12);
+  }
+  .btn.secondary{background:transparent;border:1px solid rgba(255,255,255,0.06);color:var(--muted);font-weight:600}
+  .small{font-size:13px;padding:8px 10px;border-radius:8px}
+
+  .right{
+    flex:1;min-height:360px;display:flex;flex-direction:column;align-items:center;justify-content:center;position:relative;
+    padding:18px;border-radius:10px;background:linear-gradient(180deg, rgba(255,255,255,0.01), transparent);
+  }
+
+  /* Drum */
+  .drum{
+    width:320px;height:220px;border-radius:18px;background:linear-gradient(180deg,#071827 60%, #0b2630);border:1px solid rgba(255,255,255,0.03);position:relative;display:flex;align-items:center;justify-content:center;box-shadow:inset 0 -18px 40px rgba(2,6,23,0.6);
+    overflow:visible;
+  }
+  .drum .spinner{
+    width:220px;height:220px;border-radius:50%;border:8px solid rgba(255,255,255,0.03);display:flex;align-items:center;justify-content:center;position:relative;
+    background:radial-gradient(circle at 30% 30%, rgba(255,255,255,0.02), transparent 30%);
+    transform-origin:center center;
+    animation:spin 6s linear infinite;
+  }
+  @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+
+  .drum .slot{
+    position:absolute;bottom:-12px;width:120px;height:36px;background:linear-gradient(180deg,#071827,#0b2630);border-radius:18px;border:1px solid rgba(255,255,255,0.03);display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:13px;box-shadow:0 6px 18px rgba(2,6,23,0.5)
+  }
+
+  /* Ball */
+  .ball{
+    position:absolute;width:46px;height:46px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;color:#042027;background:var(--ball-bg);box-shadow:0 8px 18px rgba(2,6,23,0.45);
+    transform:translate(-50%,-50%) scale(1);will-change:transform,left,top;
+    user-select:none;pointer-events:none;font-size:12px;padding:6px;text-align:center;
+  }
+
+  /* Containers */
+  .containers{display:flex;gap:12px;margin-top:18px;flex-wrap:wrap;justify-content:center;width:100%}
+  .container{
+    min-width:140px;flex:1 1 160px;background:linear-gradient(180deg, rgba(255,255,255,0.02), transparent);border-radius:12px;padding:10px;border:1px solid rgba(255,255,255,0.03);min-height:120px;display:flex;flex-direction:column;align-items:center;
+  }
+  .container h3{margin:0;font-size:13px;color:var(--muted);font-weight:700}
+  .slot-area{flex:1;width:100%;display:flex;flex-wrap:wrap;gap:8px;align-content:flex-start;justify-content:center;padding-top:8px}
+  .mini-ball{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;color:#042027;background:var(--ball-bg);font-size:11px;box-shadow:0 6px 14px rgba(2,6,23,0.35);padding:6px;text-align:center}
+
+  /* Results card (separate) */
+  .results-card{
+    margin-top:18px;background:linear-gradient(180deg, rgba(255,255,255,0.02), transparent);border-radius:12px;padding:14px;border:1px solid rgba(255,255,255,0.03);
+  }
+  .results-grid{
+    display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;
+  }
+  .team-card{
+    background:linear-gradient(180deg, rgba(255,255,255,0.01), transparent);padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,0.03);
+  }
+  .team-card h4{margin:0 0 8px 0;font-size:13px;color:var(--muted);font-weight:700}
+
+  /* Table styling (no internal scrollbars) */
+  .team-table{
+    width:100%;border-collapse:collapse;margin:0;background:transparent;
+  }
+  .team-table th{
+    text-align:left;font-size:12px;color:var(--muted);padding:6px 8px;border-bottom:1px solid rgba(255,255,255,0.03);
+  }
+  .team-table td{
+    padding:6px 8px;font-size:13px;color:#e6eef6;border-bottom:1px dashed rgba(255,255,255,0.02);
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+
+  footer{display:flex;justify-content:space-between;align-items:center;margin-top:14px;color:var(--muted);font-size:13px}
+  .controls .hint{font-size:12px;color:var(--muted);margin-top:8px}
+
+  /* responsive */
+  @media (max-width:880px){
+    .controls{flex-direction:column}
+    .left{width:100%}
+    .drum{width:280px;height:200px}
+  }
+</style>
+</head>
+<body>
+<div class="wrap" role="application" aria-label="Team spinner">
+  <header>
+    <div>
+      <h1>Team Spinner</h1>
+      <p class="lead">Klistra in namn, välj antal lag (2–10) och tryck Roll. Resultatet visas som bollar och i tabeller under.</p>
+    </div>
+  </header>
+
+  <div class="controls">
+    <div class="left" aria-hidden="false">
+      <label for="names">Namn (en per rad)</label>
+      <textarea id="names" placeholder="Exempel:&#10;Alice&#10;Bob&#10;Charlie"></textarea>
+
+      <div class="row" style="margin-top:12px">
+        <div style="flex:1">
+          <label for="teams">Antal lag</label>
+          <input id="teams" type="number" min="2" max="10" value="4" />
+        </div>
+        <div style="display:flex;flex-direction:column;gap:8px;align-items:flex-end">
+          <button id="roll" class="btn">Roll</button>
+          <button id="reset" class="btn secondary small">Reset</button>
+        </div>
+      </div>
+
+      <div class="hint">Tips: Använd Enter för att separera namn. Ctrl/Cmd+Enter för att rulla snabbt.</div>
+    </div>
+
+    <div class="right">
+      <div class="drum" id="drum" aria-hidden="true">
+        <div class="spinner" id="spinner"></div>
+        <div class="slot" style="left:50%;transform:translateX(-50%);">Outlet</div>
+      </div>
+
+      <div class="containers" id="containers" aria-live="polite" style="margin-top:18px"></div>
+    </div>
+  </div>
+
+  <!-- Separat kort för tabeller -->
+  <div class="results-card" id="resultsCard" aria-live="polite">
+    <h3 style="margin:0 0 10px 0;color:var(--muted);font-size:14px">Laglistor (alfabetiskt)</h3>
+    <div class="results-grid" id="resultsGrid">
+      <!-- Tabeller skapas dynamiskt här -->
+    </div>
+  </div>
+
+  <footer>
+    <div>Made for fun • Minimal palette • Smooth physics</div>
+    <div style="color:var(--muted)">Team Spinner</div>
+  </footer>
+</div>
+
+<script>
+/* Uppdaterad Team Spinner
+   - Tabeller ligger i separat kort under huvudkortet (ingen intern rullista)
+   - Tabeller uppdateras alfabetiskt per lag
+*/
+
+const namesEl = document.getElementById('names');
+const teamsEl = document.getElementById('teams');
+const rollBtn = document.getElementById('roll');
+const resetBtn = document.getElementById('reset');
+const containersEl = document.getElementById('containers');
+const drum = document.getElementById('drum');
+const spinner = document.getElementById('spinner');
+const resultsGrid = document.getElementById('resultsGrid');
+
+let animating = false;
+let containerData = []; // array of arrays storing names per team
+
+function clearContainers(){
+  containersEl.innerHTML = '';
+  containerData = [];
+  resultsGrid.innerHTML = '';
+}
+
+function createContainers(n){
+  clearContainers();
+  for(let i=0;i<n;i++){
+    containerData.push([]);
+    const c = document.createElement('div');
+    c.className = 'container';
+    c.dataset.index = i;
+    const title = document.createElement('h3');
+    title.textContent = `Team ${i+1}`;
+    const area = document.createElement('div');
+    area.className = 'slot-area';
+    c.appendChild(title);
+    c.appendChild(area);
+    containersEl.appendChild(c);
+  }
+  createResultTables(n);
+}
+
+function createResultTables(n){
+  resultsGrid.innerHTML = '';
+  for(let i=0;i<n;i++){
+    const card = document.createElement('div');
+    card.className = 'team-card';
+    card.dataset.index = i;
+    const h = document.createElement('h4');
+    h.textContent = `Team ${i+1}`;
+    const table = document.createElement('table');
+    table.className = 'team-table';
+    table.innerHTML = '<thead><tr><th>Medlemmar</th></tr></thead><tbody></tbody>';
+    card.appendChild(h);
+    card.appendChild(table);
+    resultsGrid.appendChild(card);
+  }
+}
+
+function parseNames(text){
+  return text.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
+}
+
+function makeBallElement(name, idx){
+  const el = document.createElement('div');
+  el.className = 'ball';
+  el.textContent = name.split(' ')[0] || name;
+  el.title = name;
+  el.style.background = '#ffffff';
+  el.style.color = '#042027';
+  el.style.fontSize = '12px';
+  el.style.padding = '6px';
+  return el;
+}
+
+function getDrumCenter(){
+  const r = drum.getBoundingClientRect();
+  return {x: r.left + r.width/2, y: r.top + r.height/2 - 10};
+}
+
+function getContainerTarget(containerEl){
+  const r = containerEl.getBoundingClientRect();
+  return {x: r.left + r.width/2, y: r.top + 36};
+}
+
+function easeOutCubic(t){ return 1 - Math.pow(1 - t, 3); }
+
+function animateBallTo(ballEl, from, to, duration=1200, delay=0, onComplete){
+  let start = null;
+  const ctrl = {x: (from.x + to.x)/2 + (Math.random()*160-80), y: Math.min(from.y,to.y) - 120 - Math.random()*80};
+  function step(ts){
+    if(!start) start = ts;
+    const elapsed = ts - start;
+    if(elapsed < delay){
+      requestAnimationFrame(step);
+      return;
+    }
+    const t = Math.min(1, (elapsed - delay)/duration);
+    const e = easeOutCubic(t);
+    const x = (1-e)*(1-e)*from.x + 2*(1-e)*e*ctrl.x + e*e*to.x;
+    const y = (1-e)*(1-e)*from.y + 2*(1-e)*e*ctrl.y + e*e*to.y;
+    ballEl.style.left = x + 'px';
+    ballEl.style.top = y + 'px';
+    ballEl.style.transform = `translate(-50%,-50%) scale(${1 - 0.12*e})`;
+    if(t < 1){
+      requestAnimationFrame(step);
+    } else {
+      if(onComplete) onComplete();
+    }
+  }
+  requestAnimationFrame(step);
+}
+
+function placeMiniBall(containerArea, name){
+  const mini = document.createElement('div');
+  mini.className = 'mini-ball';
+  mini.textContent = name.split(' ')[0] || name;
+  mini.title = name;
+  containerArea.appendChild(mini);
+}
+
+function updateTableForIndex(idx){
+  const card = resultsGrid.querySelector(`.team-card[data-index="${idx}"]`);
+  if(!card) return;
+  const tbody = card.querySelector('tbody');
+  tbody.innerHTML = '';
+  const sorted = containerData[idx].slice().sort((a,b)=>a.localeCompare(b, undefined, {sensitivity:'base'}));
+  sorted.forEach(name=>{
+    const tr = document.createElement('tr');
+    const td = document.createElement('td');
+    td.textContent = name;
+    tr.appendChild(td);
+    tbody.appendChild(tr);
+  });
+}
+
+function rollNames(){
+  if(animating) return;
+  const raw = namesEl.value;
+  const names = parseNames(raw);
+  if(names.length === 0) {
+    alert('Klistra in minst ett namn.');
+    return;
+  }
+  let teamCount = parseInt(teamsEl.value,10) || 2;
+  teamCount = Math.max(2, Math.min(10, teamCount));
+  createContainers(teamCount);
+
+  // randomize names
+  const shuffled = names.slice().sort(()=>Math.random()-0.5);
+
+  // prepare DOM balls
+  const center = getDrumCenter();
+  const createdBalls = [];
+  shuffled.forEach((name,i)=>{
+    const el = makeBallElement(name,i);
+    el.style.left = center.x + (Math.random()*40-20) + 'px';
+    el.style.top = center.y + (Math.random()*40-20) + 'px';
+    document.body.appendChild(el);
+    createdBalls.push({el,name});
+  });
+
+  animating = true;
+  rollBtn.disabled = true;
+  resetBtn.disabled = true;
+
+  // balanced random assignments
+  const assignments = [];
+  for(let i=0;i<shuffled.length;i++){
+    assignments.push(i % teamCount);
+  }
+  for(let i=assignments.length-1;i>0;i--){
+    const j = Math.floor(Math.random()*(i+1));
+    [assignments[i],assignments[j]] = [assignments[j],assignments[i]];
+  }
+
+  // animate balls
+  let completed = 0;
+  createdBalls.forEach((b, i) => {
+    const teamIdx = assignments[i];
+    const containerEl = containersEl.querySelector(`.container[data-index="${teamIdx}"]`);
+    const target = getContainerTarget(containerEl);
+    const area = containerEl.querySelector('.slot-area');
+    const offsetX = (Math.random()*60-30);
+    const offsetY = (Math.random()*40);
+    const final = {x: target.x + offsetX, y: target.y + offsetY};
+    const delay = i * 160 + Math.random()*120;
+    animateBallTo(b.el, {x: parseFloat(b.el.style.left), y: parseFloat(b.el.style.top)}, final, 900 + Math.random()*400, delay, ()=>{
+      // record name, update UI
+      containerData[teamIdx].push(b.name);
+      placeMiniBall(area, b.name);
+      updateTableForIndex(teamIdx);
+      b.el.remove();
+      completed++;
+      if(completed === createdBalls.length){
+        animating = false;
+        rollBtn.disabled = false;
+        resetBtn.disabled = false;
+      }
+    });
+  });
+}
+
+// Reset function
+function resetAll(){
+  if(animating) return;
+  // clear container data and UI
+  containerData = containerData.map(()=>[]);
+  const minis = containersEl.querySelectorAll('.mini-ball');
+  minis.forEach(m=>m.remove());
+  const tbodies = resultsGrid.querySelectorAll('tbody');
+  tbodies.forEach(t=>t.innerHTML = '');
+}
+
+// initial
+createContainers(parseInt(teamsEl.value,10) || 4);
+
+// events
+rollBtn.addEventListener('click', rollNames);
+resetBtn.addEventListener('click', resetAll);
+
+// keyboard: Ctrl+Enter to roll
+namesEl.addEventListener('keydown', (e)=>{
+  if((e.ctrlKey || e.metaKey) && e.key === 'Enter'){
+    rollNames();
+  }
+});
+
+// spinner speed control
+function animateSpinner(){
+  spinner.style.animationDuration = (animating ? '2.2s' : '6s');
+  requestAnimationFrame(animateSpinner);
+}
+requestAnimationFrame(animateSpinner);
+
+// remove stray floating balls on resize
+window.addEventListener('resize', ()=>{
+  const floating = document.querySelectorAll('.ball');
+  floating.forEach(b=>b.remove());
+});
+</script>
+</body>
+</html>
