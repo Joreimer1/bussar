@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🎡 Fun Fair Spinning Wheel</title>
+<style>
+  :root {
+    --gold: #f7d733;
+    --orange: #f37736;
+    --purple: #1a0533;
+    --purple-light: #2d1b69;
+    --text-light: #c9a0ff;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: linear-gradient(135deg, var(--purple) 0%, var(--purple-light) 40%, var(--purple) 100%);
+    min-height: 100vh;
+    color: #fff;
+    padding: 20px;
+  }
+
+  h1 {
+    text-align: center;
+    font-size: 2.2rem;
+    background: linear-gradient(to right, var(--gold), var(--orange), var(--gold));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 5px;
+  }
+  .subtitle { text-align: center; color: var(--text-light); margin-bottom: 20px; font-size: 0.95rem; }
+
+  .main-container {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 30px;
+    max-width: 1300px;
+    margin: 0 auto;
+  }
+
+  /* ── Controls / Inputs Panel ── */
+  .controls-panel {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 16px;
+    padding: 20px;
+    width: 340px;
+    max-height: 80vh;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+  }
+
+  .control-row {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    background: rgba(0,0,0,0.2);
+    padding: 10px;
+    border-radius: 10px;
+  }
+  .control-row label { font-weight: 600; color: var(--gold); white-space: nowrap; }
+  .control-row input[type="number"] {
+    width: 60px;
+    padding: 6px;
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 6px;
+    background: rgba(255,255,255,0.1);
+    color: #fff;
+    font-size: 1rem;
+  }
+  .control-row button, .paste-btn, .update-btn, .spin-btn {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 8px;
+    background: var(--text-light);
+    color: var(--purple);
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .control-row button:hover, .paste-btn:hover, .update-btn:hover { background: #fff; transform: translateY(-1px); }
+
+  textarea#pasteArea {
+    width: 100%;
+    height: 80px;
+    padding: 10px;
+    border: 1px dashed var(--text-light);
+    border-radius: 8px;
+    background: rgba(0,0,0,0.2);
+    color: #fff;
+    font-size: 0.85rem;
+    resize: vertical;
+  }
+  textarea#pasteArea::placeholder { color: rgba(255,255,255,0.3); }
+
+  .inputs-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+    margin-top: 5px;
+  }
+  .input-group { display: flex; align-items: center; gap: 6px; }
+  .input-group label { font-size: 0.75rem; color: var(--text-light); min-width: 24px; text-align: right; font-weight: 700; }
+  .input-group input {
+    width: 100%;
+    padding: 6px 8px;
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 6px;
+    background: rgba(255,255,255,0.07);
+    color: #fff;
+    font-size: 0.8rem;
+    outline: none;
+  }
+  .input-group input:focus { border-color: var(--gold); }
+
+  /* ── Wheel Section ── */
+  .wheel-section {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 25px;
+  }
+  .wheel-wrapper {
+    position: relative;
+    width: 480px;
+    height: 480px;
+  }
+  .wheel-wrapper canvas {
+    border-radius: 50%;
+    box-shadow:
+      0 0 0 10px var(--gold),
+      0 0 0 14px var(--purple-light),
+      0 0 0 18px var(--orange),
+      0 0 50px rgba(247, 215, 51, 0.3);
+  }
+  .pointer {
+    position: absolute;
+    top: -20px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 0; height: 0;
+    border-left: 20px solid transparent;
+    border-right: 20px solid transparent;
+    border-top: 44px solid var(--gold);
+    filter: drop-shadow(0 4px 6px rgba(0,0,0,0.6));
+    z-index: 10;
+    transition: transform 0.08s ease-out;
+  }
+  .pointer.tick { transform: translateX(-50%) scale(1.15) rotate(6deg); }
+
+  .center-circle {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 56px; height: 56px;
+    background: radial-gradient(circle, var(--gold), var(--orange));
+    border-radius: 50%;
+    border: 3px solid #fff;
+    box-shadow: 0 0 15px rgba(247, 215, 51, 0.5);
+    z-index: 5;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.3rem;
+  }
+
+  .spin-btn {
+    padding: 16px 60px;
+    font-size: 1.3rem;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    background: linear-gradient(135deg, var(--gold), var(--orange));
+    color: var(--purple);
+    box-shadow: 0 6px 20px rgba(243, 119, 54, 0.5);
+  }
+  .spin-btn:hover:not(:disabled) { transform: translateY(-3px) scale(1.04); box-shadow: 0 10px 30px rgba(243, 119, 54, 0.7); }
+  .spin-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+  /* ── Overlay & Confetti ── */
+  .result-overlay {
+    display: none;
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0,0,0,0.75);
+    z-index: 100;
+    justify-content: center; align-items: center;
+  }
+  .result-overlay.show { display: flex; animation: fadeIn 0.3s ease; }
+  .result-box {
+    background: linear-gradient(135deg, var(--purple-light), var(--purple));
+    border: 3px solid var(--gold);
+    border-radius: 20px;
+    padding: 35px 50px;
+    text-align: center;
+    animation: popIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    box-shadow: 0 0 60px rgba(247, 215, 51, 0.3);
+    max-width: 90%;
+  }
+  .result-box h2 { font-size: 1.2rem; color: var(--text-light); margin-bottom: 8px; }
+  .result-box .winner {
+    font-size: 2rem; font-weight: 800; margin: 10px 0 20px;
+    background: linear-gradient(to right, var(--gold), var(--orange));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .result-box button {
+    padding: 10px 35px;
+    font-size: 0.95rem; font-weight: 700;
+    border: 2px solid var(--gold); border-radius: 30px;
+    background: transparent; color: var(--gold); cursor: pointer;
+    transition: all 0.3s;
+  }
+  .result-box button:hover { background: var(--gold); color: var(--purple); }
+
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes popIn { from { transform: scale(0.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+  #confettiCanvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 99; }
+
+  .inputs-panel::-webkit-scrollbar { width: 6px; }
+  .inputs-panel::-webkit-scrollbar-track { background: transparent; }
+  .inputs-panel::-webkit-scrollbar-thumb { background: rgba(201,160,255,0.3); border-radius: 3px; }
+
+  @media (max-width: 900px) {
+    .wheel-wrapper { width: 350px; height: 350px; }
+    .controls-panel { width: 100%; max-width: 500px; max-height: none; }
+    h1 { font-size: 1.7rem; }
+  }
+</style>
+</head>
+<body>
+
+<h1>🎡 Fun Fair Spinning Wheel</h1>
+<p class="subtitle">Configure 2–30 options, paste them, or edit manually. Then spin!</p>
+
+<div class="main-container">
+  <!-- CONTROLS -->
+  <div class="controls-panel">
+    <div class="control-row">
+      <label>Options Count:</label>
+      <input type="number" id="countInput" min="2" max="30" value="10">
+      <button id="setCountBtn">Apply</button>
+    </div>
+
+    <div style="display:flex; flex-direction:column; gap:8px;">
+      <label style="color:var(--gold); font-weight:600;">📋 Bulk Paste Options</label>
+      <textarea id="pasteArea" placeholder="Separate by commas, new lines, or semicolons..."></textarea>
+      <button class="paste-btn" id="pasteBtn">Load Pasted Options</button>
+    </div>
+
+    <div id="inputsGrid" class="inputs-grid"></div>
+    <button class="update-btn" id="updateBtn" style="margin-top:auto;">🔄 Update Wheel</button>
+  </div>
+
+  <!-- WHEEL -->
+  <div class="wheel-section">
+    <div class="wheel-wrapper">
+      <div class="pointer" id="pointer"></div>
+      <canvas id="wheelCanvas" width="480" height="480"></canvas>
+      <div class="center-circle">🎯</div>
+    </div>
+    <button class="spin-btn" id="spinBtn">🎰 SPIN!</button>
+  </div>
+</div>
+
+<!-- RESULT -->
+<div class="result-overlay" id="resultOverlay">
+  <div class="result-box">
+    <h2>🎉 The wheel has spoken! 🎉</h2>
+    <div class="winner" id="winnerText"></div>
+    <button id="closeResult">Spin Again</button>
+  </div>
+</div>
+
+<canvas id="confettiCanvas"></canvas>
+
+<script>
+// ─── STATE ─────────────────────────────────────────────────────────────
+let numOptions = 10;
+let options = Array.from({ length: numOptions }, (_, i) => `Option ${i + 1}`);
+let currentAngle = 0;
+let spinning = false;
+let audioCtx = null;
+
+// ─── DOM REFS ──────────────────────────────────────────────────────────
+const canvas = document.getElementById('wheelCanvas');
+const ctx = canvas.getContext('2d');
+const countInput = document.getElementById('countInput');
+const setCountBtn = document.getElementById('setCountBtn');
+const pasteArea = document.getElementById('pasteArea');
+const pasteBtn = document.getElementById('pasteBtn');
+const inputsGrid = document.getElementById('inputsGrid');
+const updateBtn = document.getElementById('updateBtn');
+const spinBtn = document.getElementById('spinBtn');
+const pointer = document.getElementById('pointer');
+const resultOverlay = document.getElementById('resultOverlay');
+const winnerText = document.getElementById('winnerText');
+const closeResult = document.getElementById('closeResult');
+const confettiCanvas = document.getElementById('confettiCanvas');
+const confettiCtx = confettiCanvas.getContext('2d');
+
+const PALETTE = [
+  '#e74c3c','#e67e22','#f1c40f','#2ecc71','#1abc9c','#3498db','#9b59b6','#e84393',
+  '#00cec9','#fd79a8','#6c5ce7','#00b894','#fdcb6e','#d63031','#0984e3','#a29bfe',
+  '#ff7675','#55efc4','#ffeaa7','#fab1a0','#74b9ff','#81ecec','#dfe6e9','#f8a5c2',
+  '#778beb','#cf6a87','#574b90','#f78fb3','#3dc1d3','#e15f41'
+];
+
+// ─── INPUT MANAGEMENT ──────────────────────────────────────────────────
+function buildInputs(preserve = true) {
+  const oldValues = preserve ? Array.from(inputsGrid.querySelectorAll('input')).map(i => i.value) : [];
+  inputsGrid.innerHTML = '';
+  for (let i = 1; i <= numOptions; i++) {
+    const group = document.createElement('div');
+    group.className = 'input-group';
+    const label = document.createElement('label');
+    label.textContent = i + '.';
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.maxLength = 20;
+    input.value = oldValues[i - 1] || options[i - 1] || '';
+    group.appendChild(label);
+    group.appendChild(input);
+    inputsGrid.appendChild(group);
+  }
+}
+
+function readOptions() {
+  return Array.from(inputsGrid.querySelectorAll('input')).map((inp, i) => inp.value.trim() || `Option ${i + 1}`);
+}
+
+function setCount(val) {
+  val = Math.max(2, Math.min(30, parseInt(val) || 2));
+  numOptions = val;
+  countInput.value = val;
+  options = readOptions().slice(0, val);
+  while (options.length < val) options.push(`Option ${options.length + 1}`);
+  buildInputs(false);
+  drawWheel(currentAngle);
+}
+
+setCountBtn.addEventListener('click', () => setCount(countInput.value));
+countInput.addEventListener('change', () => setCount(countInput.value));
+
+pasteBtn.addEventListener('click', () => {
+  const raw = pasteArea.value.trim();
+  if (!raw) return;
+  const parsed = raw.split(/[,\n;]+/).map(s => s.trim()).filter(Boolean);
+  if (parsed.length === 0) return;
+  numOptions = Math.min(30, Math.max(2, parsed.length));
+  countInput.value = numOptions;
+  options = parsed.slice(0, numOptions);
+  while (options.length < numOptions) options.push(`Option ${options.length + 1}`);
+  buildInputs(false);
+  drawWheel(currentAngle);
+  pasteArea.value = '';
+});
+
+updateBtn.addEventListener('click', () => {
+  options = readOptions();
+  drawWheel(currentAngle);
+});
+
+// ─── DRAW WHEEL ────────────────────────────────────────────────────────
+function drawWheel(rotation) {
+  const cx = canvas.width / 2;
+  const cy = canvas.height / 2;
+  const r = cx - 4;
+  const segmentArc = (2 * Math.PI) / numOptions;
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(rotation);
+
+  for (let i = 0; i < numOptions; i++) {
+    const startAngle = i * segmentArc;
+    const endAngle = startAngle + segmentArc;
+
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.arc(0, 0, r, startAngle, endAngle);
+    ctx.closePath();
+    ctx.fillStyle = PALETTE[i % PALETTE.length];
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // Text
+    ctx.save();
+    ctx.rotate(startAngle + segmentArc / 2);
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#fff';
+    ctx.shadowColor = 'rgba(0,0,0,0.6)';
+    ctx.shadowBlur = 4;
+    const fontSize = r < 200 ? 9 : 12;
+    ctx.font = `bold ${fontSize}px system-ui, sans-serif`;
+    const text = options[i] || `#${i+1}`;
+    const truncated = text.length > 14 ? text.substring(0, 13) + '…' : text;
+    ctx.fillText(truncated, r - 18, 0);
+    ctx.restore();
+  }
+
+  // Outer decorative ring
+  ctx.beginPath();
+  ctx.arc(0, 0, r, 0, 2 * Math.PI);
+  ctx.strokeStyle = '#f7d733';
+  ctx.lineWidth = 4;
+  ctx.stroke();
+
+  // Rim dots
+  for (let i = 0; i < 60; i++) {
+    const angle = (i / 60) * 2 * Math.PI;
+    ctx.beginPath();
+    ctx.arc(Math.cos(angle) * (r - 8), Math.sin(angle) * (r - 8), 2.5, 0, 2 * Math.PI);
+    ctx.fillStyle = i % 2 === 0 ? '#f7d733' : '#f37736';
+    ctx.fill();
+  }
+
+  ctx.restore();
+}
+
+// ─── AUDIO ─────────────────────────────────────────────────────────────
+function playTick() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+  osc.frequency.value = 600 + Math.random() * 400;
+  osc.type = 'sine';
+  gain.gain.setValueAtTime(0.07, audioCtx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.04);
+  osc.start();
+  osc.stop(audioCtx.currentTime + 0.04);
+}
+
+function playWin() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  [523, 659, 784, 1047].forEach((f, i) => {
+    const o = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    o.connect(g); g.connect(audioCtx.destination);
+    o.frequency.value = f; o.type = 'triangle';
+    const t = audioCtx.currentTime + i * 0.12;
+    g.gain.setValueAtTime(0.15, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
+    o.start(t); o.stop(t + 0.25);
+  });
+}
+
+// ─── WINNER CALCULATION (FIXED) ────────────────────────────────────────
+function getWinnerIndex(rotation) {
+  const segmentArc = (2 * Math.PI) / numOptions;
+  // Pointer is fixed at 12 o'clock = -π/2 = 3π/2 in canvas coords
+  // Wheel rotated clockwise by 'rotation'
+  // Angle on the wheel currently under the pointer:
+  let angleOnWheel = (1.5 * Math.PI - rotation) % (2 * Math.PI);
+  if (angleOnWheel < 0) angleOnWheel += 2 * Math.PI;
+  return Math.floor(angleOnWheel / segmentArc) % numOptions;
+}
+
+// ─── SPIN LOGIC ────────────────────────────────────────────────────────
+spinBtn.addEventListener('click', () => {
+  if (spinning) return;
+  spinning = true;
+  spinBtn.disabled = true;
+  options = readOptions();
+  resultOverlay.classList.remove('show');
+
+  const extraSpins = (6 + Math.random() * 6) * 2 * Math.PI;
+  const targetAngle = currentAngle + extraSpins + Math.random() * 2 * Math.PI;
+  const duration = 5000 + Math.random() * 2000;
+  const startAngle = currentAngle;
+  const startTime = performance.now();
+  let lastSeg = -1;
+
+  function easeOutCubic(t) { return 1 - Math.pow(1 - t, 3); }
+
+  function animate(now) {
+    const elapsed = now - startTime;
+    const progress = Math.min(elapsed / duration, 1);
+    const eased = easeOutCubic(progress);
+    currentAngle = startAngle + (targetAngle - startAngle) * eased;
+    drawWheel(currentAngle);
+
+    const currentSeg = getWinnerIndex(currentAngle);
+    if (currentSeg !== lastSeg && progress < 0.97) {
+      playTick();
+      pointer.classList.add('tick');
+      setTimeout(() => pointer.classList.remove('tick'), 80);
+      lastSeg = currentSeg;
+    }
+
+    if (progress < 1) {
+      requestAnimationFrame(animate);
+    } else {
+      spinning = false;
+      spinBtn.disabled = false;
+      const winnerIdx = getWinnerIndex(currentAngle);
+      winnerText.textContent = options[winnerIdx];
+      playWin();
+      launchConfetti();
+      setTimeout(() => resultOverlay.classList.add('show'), 300);
+    }
+  }
+  requestAnimationFrame(animate);
+});
+
+closeResult.addEventListener('click', () => resultOverlay.classList.remove('show'));
+resultOverlay.addEventListener('click', e => { if (e.target === resultOverlay) resultOverlay.classList.remove('show'); });
+
+// ─── CONFETTI ──────────────────────────────────────────────────────────
+let confetti = [];
+let confettiActive = false;
+
+function launchConfetti() {
+  confettiCanvas.width = window.innerWidth;
+  confettiCanvas.height = window.innerHeight;
+  confetti = [];
+  for (let i = 0; i < 180; i++) {
+    confetti.push({
+      x: Math.random() * confettiCanvas.width,
+      y: -30 - Math.random() * 200,
+      w: 7 + Math.random() * 6,
+      h: 4 + Math.random() * 3,
+      c: PALETTE[Math.floor(Math.random() * PALETTE.length)],
+      vx: (Math.random() - 0.5) * 4,
+      vy: 2 + Math.random() * 5,
+      rot: Math.random() * 360,
+      rv: (Math.random() - 0.5) * 12
+    });
+  }
+  if (!confettiActive) {
+    confettiActive = true;
+    animateConfetti();
+  }
+}
+
+function animateConfetti() {
+  confettiCtx.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height);
+  let alive = false;
+  confetti.forEach(p => {
+    p.x += p.vx;
+    p.y += p.vy;
+    p.vy += 0.06;
+    p.rot += p.rv;
+    if (p.y < confettiCanvas.height + 50) alive = true;
+    confettiCtx.save();
+    confettiCtx.translate(p.x, p.y);
+    confettiCtx.rotate(p.rot * Math.PI / 180);
+    confettiCtx.fillStyle = p.c;
+    confettiCtx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+    confettiCtx.restore();
+  });
+  alive ? requestAnimationFrame(animateConfetti) : (confettiActive = false, confettiCtx.clearRect(0,0,confettiCanvas.width,confettiCanvas.height));
+}
+
+// ─── INIT ──────────────────────────────────────────────────────────────
+buildInputs();
+drawWheel(0);
+</script>
+</body>
+</html>
