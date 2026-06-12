@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SL Hållplatser & Realtid</title>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        #map {
+            width: 100%;
+            height: 100%;
+        }
+        /* Styling för SL-liknande realtidstavla i popupen */
+        .sl-popup {
+            width: 280px;
+        }
+        .sl-header {
+            background-color: #00B0FF; /* SL-blå (eller #0079C1) */
+            color: white;
+            padding: 8px 12px;
+            font-weight: bold;
+            border-radius: 4px 4px 0 0;
+            margin: -14px -20px 10px -20px; /* Nollställer Leaflets standardmarginaler */
+        }
+        .sl-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+        .sl-table th {
+            text-align: left;
+            color: #666;
+            border-bottom: 2px solid #ddd;
+            padding-bottom: 4px;
+        }
+        .sl-table td {
+            padding: 6px 0;
+            border-bottom: 1px solid #eee;
+        }
+        .line-number {
+            background-color: #E0E0E0;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-weight: bold;
+            color: #333;
+        }
+        /* Specifik färg för t.ex. stomlinjebussar (blåbussar) */
+        .line-number.blue-bus {
+            background-color: #0079C1;
+            color: white;
+        }
+        .time-countdown {
+            font-weight: bold;
+            color: #d32f2f; /* Röd färg för "Nu" eller korta tider */
+            text-align: right;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="map"></div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <script>
+        // 1. Initiera kartan och centrera över Stockholm
+        const map = L.map('map').setView([59.3293, 18.0686], 12);
+
+        // 2. Lägg till Stadia Maps (Terrain) - Kräver egentligen API-nyckel i produktion, 
+        // men fungerar ofta på localhost för utveckling. Alternativ OSM-länk finns under.
+        const stadiaTerrain = L.tileLayer('https://tiles.stadiamaps.com/tiles/stamen_terrain/{z}/{x}/{y}{r}.png', {
+            maxZoom: 18,
+            attribution: '&copy; <a href="https://stadiamaps.com/">Stadia Maps</a>, &copy; <a href="https://openmaptiles.org/">OpenMapTiles</a> &copy; <a href="http://openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(map);
+
+        // Standard OpenStreetMap om Stadia kräver nyckel direkt hos dig:
+        // const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: 'OSM' });
+
+        // 3. Dummy-data för hållplatser i SL-området
+        const stopAreas = [
+            { id: 1, name: "T-Centralen (Buss)", lat: 59.3312, lng: 18.0617 },
+            { id: 2, name: "Slussen", lat: 59.3202, lng: 18.0717 },
+            { id: 3, name: "Odenplan", lat: 59.3430, lng: 18.0498 },
+            { id: 4, name: "Gullmarsplan", lat: 59.2991, lng: 18.0801 },
+            { id: 5, name: "Fridhemsplan", lat: 59.3323, lng: 18.0289 }
+        ];
+
+        // 4. Funktion för att generera dummy-realtidsinfo (SL-style)
+        function generateDummyRealtime(stopName) {
+            // Simulera olika linjer beroende på hållplats
+            const dummyLines = [
+                { line: "1", dest: "Frihamnen", time: "2 min", isBlue: true },
+                { line: "4", dest: "Radiohjälpen", time: "Nu", isBlue: true },
+                { line: "50", dest: "Odenplan", time: "7 min", isBlue: false },
+                { line: "57", dest: "Frösundavik", time: "11 min", isBlue: false },
+                { line: "3", dest: "Karolinska sjukhuset", time: "14 min", isBlue: true }
+            ];
+
+            // Slumpa fram 2-4 avgångar så det ser levande ut
+            const count = Math.floor(Math.random() * 3) + 2;
+            const shuffled = dummyLines.sort(() => 0.5 - Math.random()).slice(0, count);
+            
+            // Sortera så "Nu" hamnar först (enkel ful-sortering för dummyn)
+            shuffled.sort((a, b) => (a.time === 'Nu' ? -1 : 1));
+
+            // Bygg HTML-strängen för popupen
+            let html = `
+                <div class="sl-popup">
+                    <div class="sl-header">${stopName}</div>
+                    <table class="sl-table">
+                        <thead>
+                            <tr>
+                                <th style="width: 20%;">Linje</th>
+                                <th style="width: 55%;">Destination</th>
+                                <th style="width: 25%; text-align: right;">Avgång</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+            `;
+
+            shuffled.forEach(item => {
+                const badgeClass = item.isBlue ? 'line-number blue-bus' : 'line-number';
+                html += `
+                    <tr>
+                        <td><span class="${badgeClass}">${item.line}</span></td>
+                        <td>${item.dest}</td>
+                        <td class="time-countdown">${item.time}</td>
+                    </tr>
+                `;
+            });
+
+            html += `
+                        </tbody>
+                    </table>
+                </div>
+            `;
+            return html;
+        }
+
+        // 5. Loopa igenom hållplatserna och placera ut markörer
+        stopAreas.forEach(stop => {
+            const marker = L.marker([stop.lat, stop.lng]).addTo(map);
+            
+            // Dynamiskt innehåll när man klickar (genererar ny dummydata varje gång)
+            marker.bindPopup(() => generateDummyRealtime(stop.name));
+        });
+    </script>
+</body>
+</html>
