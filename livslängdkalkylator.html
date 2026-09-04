@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vetenskaplig Livslängdskalkylator</title>
+    <style>
+        :root {
+            --primary: #2c3e50;
+            --accent: #27ae60;
+            --bg: #f4f7f6;
+            --card-bg: #ffffff;
+            --text: #333333;
+            --border: #dcdde1;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: var(--card-bg);
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+        }
+
+        h1 {
+            color: var(--primary);
+            text-align: center;
+            margin-bottom: 5px;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #7f8c8d;
+            font-size: 0.95rem;
+            margin-bottom: 30px;
+        }
+
+        fieldset {
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            background: #fafbfc;
+        }
+
+        legend {
+            font-weight: bold;
+            color: var(--primary);
+            padding: 0 10px;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        label {
+            margin-bottom: 5px;
+            font-weight: 500;
+            font-size: 0.9rem;
+        }
+
+        input, select {
+            padding: 10px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            font-size: 1rem;
+            background: #fff;
+        }
+
+        input:focus, select:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 5px rgba(39, 174, 96, 0.2);
+        }
+
+        .row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+
+        button {
+            display: block;
+            width: 100%;
+            background-color: var(--accent);
+            color: white;
+            border: none;
+            padding: 14px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background 0.2s;
+            margin-top: 20px;
+        }
+
+        button:hover {
+            background-color: #219653;
+        }
+
+        #result {
+            margin-top: 30px;
+            padding: 25px;
+            background: #e8f8f5;
+            border: 1px solid #a3e4d7;
+            border-radius: 8px;
+            display: none;
+        }
+
+        #result h2 {
+            color: #0e6655;
+            margin-top: 0;
+        }
+
+        .metric {
+            font-size: 1.2rem;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+
+        .factor-list {
+            margin-top: 15px;
+            font-size: 0.9rem;
+            color: #2c3e50;
+        }
+
+        .factor-list ul {
+            padding-left: 20px;
+            margin: 5px 0;
+        }
+
+        @media (max-width: 600px) {
+            .row {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Evidensbaserad Livslängdskalkylator</h1>
+    <div class="subtitle">Beräknad på demografisk basdata, kardiometaboliska riskfaktorer och livsstil</div>
+
+    <form id="longevityForm">
+        <!-- Grunddata -->
+        <fieldset>
+            <legend>Grundläggande data</legend>
+            <div class="row">
+                <div class="form-group">
+                    <label for="age">Nuvarande ålder (år):</label>
+                    <input type="number" id="age" required min="18" max="100" value="45">
+                </div>
+                <div class="form-group">
+                    <label for="gender">Biologiskt kön:</label>
+                    <select id="gender">
+                        <option value="male">Man</option>
+                        <option value="female">Kvinna</option>
+                    </select>
+                </div>
+            </div>
+            <div class="row">
+                <div class="form-group">
+                    <label for="height">Längd (cm):</label>
+                    <input type="number" id="height" required min="100" max="250" value="178">
+                </div>
+                <div class="form-group">
+                    <label for="weight">Vikt (kg):</label>
+                    <input type="number" id="weight" required min="30" max="300" value="75">
+                </div>
+            </div>
+            <div class="form-group">
+                <label for="waist">Midjemått (cm):</label>
+                <input type="number" id="waist" required min="50" max="200" value="85">
+                <small style="color: #666; font-size: 0.8rem;">Mätt i höjd med naveln. Centralt fett är en stark markör för visceralt fett.</small>
+            </div>
+        </fieldset>
+
+        <!-- Fysiologiska markörer -->
+        <fieldset>
+            <legend>Fysiologiska markörer & Medicinskt</legend>
+            <div class="row">
+                <div class="form-group">
+                    <label for="sbp">Systoliskt blodtryck (övertryck mmHg):</label>
+                    <input type="number" id="sbp" required min="80" max="240" value="120">
+                </div>
+                <div class="form-group">
+                    <label for="hr">Vilopuls (slag/min):</label>
+                    <input type="number" id="hr" required min="35" max="120" value="62">
+                </div>
+            </div>
+            <div class="row">
+                <div class="form-group">
+                    <label for="cholesterol">Totalt kolesterol / HDL-kvot (eller uppskattning):</label>
+                    <select id="cholesterol">
+                        <option value="optimal">Optimal (Låg kvot / normala blodfetter)</option>
+                        <option value="borderline" selected>Måttligt förhöjt</option>
+                        <option value="high">Högt / Behandlat med statiner</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="vo2max">Kondition / VO2max nivå:</label>
+                    <select id="vo2max">
+                        <option value="high">Hög (Tränar regelbundet, god kondition)</option>
+                        <option value="average" selected>Normal (Måttligt aktiv)</option>
+                        <option value="low">Låg (Stillasittande, märkbart flåsig)</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-group">
+                <label for="diseases">Diagnoser / Kroniska tillstånd:</label>
+                <select id="diseases">
+                    <option value="none" selected>Inga kända kroniska sjukdomar</option>
+                    <option value="diabetes2">Typ 2-diabetes</option>
+                    <option value="cvd">Tidigare hjärt-kärlsjukdom (t.ex. infarkt/stroke)</option>
+                    <option value="cancer">Tidigare cancerdiagnos</option>
+                </select>
+            </div>
+        </fieldset>
+
+        <!-- Livsstil -->
+        <fieldset>
+            <legend>Livsstilsvanor</legend>
+            <div class="row">
+                <div class="form-group">
+                    <label for="smoking">Rökning:</label>
+                    <select id="smoking">
+                        <option value="never" selected>Aldrig rökt / Slutat för >10 år sedan</option>
+                        <option value="former">Fd rökare (slutat nyligen)</option>
+                        <option value="current">Rökare regelbundet</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="alcohol">Alkoholvanor:</label>
+                    <select id="alcohol">
+                        <option value="moderate" selected>Måttlig / Låg konsumtion</option>
+                        <option value="high">Hög konsumtion / Riskbruk</option>
+                        <option value="abstainer">Helnykterist</option>
+                    </select>
+                </div>
+            </div>
+            <div class="row">
+                <div class="form-group">
+                    <label for="diet">Kostkvalitet:</label>
+                    <select id="diet">
+                        <option value="good" selected>Hälsosam (Medelhavskost / mycket grönt, fiber, fisk)</option>
+                        <option value="average">Standardkost (blandad svensk husmanskost)</option>
+                        <option value="poor">Processad mat (mycket snabbmat, socker, chark)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="exercise">Fysisk aktivitet (träning):</label>
+                    <select id="exercise">
+                        <option value="high">Styrka + Kondition flera ggr/vecka</option>
+                        <option value="moderate" selected>Promenader / lättare motion regelbundet</option>
+                        <option value="low">Stillasittande vardag</option>
+                    </select>
+                </div>
+            </div>
+        </fieldset>
+
+        <!-- Ärftlighet -->
+        <fieldset>
+            <legend>Genetik & Ärftlighet</legend>
+            <div class="form-group">
+                <label for="family">Föräldrars livslängd och hälsa:</label>
+                <select id="family">
+                    <option value="long" selected>Båda blev gamla (>85 år) utan tidig hjärt-kärlsjukdom/cancer</option>
+                    <option value="average">Genomsnittlig livslängd (75–84 år)</option>
+                    <option value="short">Föräldrar som avled tidigt (<70 år) i hjärt-kärlsjukdom eller cancer</option>
+                </select>
+            </div>
+        </fieldset>
+
+        <button type="button" onclick="calculateLongevity()">Beräkna prognos</button>
+    </form>
+
+    <div id="result">
+        <h2>Resultat & Analys</h2>
+        <div class="metric" id="resLifeExpectancy"></div>
+        <div class="metric" id="resBiologicalAge"></div>
+        <div class="factor-list" id="resAnalysis"></div>
+    </div>
+</div>
+
+<script>
+function calculateLongevity() {
+    // Hämta värden
+    const age = parseInt(document.getElementById('age').value);
+    const gender = document.getElementById('gender').value;
+    const height = parseFloat(document.getElementById('height').value) / 100;
+    const weight = parseFloat(document.getElementById('weight').value);
+    const waist = parseFloat(document.getElementById('waist').value);
+    const sbp = parseInt(document.getElementById('sbp').value);
+    const hr = parseInt(document.getElementById('hr').value);
+    const cholesterol = document.getElementById('cholesterol').value;
+    const vo2max = document.getElementById('vo2max').value;
+    const diseases = document.getElementById('diseases').value;
+    const smoking = document.getElementById('smoking').value;
+    const alcohol = document.getElementById('alcohol').value;
+    const diet = document.getElementById('diet').value;
+    const exercise = document.getElementById('exercise').value;
+    const family = document.getElementById('family').value;
+
+    // Basförväntad återstående livslängd (statistiskt snitt SCB / WHO)
+    // Svenska snittet: Män ~81 år, Kvinnor ~84 år total förväntad livslängd vid födseln, 
+    // men ökar ju äldre man blir pga överlevnad.
+    let baseRemainingLife = (gender === 'female') ? (85 - age) : (81 - age);
+    if (baseRemainingLife < 2) baseRemainingLife = 2; // Minimigräns
+
+    let ageModifier = 0; // Positivt = drar av år (förkortar liv), Negativt = lägger till år (förlänger)
+    let analysisNotes = [];
+
+    // 1. BMI & Midjemått (Visceralt fett)
+    const bmi = weight / (height * height);
+    if (bmi > 30 || (gender === 'male' && waist > 102) || (gender === 'female' && waist > 88)) {
+        ageModifier += 3.5;
+        analysisNotes.push("Förhöjt midjemått/BMI ökar risken för metabolt syndrom och kardiovaskulära händelser.");
+    } else if (bmi < 18.5) {
+        ageModifier += 2.0;
+        analysisNotes.push("Lågt BMI/undervikt kan indikera minskad muskelmassa (sarkopeni) eller underliggande skörhet.");
+    } else {
+        ageModifier -= 1.0;
+    }
+
+    // 2. Blodtryck & Vilopuls
+    if (sbp >= 140) {
+        ageModifier += 3.0;
+        analysisNotes.push("Ett förhöjt systoliskt blodtryck belastar artärer och hjärta över tid.");
+    } else if (sbp <= 115) {
+        ageModifier -= 1.0;
+    }
+
+    if (hr > 75) {
+        ageModifier += 1.5;
+        analysisNotes.push("En högre vilopuls är ofta sammankopplad med lägre aerob kapacitet och ökad allmänmortalitet.");
+    } else if (hr < 55) {
+        ageModifier -= 1.5;
+    }
+
+    // 3. Kolesterol / Blodfetter
+    if (cholesterol === 'high') {
+        ageModifier += 2.5;
+        analysisNotes.push("Höga blodfetter/kolesterolnivåer bidrar till ateroskleros (åderförfettning).");
+    } else if (cholesterol === 'optimal') {
+        ageModifier -= 0.5;
+    }
+
+    // 4. Kondition & VO2max
+    if (vo2max === 'high') {
+        ageModifier -= 4.0;
+        analysisNotes.push("Hög kardiorespiratorisk kondition (VO2max) är en av de starkaste skyddande faktorerna mot tidig död i forskningen.");
+    } else if (vo2max === 'low') {
+        ageModifier += 3.5;
+        analysisNotes.push("Låg kondition utgör en betydande riskfaktor, likvärdig med rökning i vissa studier.");
+    }
+
+    // 5. Sjukdomar
+    if (diseases === 'cvd') {
+        ageModifier += 8.0;
+        analysisNotes.push("Tidigare hjärt-kärlsjukdom väger tungt i den statistiska riskkalkylen.");
+    } else if (diseases === 'diabetes2') {
+        ageModifier += 6.0;
+        analysisNotes.push("Typ 2-diabetes ökar markant risken för kärl- och organpåverkan.");
+    } else if (diseases === 'cancer') {
+        ageModifier += 5.0;
+        analysisNotes.push("Tidigare cancerdiagnos påverkar den statistiska prognosen beroende påtyp och behandling.");
+    }
+
+    // 6. Rökning
+    if (smoking === 'current') {
+        ageModifier += 7.0;
+        analysisNotes.push("Rökning är den enskilt största undvikbara riskfaktorn för förlorade levnadsår.");
+    } else if (smoking === 'former') {
+        ageModifier += 1.5;
+    }
+
+    // 7. Alkohol
+    if (alcohol === 'high') {
+        ageModifier += 3.0;
+        analysisNotes.push("Överdriven alkoholkonsumtion ökar risken för leverskador, cancer och hypertoni.");
+    }
+
+    // 8. Kost & Träning
+    if (diet === 'good' && exercise === 'high') {
+        ageModifier -= 3.0;
+        analysisNotes.push("Kombinationen av näringstät kost och regelbunden träning optimerar cellernas hälsa och mitokondriefunktion.");
+    } else if (diet === 'poor') {
+        ageModifier += 2.0;
+    }
+
+    // 9. Genetik
+    if (family === 'long') {
+        ageModifier -= 3.5;
+        analysisNotes.push("Gynnsam familjehistoria (långlivade föräldrar) indikerar robust genetiskt skydd.");
+    } else if (family === 'short') {
+        ageModifier += 3.0;
+        analysisNotes.push("Ärftlighet för tidig sjukdom i familjen innebär att man bör vara extra vaksam med förebyggande åtgärder.");
+    }
+
+    // Beräkna slutvärden
+    let finalRemaining = Math.max(2, baseRemainingLife - ageModifier);
+    let totalLifeExpectancy = age + finalRemaining;
+    let biologicalAge = age + ageModifier;
+
+    // Presentation av resultat
+    document.getElementById('resLifeExpectancy').innerText = 
+        `Uppskattad återstående livslängd: ca ${Math.round(finalRemaining)} år (Total förväntad ålder: ${Math.round(totalLifeExpectancy)} år)`;
+    
+    document.getElementById('resBiologicalAge').innerText = 
+        `Beräknad biologisk ålder: ${Math.round(biologicalAge)} år (Kronologisk ålder: ${age} år)`;
+
+    let analysisHtml = "<strong>Evidensbaserade nyckelfaktorer i din profil:</strong><ul>";
+    if (analysisNotes.length === 0) {
+        analysisNotes.push("Din profil ligger nära befolkningsgenomsnittet med god balans mellan risk- och friskfaktorer.");
+    }
+    analysisNotes.forEach(note => {
+        analysisHtml += `<li>${note}</li>`;
+    });
+    analysisHtml += "</ul>";
+
+    document.getElementById('resAnalysis').innerHTML = analysisHtml;
+    document.getElementById('result').style.display = 'block';
+    
+    // Scrolla ner till resultatet
+    document.getElementById('result').scrollIntoView({ behavior: 'smooth' });
+}
+</script>
+
+</body>
+</html>
