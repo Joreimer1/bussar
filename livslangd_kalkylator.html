@@ -1,0 +1,1055 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Biologisk Ålder & Livslängdsanalys</title>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-base: #0f172a;
+            --bg-card: #1e293b;
+            --bg-input: #334155;
+            --accent: #10b981;
+            --accent-gradient: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            --accent-hover: #059669;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --border: #475569;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --success: #10b981;
+            --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Plus Jakarta Sans', sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-base);
+            color: var(--text-main);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            overflow-x: hidden;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 850px;
+            background: var(--bg-card);
+            border-radius: 24px;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            overflow: hidden;
+            position: relative;
+        }
+
+        /* Header Progress Bar */
+        .header-progress {
+            background: #111827;
+            padding: 20px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .logo-title {
+            font-size: 1.1rem;
+            font-weight: 700;
+            letter-spacing: -0.025em;
+            color: var(--text-main);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .logo-title span {
+            color: var(--accent);
+        }
+
+        .step-counter {
+            font-size: 0.9rem;
+            color: var(--text-muted);
+            font-weight: 500;
+        }
+
+        .progress-bar-container {
+            width: 100%;
+            height: 4px;
+            background: #374151;
+        }
+
+        .progress-bar-fill {
+            height: 100%;
+            background: var(--accent-gradient);
+            width: 0%;
+            transition: width 0.4s ease;
+        }
+
+        /* Wizard Content */
+        .wizard-body {
+            padding: 40px;
+            min-height: 420px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .step-content {
+            display: none;
+            animation: fadeIn 0.4s ease forwards;
+        }
+
+        .step-content.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        h2 {
+            font-size: 1.8rem;
+            font-weight: 700;
+            margin-bottom: 10px;
+            color: #fff;
+            letter-spacing: -0.02em;
+        }
+
+        .step-desc {
+            color: var(--text-muted);
+            font-size: 1rem;
+            margin-bottom: 30px;
+        }
+
+        /* Inputs & Controls */
+        .form-group {
+            margin-bottom: 25px;
+        }
+
+        label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 8px;
+            font-size: 0.95rem;
+            color: #e2e8f0;
+        }
+
+        .input-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        input[type="number"], select {
+            width: 100%;
+            padding: 14px 18px;
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            color: #fff;
+            font-size: 1.1rem;
+            transition: var(--transition);
+        }
+
+        input[type="number"]:focus, select:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2);
+        }
+
+        /* Slider Styles */
+        .slider-container {
+            background: var(--bg-input);
+            padding: 20px;
+            border-radius: 16px;
+            border: 1px solid var(--border);
+        }
+
+        .slider-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .slider-value {
+            font-size: 1.4rem;
+            font-weight: 700;
+            color: var(--accent);
+        }
+
+        input[type="range"] {
+            -webkit-appearance: none;
+            width: 100%;
+            height: 8px;
+            background: #475569;
+            border-radius: 4px;
+            outline: none;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: var(--accent);
+            cursor: pointer;
+            box-shadow: 0 0 10px rgba(16, 185, 129, 0.5);
+            transition: transform 0.1s;
+        }
+
+        input[type="range"]::-webkit-slider-thumb:hover {
+            transform: scale(1.15);
+        }
+
+        /* Select Cards (Grid buttons) */
+        .card-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 12px;
+        }
+
+        .card-grid.two-cols {
+            grid-template-columns: 1fr 1fr;
+        }
+
+        .option-card {
+            background: var(--bg-input);
+            border: 2px solid var(--border);
+            padding: 16px 20px;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: var(--transition);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .option-card:hover {
+            border-color: var(--text-muted);
+            background: #3b82f610;
+        }
+
+        .option-card.selected {
+            border-color: var(--accent);
+            background: rgba(16, 185, 129, 0.1);
+        }
+
+        .option-card .title {
+            font-weight: 600;
+            font-size: 1rem;
+        }
+
+        .option-card .radio-circle {
+            width: 20px;
+            height: 20px;
+            border: 2px solid var(--border);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: var(--transition);
+        }
+
+        .option-card.selected .radio-circle {
+            border-color: var(--accent);
+            background: var(--accent);
+        }
+
+        .option-card.selected .radio-circle::after {
+            content: '';
+            width: 8px;
+            height: 8px;
+            background: #fff;
+            border-radius: 50%;
+        }
+
+        /* Footer Navigation Buttons */
+        .wizard-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .btn {
+            padding: 12px 28px;
+            border-radius: 12px;
+            font-weight: 600;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: var(--transition);
+            border: none;
+        }
+
+        .btn-secondary {
+            background: transparent;
+            color: var(--text-muted);
+            border: 1px solid var(--border);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255,255,255,0.05);
+            color: #fff;
+        }
+
+        .btn-primary {
+            background: var(--accent-gradient);
+            color: white;
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 16px rgba(16, 185, 129, 0.4);
+        }
+
+        /* Result View */
+        #resultView {
+            display: none;
+            animation: fadeIn 0.5s ease forwards;
+        }
+
+        .result-hero {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 25px;
+            margin-bottom: 30px;
+        }
+
+        .metric-card {
+            background: #111827;
+            padding: 25px;
+            border-radius: 16px;
+            border: 1px solid rgba(255,255,255,0.05);
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .metric-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 4px;
+        }
+
+        .metric-card.bio::before { background: #3b82f6; }
+        .metric-card.life::before { background: var(--accent); }
+
+        .metric-label {
+            font-size: 0.9rem;
+            color: var(--text-muted);
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .metric-value {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: #fff;
+        }
+
+        .metric-sub {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            margin-top: 5px;
+        }
+
+        /* Risk Factors Breakdown & Optimization */
+        .section-title {
+            font-size: 1.2rem;
+            font-weight: 700;
+            margin-bottom: 15px;
+            color: #f1f5f9;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .analysis-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .card-box {
+            background: #111827;
+            padding: 20px;
+            border-radius: 16px;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .risk-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            font-size: 0.95rem;
+        }
+
+        .risk-item:last-child {
+            border-bottom: none;
+        }
+
+        .badge {
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 700;
+        }
+
+        .badge.negative { background: rgba(239, 68, 68, 0.2); color: #f87171; }
+        .badge.positive { background: rgba(16, 185, 129, 0.2); color: #34d399; }
+        .badge.neutral { background: rgba(148, 163, 184, 0.2); color: #cbd5e1; }
+
+        /* Potential Gain / Actionable List */
+        .action-card {
+            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            padding: 16px 20px;
+            border-radius: 12px;
+            margin-bottom: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .action-info h4 {
+            font-size: 1rem;
+            color: #fff;
+            margin-bottom: 4px;
+        }
+
+        .action-info p {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+        }
+
+        .gain-badge {
+            background: var(--accent);
+            color: #0f172a;
+            font-weight: 700;
+            padding: 6px 12px;
+            border-radius: 8px;
+            font-size: 0.95rem;
+            white-space: nowrap;
+        }
+
+        .restart-btn {
+            display: block;
+            width: 100%;
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--text-muted);
+            padding: 14px;
+            border-radius: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 20px;
+            transition: var(--transition);
+        }
+
+        .restart-btn:hover {
+            border-color: #fff;
+            color: #fff;
+        }
+
+        @media (max-width: 768px) {
+            .input-row, .result-hero, .analysis-grid, .card-grid.two-cols {
+                grid-template-columns: 1fr;
+            }
+            .container {
+                border-radius: 16px;
+            }
+            .wizard-body {
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="header-progress">
+        <div class="logo-title"><span>🧬</span> Evidensbaserad Livslängdsanalys</div>
+        <div class="step-counter" id="stepCounter">Steg 1 av 8</div>
+    </div>
+    <div class="progress-bar-container">
+        <div class="progress-bar-fill" id="progressBar"></div>
+    </div>
+
+    <div class="wizard-body">
+        <form id="longevityForm">
+            
+            <!-- STEP 1: Grunddata -->
+            <div class="step-content active" data-step="1">
+                <h2>Grundläggande information</h2>
+                <p class="step-desc">Vi börjar med dina demografiska basdata för att ställa in befolkningssnittet.</p>
+                
+                <div class="input-row">
+                    <div class="form-group">
+                        <label for="age">Nuvarande ålder (år)</label>
+                        <input type="number" id="age" min="18" max="100" value="45" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Biologiskt kön</label>
+                        <div class="card-grid two-cols" style="margin-top: 5px;">
+                            <div class="option-card selected" onclick="selectGender('male', this)">
+                                <span class="title">Man</span>
+                                <div class="radio-circle"></div>
+                            </div>
+                            <div class="option-card" onclick="selectGender('female', this)">
+                                <span class="title">Kvinna</span>
+                                <div class="radio-circle"></div>
+                            </div>
+                        </div>
+                        <input type="hidden" id="gender" value="male">
+                    </div>
+                </div>
+
+                <div class="input-row">
+                    <div class="form-group">
+                        <label for="height">Längd (cm)</label>
+                        <input type="number" id="height" min="120" max="230" value="178" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="weight">Vikt (kg)</label>
+                        <input type="number" id="weight" min="40" max="250" value="78" required>
+                    </div>
+                </div>
+            </div>
+
+            <!-- STEP 2: Midjemått & Bukfett -->
+            <div class="step-content" data-step="2">
+                <h2>Kroppssammansättning & Bukfett</h2>
+                <p class="step-desc">Midjemåttet mätt i höjd med naveln är en av de starkaste markörerna för visceralt fett.</p>
+                
+                <div class="form-group">
+                    <div class="slider-container">
+                        <div class="slider-header">
+                            <label for="waist" style="margin:0;">Midjemått (cm)</label>
+                            <span class="slider-value" id="waistVal">85 cm</span>
+                        </div>
+                        <input type="range" id="waist" min="60" max="160" value="85" oninput="updateSlider('waist', 'waistVal', ' cm')">
+                        <small style="color: var(--text-muted); display: block; margin-top: 10px;">Tips: Mät löst med måttband i höjd med naveln.</small>
+                    </div>
+                </div>
+            </div>
+
+            <!-- STEP 3: Fysiologiska markörer -->
+            <div class="step-content" data-step="3">
+                <h2>Fysiologiska markörer</h2>
+                <p class="step-desc">Blodtryck och vilopuls speglar det kardiometaboliska systemets belastning.</p>
+                
+                <div class="input-row">
+                    <div class="form-group">
+                        <label for="sbp">Systoliskt blodtryck (mmHg)</label>
+                        <input type="number" id="sbp" min="80" max="220" value="120" required>
+                        <small style="color: var(--text-muted);">Övertrycket (t.ex. 120)</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="hr">Vilopuls (slag/min)</label>
+                        <input type="number" id="hr" min="35" max="120" value="62" required>
+                        <small style="color: var(--text-muted);">Mätt i vila på morgonen</small>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Kolesterol / Blodfetter</label>
+                    <div class="card-grid">
+                        <div class="option-card selected" onclick="selectOption('cholesterol', 'optimal', this)">
+                            <span class="title">Optimala blodfetter / Låg kvot</span>
+                            <div class="radio-circle"></div>
+                        </div>
+                        <div class="option-card" onclick="selectOption('cholesterol', 'borderline', this)">
+                            <span class="title">Måttligt förhöjt</span>
+                            <div class="radio-circle"></div>
+                        </div>
+                        <div class="option-card" onclick="selectOption('cholesterol', 'high', this)">
+                            <span class="title">Högt / Behandlat med statiner</span>
+                            <div class="radio-circle"></div>
+                        </div>
+                    </div>
+                    <input type="hidden" id="cholesterol" value="optimal">
+                </div>
+            </div>
+
+            <!-- STEP 4: Kondition & VO2max -->
+            <div class="step-content" data-step="4">
+                <h2>Aerob kapacitet & Kondition</h2>
+                <p class="step-desc">Kondition (VO2max) är en av vetenskapens tyngsta prediktorer för långt liv.</p>
+                
+                <div class="form-group">
+                    <div class="card-grid">
+                        <div class="option-card" onclick="selectOption('vo2max', 'high', this)">
+                            <div class="title">Hög kondition (Tränar regelbundet, god uthållighet)</div>
+                            <div class="radio-circle"></div>
+                        </div>
+                        <div class="option-card selected" onclick="selectOption('vo2max', 'average', this)">
+                            <div class="title">Normal kondition (Måttligt aktiv i vardagen)</div>
+                            <div class="radio-circle"></div>
+                        </div>
+                        <div class="option-card" onclick="selectOption('vo2max', 'low', this)">
+                            <div class="title">Låg kondition (Stillasittande, märkbart flåsig vid ansträngning)</div>
+                            <div class="radio-circle"></div>
+                        </div>
+                    </div>
+                    <input type="hidden" id="vo2max" value="average">
+                </div>
+            </div>
+
+            <!-- STEP 5: Sjukdomar & Medicinskt -->
+            <div class="step-content" data-step="5">
+                <h2>Diagnoser & Kroniska tillstånd</h2>
+                <p class="step-desc">Befintliga medicinska tillstånd som påverkar den statistiska prognosen.</p>
+                
+                <div class="form-group">
+                    <div class="card-grid">
+                        <div class="option-card selected" onclick="selectOption('diseases', 'none', this)">
+                            <div class="title">Inga kända kroniska sjukdomar</div>
+                            <div class="radio-circle"></div>
+                        </div>
+                        <div class="option-card" onclick="selectOption('diseases', 'diabetes2', this)">
+                            <div class="title">Typ 2-diabetes</div>
+                            <div class="radio-circle"></div>
+                        </div>
+                        <div class="option-card" onclick="selectOption('diseases', 'cvd', this)">
+                            <div class="title">Tidigare hjärt-kärlsjukdom (infarkt / stroke)</div>
+                            <div class="radio-circle"></div>
+                        </div>
+                        <div class="option-card" onclick="selectOption('diseases', 'cancer', this)">
+                            <div class="title">Tidigare cancerdiagnos</div>
+                            <div class="radio-circle"></div>
+                        </div>
+                    </div>
+                    <input type="hidden" id="diseases" value="none">
+                </div>
+            </div>
+
+            <!-- STEP 6: Livsstil (Rökning, Kost, Alkohol, Träning) -->
+            <div class="step-content" data-step="6">
+                <h2>Livsstilsvanor</h2>
+                <p class="step-desc">Dina dagliga vanor formar cellulärt åldrande och hälsa.</p>
+                
+                <div class="form-group">
+                    <label>Rökvanor</label>
+                    <div class="card-grid three-cols" style="grid-template-columns: 1fr 1fr 1fr;">
+                        <div class="option-card selected" onclick="selectOption('smoking', 'never', this)">
+                            <div class="title">Aldrig / Slutat >10 år</div>
+                            <div class="radio-circle"></div>
+                        </div>
+                        <div class="option-card" onclick="selectOption('smoking', 'former', this)">
+                            <div class="title">Fd rökare</div>
+                            <div class="radio-circle"></div>
+                        </div>
+                        <div class="option-card" onclick="selectOption('smoking', 'current', this)">
+                            <div class="title">Rökare regelbundet</div>
+                            <div class="radio-circle"></div>
+                        </div>
+                    </div>
+                    <input type="hidden" id="smoking" value="never">
+                </div>
+
+                <div class="form-group">
+                    <label>Kostkvalitet</label>
+                    <div class="card-grid">
+                        <div class="option-card selected" onclick="selectOption('diet', 'good', this)">
+                            <div class="title">Hälsosam (Medelhavskost / mycket grönt, fiber, fisk)</div>
+                            <div class="radio-circle"></div>
+                        </div>
+                        <div class="option-card" onclick="selectOption('diet', 'average', this)">
+                            <div class="title">Standardkost (blandad husmanskost)</div>
+                            <div class="radio-circle"></div>
+                        </div>
+                        <div class="option-card" onclick="selectOption('diet', 'poor', this)">
+                            <div class="title">Processad mat / snabbmat / mycket socker</div>
+                            <div class="radio-circle"></div>
+                        </div>
+                    </div>
+                    <input type="hidden" id="diet" value="good">
+                </div>
+            </div>
+
+            <!-- STEP 7: Könsspecifika faktorer -->
+            <div class="step-content" data-step="7">
+                <h2 id="genderSpecificTitle">Könsspecifika markörer</h2>
+                <p class="step-desc" id="genderSpecificDesc">Faktorer specifika för ditt biologiska kön.</p>
+                
+                <div id="maleSpecificSection">
+                    <div class="form-group">
+                        <label for="psa">PSA-nivå (µg/L eller ng/mL)</label>
+                        <input type="number" step="0.1" id="psa" min="0" max="100" value="1.0">
+                        <small style="color: var(--text-muted); display: block; margin-top: 5px;">Normalt under 3.0 µg/L.</small>
+                    </div>
+                </div>
+
+                <div id="femaleSpecificSection" style="display: none;">
+                    <div class="form-group">
+                        <label>Menopausstatus</label>
+                        <select id="menopause">
+                            <option value="normal">Normal ålder för menopaus (ca 48-52 år)</option>
+                            <option value="early">Tidig menopaus (före 45 års ålder)</option>
+                            <option value="pre" selected>Ännu ej i menopaus</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Graviditetskomplikationer</label>
+                        <select id="pregnancy">
+                            <option value="none" selected>Inga kända komplikationer / Ej relevant</option>
+                            <option value="preeclampsia">Tidigare havandeskapsförgiftning (preeklampsi)</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- STEP 8: Genetik & Ärftlighet -->
+            <div class="step-content" data-step="8">
+                <h2>Genetik & Familjehistoria</h2>
+                <p class="step-desc">Dina föräldrars livslängd och hälsoprofil.</p>
+                
+                <div class="form-group">
+                    <div class="card-grid">
+                        <div class="option-card selected" onclick="selectOption('family', 'long', this)">
+                            <div class="title">Båda blev gamla (>85 år) utan tidig svår sjukdom</div>
+                            <div class="radio-circle"></div>
+                        </div>
+                        <div class="option-card" onclick="selectOption('family', 'average', this)">
+                            <div class="title">Genomsnittlig livslängd (75–84 år)</div>
+                            <div class="radio-circle"></div>
+                        </div>
+                        <div class="option-card" onclick="selectOption('family', 'short', this)">
+                            <div class="title">Föräldrar som avled tidigt (<70 år) i hjärt-kärlsjukdom/cancer</div>
+                            <div class="radio-circle"></div>
+                        </div>
+                    </div>
+                    <input type="hidden" id="family" value="long">
+                </div>
+            </div>
+
+        </form>
+
+        <!-- Navigation Buttons -->
+        <div class="wizard-footer">
+            <button type="button" class="btn btn-secondary" id="prevBtn" onclick="changeStep(-1)" style="visibility: hidden;">Föregående</button>
+            <button type="button" class="btn btn-primary" id="nextBtn" onclick="changeStep(1)">Nästa</button>
+        </div>
+    </div>
+
+    <!-- RESULT VIEW -->
+    <div id="resultView" style="padding: 40px; display: none;">
+        <h2 style="margin-bottom: 5px;">Din Livslängdsanalys</h2>
+        <p class="step-desc">Baserat på vetenskapliga modeller och dina angivna värden.</p>
+
+        <div class="result-hero">
+            <div class="metric-card bio">
+                <div class="metric-label">Biologisk Ålder</div>
+                <div class="metric-value" id="resBioAge">--</div>
+                <div class="metric-sub" id="resBioSub">Kronologisk ålder: <span id="resChronAge">--</span> år</div>
+            </div>
+            <div class="metric-card life">
+                <div class="metric-label">Uppskattad Total Ålder</div>
+                <div class="metric-value" id="resTotalAge">--</div>
+                <div class="metric-sub" id="resRemainingSub">Återstående: ca -- år</div>
+            </div>
+        </div>
+
+        <div class="analysis-grid">
+            <div class="card-box">
+                <div class="section-title"><span>⚖️</span> Riskfaktorer & Påverkan</div>
+                <div id="riskFactorsList">
+                    <!-- Populated via JS -->
+                </div>
+            </div>
+            <div class="card-box">
+                <div class="section-title"><span>🚀</span> Vad du kan påverka (och vinsten)</div>
+                <div id="actionableList">
+                    <!-- Populated via JS -->
+                </div>
+            </div>
+        </div>
+
+        <button type="button" class="restart-btn" onclick="resetWizard()">Gör om analysen</button>
+    </div>
+
+</div>
+
+<script>
+    let currentStep = 1;
+    const totalSteps = 8;
+
+    function updateSlider(inputId, valId, unit) {
+        const val = document.getElementById(inputId).value;
+        document.getElementById(valId).innerText = val + unit;
+    }
+
+    function selectGender(genderVal, el) {
+        const parent = el.parentNode;
+        parent.querySelectorAll('.option-card').forEach(c => c.classList.remove('selected'));
+        el.classList.add('selected');
+        document.getElementById('gender').value = genderVal;
+
+        // Toggle gender specific section display in step 7
+        if (genderVal === 'male') {
+            document.getElementById('maleSpecificSection').style.display = 'block';
+            document.getElementById('femaleSpecificSection').style.display = 'none';
+            document.getElementById('genderSpecificTitle').innerText = "Mäns hälsomarkörer";
+            document.getElementById('genderSpecificDesc').innerText = "Prostataspecifik markör (PSA).";
+        } else {
+            document.getElementById('maleSpecificSection').style.display = 'none';
+            document.getElementById('femaleSpecificSection').style.display = 'block';
+            document.getElementById('genderSpecificTitle').innerText = "Kvinnors hälsomarkörer";
+            document.getElementById('genderSpecificDesc').innerText = "Menopaus och graviditetshistorik.";
+        }
+    }
+
+    function selectOption(hiddenId, value, el) {
+        const parent = el.parentNode;
+        parent.querySelectorAll('.option-card').forEach(c => c.classList.remove('selected'));
+        el.classList.add('selected');
+        document.getElementById(hiddenId).value = value;
+    }
+
+    function updateProgress() {
+        const percent = ((currentStep - 1) / (totalSteps - 1)) * 100;
+        document.getElementById('progressBar').style.width = percent + '%';
+        document.getElementById('stepCounter').innerText = `Steg ${currentStep} av ${totalSteps}`;
+
+        document.getElementById('prevBtn').style.visibility = currentStep === 1 ? 'hidden' : 'visible';
+        document.getElementById('nextBtn').innerText = currentStep === totalSteps ? 'Beräkna resultat' : 'Nästa';
+    }
+
+    function changeStep(direction) {
+        if (direction === 1 && currentStep === totalSteps) {
+            calculateResults();
+            return;
+        }
+
+        const nextStep = currentStep + direction;
+        if (nextStep >= 1 && nextStep <= totalSteps) {
+            document.querySelector(`.step-content[data-step="${currentStep}"]`).classList.remove('active');
+            currentStep = nextStep;
+            document.querySelector(`.step-content[data-step="${currentStep}"]`).classList.add('active');
+            updateProgress();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+    }
+
+    function calculateResults() {
+        // Collect values
+        const age = parseInt(document.getElementById('age').value);
+        const gender = document.getElementById('gender').value;
+        const height = parseFloat(document.getElementById('height').value) / 100;
+        const weight = parseFloat(document.getElementById('weight').value);
+        const waist = parseInt(document.getElementById('waist').value);
+        const sbp = parseInt(document.getElementById('sbp').value);
+        const hr = parseInt(document.getElementById('hr').value);
+        const cholesterol = document.getElementById('cholesterol').value;
+        const vo2max = document.getElementById('vo2max').value;
+        const diseases = document.getElementById('diseases').value;
+        const smoking = document.getElementById('smoking').value;
+        const diet = document.getElementById('diet').value;
+        const family = document.getElementById('family').value;
+
+        let baseRemaining = (gender === 'female') ? (85 - age) : (81 - age);
+        if (baseRemaining < 2) baseRemaining = 2;
+
+        let ageModifier = 0; // Positive = ages you biologically, Negative = rejuvenates
+        let riskFactors = [];
+        let modifiables = [];
+
+        // 1. BMI & Waist
+        const bmi = weight / (height * height);
+        if (bmi > 30 || (gender === 'male' && waist > 102) || (gender === 'female' && waist > 88)) {
+            ageModifier += 3.5;
+            riskFactors.push({ name: "Bukfett / Högt BMI", impact: "+3.5 år", type: "negative" });
+            modifiables.push({ title: "Minska midjemått & vikt", desc: "Att nå normalt midjemått via kost och kalorioptimering.", gain: "+3.5 år" });
+        } else if (bmi < 18.5) {
+            ageModifier += 2.0;
+            riskFactors.push({ name: "Undervikt / Låg muskelmassa", impact: "+2.0 år", type: "negative" });
+            modifiables.push({ title: "Styrketräning & Näring", desc: "Öka muskelmassan och säkra adekvat proteinintag.", gain: "+2.0 år" });
+        } else {
+            ageModifier -= 1.0;
+            riskFactors.push({ name: "Hälsosam kroppsvikt", impact: "-1.0 år", type: "positive" });
+        }
+
+        // 2. Blood Pressure & Heart Rate
+        if (sbp >= 140) {
+            ageModifier += 3.0;
+            riskFactors.push({ name: "Förhöjt blodtryck (≥140)", impact: "+3.0 år", type: "negative" });
+            modifiables.push({ title: "Blodtryckskontroll", desc: "Livsstilsförändringar eller medicinsk sänkning till <120/80.", gain: "+3.0 år" });
+        } else if (sbp <= 115) {
+            ageModifier -= 1.0;
+            riskFactors.push({ name: "Optimalt blodtryck", impact: "-1.0 år", type: "positive" });
+        }
+
+        if (hr > 75) {
+            ageModifier += 1.5;
+            riskFactors.push({ name: "Hög vilopuls (>75 bpm)", impact: "+1.5 år", type: "negative" });
+            modifiables.push({ title: "Förbättra konditionen", desc: "Regelbunden uthållighetsträning sänker vilopulsen.", gain: "+1.5 år" });
+        } else if (hr < 55) {
+            ageModifier -= 1.5;
+            riskFactors.push({ name: "Låg vilopuls (stark hjärtmuskel)", impact: "-1.5 år", type: "positive" });
+        }
+
+        // 3. Cholesterol
+        if (cholesterol === 'high') {
+            ageModifier += 2.5;
+            riskFactors.push({ name: "Höga blodfetter / Statiner", impact: "+2.5 år", type: "negative" });
+            modifiables.push({ title: "Optimera blodfetter", desc: "Kostjusteringar och ev. medicinsk behandling.", gain: "+2.5 år" });
+        } else if (cholesterol === 'optimal') {
+            ageModifier -= 0.5;
+            riskFactors.push({ name: "Optimala blodfetter", impact: "-0.5 år", type: "positive" });
+        }
+
+        // 4. VO2max
+        if (vo2max === 'high') {
+            ageModifier -= 4.0;
+            riskFactors.push({ name: "Hög kardiorespiratorisk kondition", impact: "-4.0 år", type: "positive" });
+        } else if (vo2max === 'low') {
+            ageModifier += 3.5;
+            riskFactors.push({ name: "Låg konditionsnivå", impact: "+3.5 år", type: "negative" });
+            modifiables.push({ title: "Bygg upp konditionen (VO2max)", desc: "Konditionsträning 3x/vecka (inkl. intervaller).", gain: "+4.0 år" });
+        }
+
+        // 5. Diseases
+        if (diseases === 'cvd') {
+            ageModifier += 8.0;
+            riskFactors.push({ name: "Tidigare hjärt-kärlsjukdom", impact: "+8.0 år", type: "negative" });
+        } else if (diseases === 'diabetes2') {
+            ageModifier += 6.0;
+            riskFactors.push({ name: "Typ 2-diabetes", impact: "+6.0 år", type: "negative" });
+            modifiables.push({ title: "Blodsockeroptimering", desc: "Strikt kost och motion för att nå god glykemisk kontroll.", gain: "+4.0 år" });
+        } else if (diseases === 'cancer') {
+            ageModifier += 5.0;
+            riskFactors.push({ name: "Tidigare cancerdiagnos", impact: "+5.0 år", type: "negative" });
+        }
+
+        // 6. Smoking & Diet
+        if (smoking === 'current') {
+            ageModifier += 7.0;
+            riskFactors.push({ name: "Rökning (regelbunden)", impact: "+7.0 år", type: "negative" });
+            modifiables.push({ title: "Rökstopp", desc: "Att sluta röka är den enskilt mest livsförlängande insatsen.", gain: "+7.0 år" });
+        } else if (smoking === 'former') {
+            ageModifier += 1.5;
+            riskFactors.push({ name: "Före detta rökare", impact: "+1.5 år", type: "neutral" });
+        }
+
+        if (diet === 'poor') {
+            ageModifier += 2.0;
+            riskFactors.push({ name: "Processad mat & snabbmat", impact: "+2.0 år", type: "negative" });
+            modifiables.push({ title: "Gå över till näringstät kost", desc: "Mer grönt, fiber, fisk och hälsosamma fetter (Medelhavskost).", gain: "+2.0 år" });
+        } else if (diet === 'good') {
+            ageModifier -= 1.5;
+            riskFactors.push({ name: "Hälsosam kostprofil", impact: "-1.5 år", type: "positive" });
+        }
+
+        // 7. Gender specific
+        if (gender === 'male') {
+            const psa = parseFloat(document.getElementById('psa').value);
+            if (psa > 4.0) {
+                ageModifier += 2.0;
+                riskFactors.push({ name: "Förhöjt PSA-värde", impact: "+2.0 år", type: "negative" });
+                modifiables.push({ title: "Urologisk uppföljning", desc: "Utredning och kontroll av förhöjt PSA.", gain: "+2.0 år" });
+            }
+        } else {
+            const menopause = document.getElementById('menopause').value;
+            const pregnancy = document.getElementById('pregnancy').value;
+            if (menopause === 'early') {
+                ageModifier += 1.5;
+                riskFactors.push({ name: "Tidig menopaus", impact: "+1.5 år", type: "neutral" });
+            }
+            if (pregnancy === 'preeclampsia') {
+                ageModifier += 2.0;
+                riskFactors.push({ name: "Tidigare preeklampsi", impact: "+2.0 år", type: "negative" });
+            }
+        }
+
+        // 8. Family
+        if (family === 'long') {
+            ageModifier -= 3.5;
+            riskFactors.push({ name: "Gynnsam genetik (>85 år)", impact: "-3.5 år", type: "positive" });
+        } else if (family === 'short') {
+            ageModifier += 3.0;
+            riskFactors.push({ name: "Ärftlighet för tidig sjukdom", impact: "+3.0 år", type: "negative" });
+        }
+
+        const bioAge = Math.round(age + ageModifier);
+        const finalRemaining = Math.max(2, baseRemaining - ageModifier);
+        const totalLife = Math.round(age + finalRemaining);
+
+        // Render results
+        document.getElementById('resBioAge').innerText = bioAge + " år";
+        document.getElementById('resChronAge').innerText = age;
+        document.getElementById('resTotalAge').innerText = totalLife + " år";
+        document.getElementById('resRemainingSub').innerText = `Återstående: ca ${Math.round(finalRemaining)} år`;
+
+        // Render risk factors
+        let riskHtml = "";
+        riskFactors.forEach(rf => {
+            riskHtml += `
+                <div class="risk-item">
+                    <span>${rf.name}</span>
+                    <span class="badge ${rf.type}">${rf.impact}</span>
+                </div>
+            `;
+        });
+        document.getElementById('riskFactorsList').innerHTML = riskHtml || "<p style='color:var(--text-muted); font-size:0.9rem;'>Inga särskilda riskfaktorer noterade.</p>";
+
+        // Render actionables
+        let actionHtml = "";
+        modifiables.forEach(act => {
+            actionHtml += `
+                <div class="action-card">
+                    <div class="action-info">
+                        <h4>${act.title}</h4>
+                        <p>${act.desc}</p>
+                    </div>
+                    <div class="gain-badge">${act.gain}</div>
+                </div>
+            `;
+        });
+        document.getElementById('actionableList').innerHTML = actionHtml || "<p style='color:var(--text-muted); font-size:0.9rem;'>Din profil är redan optimerad på de flesta punkter!</p>";
+
+        // Switch view
+        document.getElementById('longevityForm').style.display = 'none';
+        document.querySelector('.wizard-footer').style.display = 'none';
+        document.querySelector('.header-progress').style.display = 'none';
+        document.querySelector('.progress-bar-container').style.display = 'none';
+        document.getElementById('resultView').style.display = 'block';
+    }
+
+    function resetWizard() {
+        currentStep = 1;
+        document.getElementById('resultView').style.display = 'none';
+        document.getElementById('longevityForm').style.display = 'block';
+        document.querySelector('.wizard-footer').style.display = 'flex';
+        document.querySelector('.header-progress').style.display = 'flex';
+        document.querySelector('.progress-bar-container').style.display = 'block';
+        document.querySelector(`.step-content[data-step="8"]`).classList.remove('active');
+        document.querySelector(`.step-content[data-step="1"]`).classList.add('active');
+        updateProgress();
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    // Initialize progress bar on load
+    updateProgress();
+</script>
+
+</body>
+</html>
