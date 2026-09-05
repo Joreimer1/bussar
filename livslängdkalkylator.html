@@ -282,6 +282,55 @@
             border-radius: 50%;
         }
 
+        .option-card .checkbox-box {
+            width: 22px;
+            height: 22px;
+            border: 2px solid var(--border);
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: var(--transition);
+            flex-shrink: 0;
+            margin-left: 10px;
+        }
+
+        .option-card.selected .checkbox-box {
+            border-color: var(--accent);
+            background: var(--accent);
+        }
+
+        .option-card.selected .checkbox-box::after {
+            content: '✓';
+            color: #fff;
+            font-size: 13px;
+            font-weight: 700;
+        }
+
+        .info-box {
+            background: rgba(59, 130, 246, 0.1);
+            border: 1px solid rgba(59, 130, 246, 0.3);
+            border-radius: 12px;
+            padding: 14px 18px;
+            margin-top: 15px;
+            font-size: 0.88rem;
+            color: #cbd5e1;
+            line-height: 1.5;
+        }
+
+        .info-box.evidence {
+            background: rgba(16, 185, 129, 0.08);
+            border: 1px solid rgba(16, 185, 129, 0.25);
+        }
+
+        .info-box.disclaimer {
+            background: rgba(245, 158, 11, 0.08);
+            border: 1px solid rgba(245, 158, 11, 0.25);
+            margin-top: 25px;
+            font-size: 0.82rem;
+            color: #94a3b8;
+        }
+
         /* Footer Navigation Buttons */
         .wizard-footer {
             display: flex;
@@ -625,28 +674,49 @@
             <!-- STEP 5: Sjukdomar & Medicinskt -->
             <div class="step-content" data-step="5">
                 <h2>Diagnoser & Kroniska tillstånd</h2>
-                <p class="step-desc">Befintliga medicinska tillstånd som påverkar den statistiska prognosen.</p>
+                <p class="step-desc">Välj de tillstånd som har diagnostiserats. Du kan välja flera, eller välja inga kända.</p>
                 
                 <div class="form-group">
                     <div class="card-grid">
-                        <div class="option-card selected" onclick="selectOption('diseases', 'none', this)">
-                            <div class="title">Inga kända kroniska sjukdomar</div>
-                            <div class="radio-circle"></div>
+                        <div class="option-card selected" data-disease="none" onclick="toggleDisease('none', this)">
+                            <div>
+                                <div class="title">Inga kända kroniska sjukdomar</div>
+                                <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 2px;">Ingen aktiv hjärt-kärlsjukdom, diabetes eller cancer.</div>
+                            </div>
+                            <div class="checkbox-box"></div>
                         </div>
-                        <div class="option-card" onclick="selectOption('diseases', 'diabetes2', this)">
-                            <div class="title">Typ 2-diabetes</div>
-                            <div class="radio-circle"></div>
+                        <div class="option-card" data-disease="diabetes2" onclick="toggleDisease('diabetes2', this)">
+                            <div>
+                                <div class="title">Typ 2-diabetes</div>
+                                <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 2px;">Metabol påverkan på mikrovaskulär och kardiovaskulär hälsa.</div>
+                            </div>
+                            <div class="checkbox-box"></div>
                         </div>
-                        <div class="option-card" onclick="selectOption('diseases', 'cvd', this)">
-                            <div class="title">Tidigare hjärt-kärlsjukdom (infarkt / stroke)</div>
-                            <div class="radio-circle"></div>
+                        <div class="option-card" data-disease="cvd" onclick="toggleDisease('cvd', this)">
+                            <div>
+                                <div class="title">Tidigare hjärt-kärlsjukdom (infarkt / stroke / kärlkramp)</div>
+                                <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 2px;">Etablerad aterosklerotisk sjukdom.</div>
+                            </div>
+                            <div class="checkbox-box"></div>
                         </div>
-                        <div class="option-card" onclick="selectOption('diseases', 'cancer', this)">
-                            <div class="title">Tidigare cancerdiagnos</div>
-                            <div class="radio-circle"></div>
+                        <div class="option-card" data-disease="cancer_recent" onclick="toggleDisease('cancer_recent', this)">
+                            <div>
+                                <div class="title">Aktiv eller nyligen behandlad cancer (&lt; 5 år sedan)</div>
+                                <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 2px;">Diagnos eller behandling inom de senaste 5 åren.</div>
+                            </div>
+                            <div class="checkbox-box"></div>
+                        </div>
+                        <div class="option-card" data-disease="cancer_cured" onclick="toggleDisease('cancer_cured', this)">
+                            <div>
+                                <div class="title">Tidigare cancer (&gt; 5 år sedan, friskförklarad / i remission)</div>
+                                <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 2px;">5-årsgränsen är nådd; kraftigt reducerad risk för återfall.</div>
+                            </div>
+                            <div class="checkbox-box"></div>
                         </div>
                     </div>
-                    <input type="hidden" id="diseases" value="none">
+                    <div class="info-box evidence">
+                        <strong>💡 Vetenskaplig insikt om canceröverlevnad:</strong> Inom onkologisk epidemiologi betraktas 5-årsgränsen som en avgörande milstolpe. Efter 5 år utan återfall sjunker den specifika cancermortaliteten dramatiskt och närmar sig den allmänna befolkningens nivå (med endast en liten restpåverkan från eventuella sena behandlingsbiverkningar).
+                    </div>
                 </div>
             </div>
 
@@ -720,9 +790,34 @@
                 
                 <div id="maleSpecificSection">
                     <div class="form-group">
-                        <label for="psa">PSA-nivå (µg/L eller ng/mL)</label>
-                        <input type="number" step="0.1" id="psa" min="0" max="100" value="1.0">
-                        <small style="color: var(--text-muted); display: block; margin-top: 5px;">Normalt under 3.0 µg/L.</small>
+                        <label>Prostata &amp; PSA-status</label>
+                        <div class="card-grid">
+                            <div class="option-card selected" onclick="selectOption('prostateStatus', 'normal', this)">
+                                <div>
+                                    <div class="title">Normalt PSA / Ej provtaget</div>
+                                    <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 2px;">Inga symtom eller känd sjukdom (standard för friska män).</div>
+                                </div>
+                                <div class="radio-circle"></div>
+                            </div>
+                            <div class="option-card" onclick="selectOption('prostateStatus', 'bph', this)">
+                                <div>
+                                    <div class="title">Måttligt förhöjt PSA (Godartad förstoring / BPH)</div>
+                                    <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 2px;">Utrett och bedömt som ofarligt av läkare. Påverkar ej livslängd.</div>
+                                </div>
+                                <div class="radio-circle"></div>
+                            </div>
+                            <div class="option-card" onclick="selectOption('prostateStatus', 'elevated', this)">
+                                <div>
+                                    <div class="title">Förhöjt PSA under utredning / Obehandlad prostatacancer</div>
+                                    <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 2px;">Signifikant förhöjt värde över åldersgräns som kräver urologisk uppföljning.</div>
+                                </div>
+                                <div class="radio-circle"></div>
+                            </div>
+                        </div>
+                        <input type="hidden" id="prostateStatus" value="normal">
+                    </div>
+                    <div class="info-box evidence">
+                        <strong>💡 Medicinsk vägledning:</strong> PSA stiger naturligt med åldern till följd av godartad prostataförstoring (BPH). Friska symtomfria män under 50 år rekommenderas generellt inte PSA-screening enligt svenska vårdprogram, då lätt förhöjda värden sällan påverkar överlevnaden utan ofta är godartade.
                     </div>
                 </div>
 
@@ -734,13 +829,15 @@
                             <option value="early">Tidig menopaus (före 45 års ålder)</option>
                             <option value="pre" selected>Ännu ej i menopaus</option>
                         </select>
+                        <small style="color: var(--text-muted); display: block; margin-top: 5px;">Tidig menopaus innebär tidigare bortfall av östrogens naturliga kärlskyddande effekt.</small>
                     </div>
                     <div class="form-group">
                         <label>Graviditetskomplikationer</label>
                         <select id="pregnancy">
-                            <option value="none" selected>Inga kända komplikationer / Ej relevant</option>
+                            <option value="none" selected>Inga kända komplikationer / Ej fött barn / Ej relevant</option>
                             <option value="preeclampsia">Tidigare havandeskapsförgiftning (preeklampsi)</option>
                         </select>
+                        <small style="color: var(--text-muted); display: block; margin-top: 5px;">Preeklampsi betraktas i modern kardiologi som en tidig markör för ökad framtida kardiovaskulär risk.</small>
                     </div>
                 </div>
             </div>
@@ -781,7 +878,7 @@
     <!-- RESULT VIEW -->
     <div id="resultView" style="padding: 40px; display: none;">
         <h2 style="margin-bottom: 5px;">Din Livslängdsanalys</h2>
-        <p class="step-desc">Baserat på vetenskapliga modeller och dina angivna värden.</p>
+        <p class="step-desc">Beräknad med SCB:s officiella livslängdstabell och epidemiologiska riskmodeller.</p>
 
         <div class="result-hero">
             <div class="metric-card bio">
@@ -792,23 +889,42 @@
             <div class="metric-card life">
                 <div class="metric-label">Uppskattad Total Ålder</div>
                 <div class="metric-value" id="resTotalAge">--</div>
-                <div class="metric-sub" id="resRemainingSub">Återstående: ca -- år</div>
+                <div class="metric-sub" id="resRemainingSub">Beräknad återstående: ca -- år</div>
+                <div class="metric-sub" id="resSCBSub" style="margin-top: 6px; color: var(--accent); font-weight: 500;">Befolkningssnitt (SCB): -- år</div>
             </div>
         </div>
 
         <div class="analysis-grid">
             <div class="card-box">
-                <div class="section-title"><span>⚖️</span> Riskfaktorer & Påverkan</div>
+                <div class="section-title"><span>⚖️</span> Riskfaktorer &amp; Påverkan</div>
                 <div id="riskFactorsList">
                     <!-- Populated via JS -->
                 </div>
             </div>
             <div class="card-box">
-                <div class="section-title"><span>🚀</span> Vad du kan påverka (och vinsten)</div>
+                <div class="section-title"><span>🚀</span> Vad du kan påverka (åldersanpassad vinst)</div>
                 <div id="actionableList">
                     <!-- Populated via JS -->
                 </div>
             </div>
+        </div>
+
+        <!-- Vetenskaplig metodik & källor -->
+        <div class="card-box" style="margin-bottom: 25px;">
+            <div class="section-title"><span>🔬</span> Vetenskaplig förankring &amp; Källor</div>
+            <div style="font-size: 0.88rem; color: var(--text-muted); line-height: 1.6;">
+                <ul style="padding-left: 20px; margin-bottom: 10px;">
+                    <li><strong>Demografisk bas:</strong> Statistiska centralbyrån (SCB) periodlivslängdstabeller för Sverige. Beräkningen utgår från betingad återstående medellivslängd givet din faktiska ålder.</li>
+                    <li><strong>Cancer &amp; 5-årsöverlevnad:</strong> Onkologisk epidemiologi visar att för individer som varit cancerfria i &gt;5 år sjunker återfallsrisken dramatiskt och mortaliteten närmar sig normalpopulationen.</li>
+                    <li><strong>Sub-additiv kardiometabol modell:</strong> Samtidiga riskfaktorer (blodtryck, blodsocker, lipider, bukfett) dämpas enligt principer från SCORE2 och Framingham för att förhindra orimlig dubbelräkning av metabola syndromet.</li>
+                    <li><strong>Kondition (VO2max):</strong> Baserat på <em>Mandsager et al. (JAMA Network Open 2018)</em> om aerob kapacitet som en stark oberoende prediktor för långt liv.</li>
+                    <li><strong>Rökning &amp; Ålderskalibrerad vinst:</strong> <em>Jha et al. (NEJM 2013)</em> och <em>Doll et al. (BMJ)</em> – vinsten vid intervention skalas proportionellt mot återstående livslängd vid aktuell ålder.</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="info-box disclaimer">
+            <strong>⚠️ Medicinsk ansvarsfriskrivning:</strong> Denna kalkylator är utvecklad i utbildnings- och motivationssyfte baserat på epidemiologiska populationsstudier. Den utgör inte medicinsk rådgivning, diagnos eller en individuell livstidsgaranti. Rådfråga alltid legitimerad sjukvårdspersonal vid avvikande provsvar, förhöjt blodtryck, symtom eller misstanke om sjukdom.
         </div>
 
         <button type="button" class="restart-btn" onclick="resetWizard()">Gör om analysen</button>
@@ -819,6 +935,73 @@
 <script>
     let currentStep = 1;
     const totalSteps = 8;
+
+    // SCB period life table for Sweden (återstående medellivslängd per ålder och biologiskt kön)
+    const scbLifeTable = {
+        male: {
+            18: 63.8, 19: 62.8, 20: 61.9, 21: 60.9, 22: 59.9, 23: 59.0, 24: 58.0, 25: 57.0,
+            26: 56.1, 27: 55.1, 28: 54.1, 29: 53.2, 30: 52.2, 31: 51.2, 32: 50.2, 33: 49.3,
+            34: 48.3, 35: 47.3, 36: 46.4, 37: 45.4, 38: 44.4, 39: 43.5, 40: 42.5, 41: 41.5,
+            42: 40.6, 43: 39.6, 44: 38.7, 45: 37.8, 46: 36.8, 47: 35.9, 48: 35.0, 49: 34.1,
+            50: 33.2, 51: 32.3, 52: 31.3, 53: 30.4, 54: 29.5, 55: 28.7, 56: 27.8, 57: 26.9,
+            58: 26.0, 59: 25.1, 60: 24.3, 61: 23.4, 62: 22.6, 63: 21.7, 64: 20.9, 65: 20.1,
+            66: 19.3, 67: 18.4, 68: 17.6, 69: 16.8, 70: 16.0, 71: 15.2, 72: 14.4, 73: 13.6,
+            74: 12.9, 75: 12.2, 76: 11.5, 77: 10.8, 78: 10.1, 79: 9.4, 80: 8.8, 81: 8.2,
+            82: 7.6, 83: 7.0, 84: 6.5, 85: 6.0, 86: 5.5, 87: 5.0, 88: 4.6, 89: 4.2,
+            90: 3.9, 91: 3.5, 92: 3.2, 93: 3.0, 94: 2.7, 95: 2.5, 96: 2.3, 97: 2.1,
+            98: 1.9, 99: 1.8, 100: 1.7
+        },
+        female: {
+            18: 67.3, 19: 66.3, 20: 65.4, 21: 64.4, 22: 63.4, 23: 62.4, 24: 61.4, 25: 60.4,
+            26: 59.4, 27: 58.4, 28: 57.5, 29: 56.5, 30: 55.5, 31: 54.5, 32: 53.5, 33: 52.5,
+            34: 51.5, 35: 50.6, 36: 49.6, 37: 48.6, 38: 47.6, 39: 46.6, 40: 45.7, 41: 44.7,
+            42: 43.7, 43: 42.8, 44: 41.8, 45: 40.9, 46: 39.9, 47: 39.0, 48: 38.0, 49: 37.1,
+            50: 36.2, 51: 35.2, 52: 34.3, 53: 33.4, 54: 32.5, 55: 31.6, 56: 30.7, 57: 29.8,
+            58: 28.9, 59: 28.0, 60: 27.1, 61: 26.2, 62: 25.3, 63: 24.4, 64: 23.5, 65: 22.7,
+            66: 21.8, 67: 20.9, 68: 20.1, 69: 19.3, 70: 18.5, 71: 17.6, 72: 16.8, 73: 16.0,
+            74: 15.2, 75: 14.4, 76: 13.6, 77: 12.8, 78: 12.1, 79: 11.3, 80: 10.6, 81: 9.9,
+            82: 9.2, 83: 8.5, 84: 7.8, 85: 7.2, 86: 6.6, 87: 6.0, 88: 5.5, 89: 5.0,
+            90: 4.6, 91: 4.2, 92: 3.8, 93: 3.5, 94: 3.2, 95: 2.9, 96: 2.6, 97: 2.4,
+            98: 2.2, 99: 2.0, 100: 1.9
+        }
+    };
+
+    function getSCBRemainingLife(age, gender) {
+        const table = scbLifeTable[gender] || scbLifeTable.male;
+        const clampedAge = Math.min(100, Math.max(18, Math.round(age)));
+        return table[clampedAge] || 2.0;
+    }
+
+    function getEquivalentAgeForRemainingLife(remainingLife, gender) {
+        const table = scbLifeTable[gender] || scbLifeTable.male;
+        if (remainingLife >= table[18]) {
+            const extra = remainingLife - table[18];
+            return Math.max(16, Math.round(18 - extra));
+        }
+        if (remainingLife <= table[100]) {
+            return 100;
+        }
+        for (let a = 18; a < 100; a++) {
+            const remA = table[a];
+            const remB = table[a + 1];
+            if (remainingLife <= remA && remainingLife >= remB) {
+                const fraction = (remA - remainingLife) / (remA - remB);
+                return Math.round(a + fraction);
+            }
+        }
+        return 100;
+    }
+
+    function combineDamped(values, weights = [1.0, 0.7, 0.5, 0.35, 0.25, 0.2]) {
+        if (!values || values.length === 0) return 0;
+        const sorted = [...values].sort((a, b) => b - a);
+        let sum = 0;
+        for (let i = 0; i < sorted.length; i++) {
+            const w = (i < weights.length) ? weights[i] : 0.15;
+            sum += sorted[i] * w;
+        }
+        return sum;
+    }
 
     function updateSlider(inputId, valId, unit) {
         const val = document.getElementById(inputId).value;
@@ -835,7 +1018,7 @@
             document.getElementById('maleSpecificSection').style.display = 'block';
             document.getElementById('femaleSpecificSection').style.display = 'none';
             document.getElementById('genderSpecificTitle').innerText = "Mäns hälsomarkörer";
-            document.getElementById('genderSpecificDesc').innerText = "Prostataspecifik markör (PSA).";
+            document.getElementById('genderSpecificDesc').innerText = "Prostatahälsa & PSA-status.";
         } else {
             document.getElementById('maleSpecificSection').style.display = 'none';
             document.getElementById('femaleSpecificSection').style.display = 'block';
@@ -849,6 +1032,42 @@
         parent.querySelectorAll('.option-card').forEach(c => c.classList.remove('selected'));
         el.classList.add('selected');
         document.getElementById(hiddenId).value = value;
+    }
+
+    function toggleDisease(value, el) {
+        const isSelected = el.classList.contains('selected');
+        const container = el.closest('.form-group');
+        const allCards = container.querySelectorAll('.option-card');
+        const noneCard = container.querySelector('.option-card[data-disease="none"]');
+
+        if (value === 'none') {
+            allCards.forEach(c => c.classList.remove('selected'));
+            el.classList.add('selected');
+            return;
+        }
+
+        if (noneCard) noneCard.classList.remove('selected');
+
+        // Mutually exclusive cancer cards
+        if (value === 'cancer_recent' && !isSelected) {
+            const curedCard = container.querySelector('.option-card[data-disease="cancer_cured"]');
+            if (curedCard) curedCard.classList.remove('selected');
+        } else if (value === 'cancer_cured' && !isSelected) {
+            const recentCard = container.querySelector('.option-card[data-disease="cancer_recent"]');
+            if (recentCard) recentCard.classList.remove('selected');
+        }
+
+        if (isSelected) {
+            el.classList.remove('selected');
+        } else {
+            el.classList.add('selected');
+        }
+
+        // If no specific diseases are left selected, auto-select 'none'
+        const anySelected = Array.from(allCards).some(c => c !== noneCard && c.classList.contains('selected'));
+        if (!anySelected && noneCard) {
+            noneCard.classList.add('selected');
+        }
     }
 
     function updateProgress() {
@@ -886,150 +1105,261 @@
         const hr = parseInt(document.getElementById('hr').value);
         const cholesterol = document.getElementById('cholesterol').value;
         const vo2max = document.getElementById('vo2max').value;
-        const diseases = document.getElementById('diseases').value;
         const smoking = document.getElementById('smoking').value;
         const alcohol = document.getElementById('alcohol').value;
         const diet = document.getElementById('diet').value;
         const family = document.getElementById('family').value;
 
-        let baseRemaining = (gender === 'female') ? (85 - age) : (81 - age);
-        if (baseRemaining < 2) baseRemaining = 2;
+        // Selected diseases (multi-select)
+        const selectedDiseases = Array.from(
+            document.querySelectorAll('.step-content[data-step="5"] .option-card.selected')
+        ).map(c => c.getAttribute('data-disease')).filter(Boolean);
 
-        let ageModifier = 0;
+        // Baseline life expectancy from SCB
+        const baseRemaining = getSCBRemainingLife(age, gender);
+
+        // Age scaling factor: relative to ~45 years old baseline (~36 years remaining)
+        // Scales impact so an 80yo is not deducted 15 years, while a 25yo has room for long-term compounding.
+        const ageScaling = Math.pow(baseRemaining / 36.0, 0.68);
+
         let riskFactors = [];
         let modifiables = [];
 
-        // 1. BMI & Waist
+        let metabolicNegatives = [];
+        let metabolicPositives = [];
+        let lifestyleNegatives = [];
+        let lifestylePositives = [];
+        let cancerRaw = 0;
+        let otherNegatives = [];
+        let otherPositives = [];
+
+        // 1. BMI & Midjemått
         const bmi = weight / (height * height);
-        if (bmi > 30 || (gender === 'male' && waist > 102) || (gender === 'female' && waist > 88)) {
-            ageModifier += 3.5;
-            riskFactors.push({ name: "Bukfett / Högt BMI", impact: "+3.5 år", type: "negative" });
-            modifiables.push({ title: "Minska midjemått & vikt", desc: "Att nå normalt midjemått via kost och kalorioptimering.", gain: "+3.5 år" });
-        } else if (bmi < 18.5) {
-            ageModifier += 2.0;
-            riskFactors.push({ name: "Undervikt / Låg muskelmassa", impact: "+2.0 år", type: "negative" });
-            modifiables.push({ title: "Styrketräning & Näring", desc: "Öka muskelmassan och säkra adekvat proteinintag.", gain: "+2.0 år" });
+        const isObese = bmi > 30 || (gender === 'male' && waist > 102) || (gender === 'female' && waist > 88);
+        const isUnderweight = bmi < 18.5;
+
+        if (isObese) {
+            metabolicNegatives.push(3.2);
+            riskFactors.push({ name: `Bukfett / Högt BMI (${bmi.toFixed(1)}, midja ${waist} cm)`, impact: "+3.2 basår", type: "negative" });
+            modifiables.push({
+                title: "Minska midjemått & visceralt bukfett",
+                desc: "Att minska bukfettet dämpar systemisk låggradig inflammation och förbättrar insulinkänsligheten.",
+                gain: `+${(3.2 * ageScaling).toFixed(1)} år`
+            });
+        } else if (isUnderweight) {
+            metabolicNegatives.push(2.0);
+            riskFactors.push({ name: `Undervikt / Låg muskelmassa (BMI ${bmi.toFixed(1)})`, impact: "+2.0 basår", type: "negative" });
+            modifiables.push({
+                title: "Styrketräning & Näringsoptimering",
+                desc: "Att bygga muskelmassa och säkra adekvat proteinintag minskar skörhet (frailty).",
+                gain: `+${(2.0 * ageScaling).toFixed(1)} år`
+            });
         } else {
-            ageModifier -= 1.0;
-            riskFactors.push({ name: "Hälsosam kroppsvikt", impact: "-1.0 år", type: "positive" });
+            metabolicPositives.push(1.0);
+            riskFactors.push({ name: "Hälsosam kroppsvikt & midjemått", impact: "-1.0 basår", type: "positive" });
         }
 
-        // 2. Blood Pressure & Heart Rate
+        // 2. Blodtryck & Vilopuls
         if (sbp >= 140) {
-            ageModifier += 3.0;
-            riskFactors.push({ name: "Förhöjt blodtryck (≥140)", impact: "+3.0 år", type: "negative" });
-            modifiables.push({ title: "Blodtryckskontroll", desc: "Livsstilsförändringar eller medicinsk sänkning till <120/80.", gain: "+3.0 år" });
+            metabolicNegatives.push(3.0);
+            riskFactors.push({ name: `Förhöjt blodtryck (Systoliskt ${sbp} mmHg)`, impact: "+3.0 basår", type: "negative" });
+            modifiables.push({
+                title: "Blodtryckskontroll (<125 mmHg)",
+                desc: "Livsstilsåtgärder och medicinsk behandling minskar risken för stroke och hjärtinfarkt markant.",
+                gain: `+${(3.0 * ageScaling).toFixed(1)} år`
+            });
         } else if (sbp <= 115) {
-            ageModifier -= 1.0;
-            riskFactors.push({ name: "Optimalt blodtryck", impact: "-1.0 år", type: "positive" });
+            metabolicPositives.push(1.0);
+            riskFactors.push({ name: `Optimalt blodtryck (${sbp} mmHg)`, impact: "-1.0 basår", type: "positive" });
         }
 
         if (hr > 75) {
-            ageModifier += 1.5;
-            riskFactors.push({ name: "Hög vilopuls (>75 bpm)", impact: "+1.5 år", type: "negative" });
-            modifiables.push({ title: "Förbättra konditionen", desc: "Regelbunden uthållighetsträning sänker vilopulsen.", gain: "+1.5 år" });
+            metabolicNegatives.push(1.5);
+            riskFactors.push({ name: `Hög vilopuls (${hr} bpm)`, impact: "+1.5 basår", type: "negative" });
+            modifiables.push({
+                title: "Konditionsträning (sänker vilopulsen)",
+                desc: "Regelbunden uthållighetsträning ökar hjärtats slagvolym och sänker vilopulsen.",
+                gain: `+${(1.5 * ageScaling).toFixed(1)} år`
+            });
         } else if (hr < 55) {
-            ageModifier -= 1.5;
-            riskFactors.push({ name: "Låg vilopuls (stark hjärtmuskel)", impact: "-1.5 år", type: "positive" });
+            metabolicPositives.push(1.2);
+            riskFactors.push({ name: `Låg vilopuls (${hr} bpm, stark hjärtmuskel)`, impact: "-1.2 basår", type: "positive" });
         }
 
-        // 3. Cholesterol
+        // 3. Kolesterol
         if (cholesterol === 'high') {
-            ageModifier += 2.5;
-            riskFactors.push({ name: "Höga blodfetter / Statiner", impact: "+2.5 år", type: "negative" });
-            modifiables.push({ title: "Optimera blodfetter", desc: "Kostjusteringar och ev. medicinsk behandling.", gain: "+2.5 år" });
+            metabolicNegatives.push(2.2);
+            riskFactors.push({ name: "Höga blodfetter / Aterogen profil", impact: "+2.2 basår", type: "negative" });
+            modifiables.push({
+                title: "Optimera ApoB / LDL-kolesterol",
+                desc: "Kostomläggning och ev. lipidsänkande behandling minskar plackprogression i kärlen.",
+                gain: `+${(2.2 * ageScaling).toFixed(1)} år`
+            });
         } else if (cholesterol === 'optimal') {
-            ageModifier -= 0.5;
-            riskFactors.push({ name: "Optimala blodfetter", impact: "-0.5 år", type: "positive" });
+            metabolicPositives.push(0.6);
+            riskFactors.push({ name: "Optimal lipidprofil / Låg aterogen kvot", impact: "-0.6 basår", type: "positive" });
         }
 
-        // 4. VO2max
+        // 4. Kroniska diagnoser (Flerval)
+        if (selectedDiseases.includes('diabetes2')) {
+            metabolicNegatives.push(5.5);
+            riskFactors.push({ name: "Typ 2-diabetes", impact: "+5.5 basår", type: "negative" });
+            modifiables.push({
+                title: "Intensiv glykemisk kontroll & livsstil",
+                desc: "Målmedveten blodsockerkontroll (HbA1c), kost, motion och moderna diabetesläkemedel.",
+                gain: `+${(3.8 * ageScaling).toFixed(1)} år`
+            });
+        }
+        if (selectedDiseases.includes('cvd')) {
+            metabolicNegatives.push(6.5);
+            riskFactors.push({ name: "Tidigare hjärt-kärlsjukdom (infarkt / stroke)", impact: "+6.5 basår", type: "negative" });
+            modifiables.push({
+                title: "Sekundärpreventiv kardiovaskulär optimering",
+                desc: "Strikt blodtryckskontroll, aggressiv LDL-sänkning och daglig vardagsmotion minskar recidivrisk.",
+                gain: `+${(3.5 * ageScaling).toFixed(1)} år`
+            });
+        }
+
+        // Cancer: 5-årsregel
+        if (selectedDiseases.includes('cancer_recent')) {
+            cancerRaw = 4.5;
+            riskFactors.push({ name: "Aktiv eller nyligen behandlad cancer (<5 år sedan)", impact: "+4.5 basår", type: "negative" });
+            modifiables.push({
+                title: "Onkologisk uppföljning & rehabilitering",
+                desc: "Följ kontrollprogrammet noggrant. För varje år utan återfall sjunker mortalitetsrisken kraftigt fram till 5-årsgränsen.",
+                gain: `+${(3.5 * ageScaling).toFixed(1)} år`
+            });
+        } else if (selectedDiseases.includes('cancer_cured')) {
+            cancerRaw = 0.7; // minimal restpåverkan från sena behandlingsbiverkningar
+            riskFactors.push({
+                name: "Tidigare cancer (>5 år friskförklarad / i full remission)",
+                impact: "+0.7 basår (låg restpåverkan)",
+                type: "neutral"
+            });
+        } else if (selectedDiseases.includes('none')) {
+            riskFactors.push({ name: "Inga kända kroniska sjukdomar", impact: "Optimal bas", type: "positive" });
+        }
+
+        // 5. Kondition / Aerob kapacitet (VO2max)
         if (vo2max === 'high') {
-            ageModifier -= 4.0;
-            riskFactors.push({ name: "Hög kardiorespiratorisk kondition", impact: "-4.0 år", type: "positive" });
+            lifestylePositives.push(3.8);
+            riskFactors.push({ name: "Hög kardiorespiratorisk kondition (VO2max)", impact: "-3.8 basår", type: "positive" });
         } else if (vo2max === 'low') {
-            ageModifier += 3.5;
-            riskFactors.push({ name: "Låg konditionsnivå", impact: "+3.5 år", type: "negative" });
-            modifiables.push({ title: "Bygg upp konditionen (VO2max)", desc: "Konditionsträning 3x/vecka (inkl. intervaller).", gain: "+4.0 år" });
+            lifestyleNegatives.push(3.5);
+            riskFactors.push({ name: "Låg konditionsnivå / Inaktivitet", impact: "+3.5 basår", type: "negative" });
+            modifiables.push({
+                title: "Bygg upp konditionen (Aerob träning)",
+                desc: "150 min pulshöjande motion i veckan är en av de kraftfullaste evidensbaserade insatserna för överlevnad.",
+                gain: `+${(3.8 * ageScaling).toFixed(1)} år`
+            });
         }
 
-        // 5. Diseases
-        if (diseases === 'cvd') {
-            ageModifier += 8.0;
-            riskFactors.push({ name: "Tidigare hjärt-kärlsjukdom", impact: "+8.0 år", type: "negative" });
-        } else if (diseases === 'diabetes2') {
-            ageModifier += 6.0;
-            riskFactors.push({ name: "Typ 2-diabetes", impact: "+6.0 år", type: "negative" });
-            modifiables.push({ title: "Blodsockeroptimering", desc: "Strikt kost och motion för att nå god glykemisk kontroll.", gain: "+4.0 år" });
-        } else if (diseases === 'cancer') {
-            ageModifier += 5.0;
-            riskFactors.push({ name: "Tidigare cancerdiagnos", impact: "+5.0 år", type: "negative" });
-        }
-
-        // 6. Smoking, Alcohol & Diet
+        // 6. Rökning, Alkohol & Kost
         if (smoking === 'current') {
-            ageModifier += 7.0;
-            riskFactors.push({ name: "Rökning (regelbunden)", impact: "+7.0 år", type: "negative" });
-            modifiables.push({ title: "Rökstopp", desc: "Att sluta röka är den enskilt mest livsförlängande insatsen.", gain: "+7.0 år" });
+            lifestyleNegatives.push(7.0);
+            riskFactors.push({ name: "Regelbunden rökning", impact: "+7.0 basår", type: "negative" });
+            const smokeGain = (7.0 * ageScaling).toFixed(1);
+            modifiables.push({
+                title: "Rökstopp",
+                desc: "Att sluta röka är den enskilt mest effektiva livsförlängande åtgärden (NEJM, Doll & Jha et al.).",
+                gain: `+${smokeGain} år`
+            });
         } else if (smoking === 'former') {
-            ageModifier += 1.5;
-            riskFactors.push({ name: "Före detta rökare", impact: "+1.5 år", type: "neutral" });
+            lifestyleNegatives.push(1.0);
+            riskFactors.push({ name: "F.d. rökare (gradvis avtagande risk)", impact: "+1.0 basår", type: "neutral" });
+        } else {
+            lifestylePositives.push(0.5);
+            riskFactors.push({ name: "Icke-rökare hela livet", impact: "-0.5 basår", type: "positive" });
         }
 
         if (alcohol === 'high') {
-            ageModifier += 3.0;
-            riskFactors.push({ name: "Hög alkoholkonsumtion / Riskbruk", impact: "+3.0 år", type: "negative" });
-            modifiables.push({ title: "Minska alkoholkonsumtionen", desc: "Sänk intaget till måttliga nivåer för att minska skaderisk.", gain: "+3.0 år" });
+            lifestyleNegatives.push(2.8);
+            riskFactors.push({ name: "Hög alkoholkonsumtion / Riskbruk", impact: "+2.8 basår", type: "negative" });
+            modifiables.push({
+                title: "Minska alkoholkonsumtionen till måttlig nivå",
+                desc: "Sänker blodtryck, leverskador, cancerrisk och hjärtflimmerrisk.",
+                gain: `+${(2.8 * ageScaling).toFixed(1)} år`
+            });
         }
 
         if (diet === 'poor') {
-            ageModifier += 2.0;
-            riskFactors.push({ name: "Processad mat & snabbmat", impact: "+2.0 år", type: "negative" });
-            modifiables.push({ title: "Gå över till näringstät kost", desc: "Mer grönt, fiber, fisk och hälsosamma fetter (Medelhavskost).", gain: "+2.0 år" });
+            lifestyleNegatives.push(2.0);
+            riskFactors.push({ name: "Processad mat & snabba kolhydrater", impact: "+2.0 basår", type: "negative" });
+            modifiables.push({
+                title: "Övergång till näringstät medelhavskost",
+                desc: "Mer grönt, fiber, fullkorn, baljväxter, fisk och vegetabiliska omättade fetter.",
+                gain: `+${(2.0 * ageScaling).toFixed(1)} år`
+            });
         } else if (diet === 'good') {
-            ageModifier -= 1.5;
-            riskFactors.push({ name: "Hälsosam kostprofil", impact: "-1.5 år", type: "positive" });
+            lifestylePositives.push(1.5);
+            riskFactors.push({ name: "Hälsosam kostprofil (Medelhavskost)", impact: "-1.5 basår", type: "positive" });
         }
 
-        // 7. Gender specific
+        // 7. Könsspecifikt
         if (gender === 'male') {
-            const psa = parseFloat(document.getElementById('psa').value);
-            if (psa > 4.0) {
-                ageModifier += 2.0;
-                riskFactors.push({ name: "Förhöjt PSA-värde", impact: "+2.0 år", type: "negative" });
-                modifiables.push({ title: "Urologisk uppföljning", desc: "Utredning och kontroll av förhöjt PSA.", gain: "+2.0 år" });
+            const prostateStatus = document.getElementById('prostateStatus').value;
+            if (prostateStatus === 'elevated') {
+                otherNegatives.push(2.0);
+                riskFactors.push({ name: "Förhöjt PSA under utredning / aktiv sjukdom", impact: "+2.0 basår", type: "negative" });
+                modifiables.push({
+                    title: "Urologisk utredning & handläggning",
+                    desc: "Genomför rekommenderad utredning för att diagnosticera och vid behov behandla prostatasjukdom i tidigt skede.",
+                    gain: `+${(2.0 * ageScaling).toFixed(1)} år`
+                });
+            } else if (prostateStatus === 'bph') {
+                riskFactors.push({ name: "Godartad prostataförstoring (BPH)", impact: "0.0 basår (ofarlig)", type: "neutral" });
             }
         } else {
             const menopause = document.getElementById('menopause').value;
             const pregnancy = document.getElementById('pregnancy').value;
             if (menopause === 'early') {
-                ageModifier += 1.5;
-                riskFactors.push({ name: "Tidig menopaus", impact: "+1.5 år", type: "neutral" });
+                otherNegatives.push(1.2);
+                riskFactors.push({ name: "Tidig menopaus (<45 år)", impact: "+1.2 basår", type: "neutral" });
             }
             if (pregnancy === 'preeclampsia') {
-                ageModifier += 2.0;
-                riskFactors.push({ name: "Tidigare preeklampsi", impact: "+2.0 år", type: "negative" });
+                metabolicNegatives.push(1.6);
+                riskFactors.push({ name: "Tidigare preeklampsi (vaskulär markör)", impact: "+1.6 basår", type: "negative" });
+                modifiables.push({
+                    title: "Kardiovaskulär uppföljning efter preeklampsi",
+                    desc: "Regelbunden årlig kontroll av blodtryck, lipider och blodsocker rekommenderas.",
+                    gain: `+${(1.6 * ageScaling).toFixed(1)} år`
+                });
             }
         }
 
-        // 8. Family
+        // 8. Genetik
         if (family === 'long') {
-            ageModifier -= 3.5;
-            riskFactors.push({ name: "Gynnsam genetik (>85 år)", impact: "-3.5 år", type: "positive" });
+            otherPositives.push(3.0);
+            riskFactors.push({ name: "Gynnsam hereditet (båda föräldrar >85 år)", impact: "-3.0 basår", type: "positive" });
         } else if (family === 'short') {
-            ageModifier += 3.0;
-            riskFactors.push({ name: "Ärftlighet för tidig sjukdom", impact: "+3.0 år", type: "negative" });
+            otherNegatives.push(2.5);
+            riskFactors.push({ name: "Ärftlighet för tidig kardiovaskulär sjukdom/cancer (<70 år)", impact: "+2.5 basår", type: "negative" });
         }
 
-        const bioAge = Math.round(age + ageModifier);
-        const finalRemaining = Math.max(2, baseRemaining - ageModifier);
-        const totalLife = Math.round(age + finalRemaining);
+        // Sub-additive aggregation
+        const metabolicNegRaw = combineDamped(metabolicNegatives, [1.0, 0.7, 0.5, 0.35, 0.25, 0.2]);
+        const metabolicPosRaw = combineDamped(metabolicPositives, [1.0, 0.8, 0.6]);
+        const lifestyleNegRaw = combineDamped(lifestyleNegatives, [1.0, 0.8, 0.6, 0.5]);
+        const lifestylePosRaw = combineDamped(lifestylePositives, [1.0, 0.8, 0.6]);
+        const otherNegRaw = combineDamped(otherNegatives, [1.0, 0.7]);
+        const otherPosRaw = combineDamped(otherPositives, [1.0]);
 
-        // Render results
+        const totalNegRaw = metabolicNegRaw + lifestyleNegRaw + cancerRaw + otherNegRaw;
+        const totalPosRaw = metabolicPosRaw + lifestylePosRaw + otherPosRaw;
+        const netModifierRaw = totalNegRaw - totalPosRaw;
+
+        // Apply age scaling
+        const netDeltaYears = netModifierRaw * ageScaling;
+        const finalRemaining = Math.max(1.5, baseRemaining - netDeltaYears);
+        const totalLife = Math.round(age + finalRemaining);
+        const bioAge = getEquivalentAgeForRemainingLife(finalRemaining, gender);
+
+        // Render metrics
         document.getElementById('resBioAge').innerText = bioAge + " år";
         document.getElementById('resChronAge').innerText = age;
         document.getElementById('resTotalAge').innerText = totalLife + " år";
-        document.getElementById('resRemainingSub').innerText = `Återstående: ca ${Math.round(finalRemaining)} år`;
+        document.getElementById('resRemainingSub').innerText = `Beräknad återstående: ca ${finalRemaining.toFixed(1)} år`;
+        document.getElementById('resSCBSub').innerText = `Befolkningssnitt (SCB): ca ${(age + baseRemaining).toFixed(1)} år (återstående: ${baseRemaining.toFixed(1)} år)`;
 
         // Render risk factors
         let riskHtml = "";
@@ -1073,7 +1403,7 @@
         document.querySelector('.wizard-footer').style.display = 'flex';
         document.querySelector('.header-progress').style.display = 'flex';
         document.querySelector('.progress-bar-container').style.display = 'block';
-        document.querySelector(`.step-content[data-step="8"]`).classList.remove('active');
+        document.querySelectorAll('.step-content').forEach(s => s.classList.remove('active'));
         document.querySelector(`.step-content[data-step="1"]`).classList.add('active');
         updateProgress();
         window.scrollTo({ top: 0, behavior: 'smooth' });
