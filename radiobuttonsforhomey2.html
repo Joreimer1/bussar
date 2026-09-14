@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Radio & Light Glow Dashboard Compact</title>
+    <style>
+        :root {
+            --bg-color: #020408;
+            --cyan-glow: #00ffff;
+            --cyan-dim: rgba(0, 255, 255, 0.3);
+            --blue-glow: #3b82f6;
+            
+            --amber-glow: #fbbf24;
+            --amber-dim: rgba(251, 191, 36, 0.35);
+
+            --red-glow: #ef4444;
+
+            --panel-bg: rgba(10, 15, 28, 0.85);
+            --card-bg: rgba(20, 30, 50, 0.7);
+            --border-color: rgba(255, 255, 255, 0.12);
+            --text-main: #ffffff;
+            --text-sub: #8492a6;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            -webkit-tap-highlight-color: transparent;
+            -webkit-touch-callout: none;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            background-image: 
+                radial-gradient(circle at 50% 10%, rgba(59, 130, 246, 0.15) 0%, transparent 50%),
+                radial-gradient(circle at 80% 80%, rgba(0, 255, 255, 0.08) 0%, transparent 40%);
+            color: var(--text-main);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 12px;
+            overflow: hidden;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+
+        /* Huvudcontainer */
+        .dashboard {
+            width: 100%;
+            max-width: 480px;
+            display: grid;
+            grid-template-columns: 1fr 82px;
+            grid-template-rows: minmax(0, 1fr) auto minmax(0, 1fr);
+            gap: 12px 16px;
+            background: var(--panel-bg);
+            padding: 18px;
+            border-radius: 28px;
+            border: 1px solid var(--border-color);
+            backdrop-filter: blur(25px);
+            -webkit-backdrop-filter: blur(25px);
+            box-shadow: 
+                0 0 60px 5px rgba(0, 0, 0, 0.9),
+                0 0 100px -10px rgba(59, 130, 246, 0.3),
+                inset 0 1px 1px rgba(255, 255, 255, 0.15);
+        }
+
+        /* Loggraderna */
+        .logo-row {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 10px;
+            width: 100%;
+        }
+
+        .logo-btn {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 18px;
+            padding: 6px;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            touch-action: manipulation;
+            transition: transform 0.15s ease, background 0.15s ease;
+            box-shadow: 
+                0 6px 14px -4px rgba(0, 0, 0, 0.6),
+                0 0 12px 0px rgba(59, 130, 246, 0.1),
+                inset 0 1px 1px rgba(255, 255, 255, 0.05);
+            animation: ambient-pulse 4s infinite alternate;
+            -webkit-appearance: none;
+        }
+
+        @keyframes ambient-pulse {
+            0% { box-shadow: 0 6px 14px -4px rgba(0, 0, 0, 0.6), 0 0 12px 0px rgba(59, 130, 246, 0.1); }
+            100% { box-shadow: 0 6px 14px -4px rgba(0, 0, 0, 0.7), 0 0 20px 2px rgba(59, 130, 246, 0.2); }
+        }
+
+        .logo-btn img {
+            max-width: 100%;
+            max-height: 100%;
+            width: auto;
+            height: auto;
+            object-fit: contain;
+            border-radius: 12px;
+            pointer-events: none;
+            filter: drop-shadow(0 2px 6px rgba(0,0,0,0.8));
+        }
+
+        .logo-btn:active {
+            transform: scale(0.92);
+            background: rgba(30, 40, 60, 0.9);
+            border-color: var(--cyan-glow);
+            box-shadow: 
+                0 0 10px rgba(0, 255, 255, 0.5),
+                0 0 30px rgba(0, 255, 255, 0.8),
+                inset 0 0 12px rgba(0, 255, 255, 0.3);
+            animation: none;
+        }
+
+        /* Avdelartext */
+        .divider-text {
+            grid-column: 1;
+            text-align: center;
+            font-size: 0.75rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: #ffffff;
+            text-shadow: 
+                0 0 5px #fff,
+                0 0 10px var(--cyan-glow),
+                0 0 20px var(--cyan-glow);
+            padding: 2px 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .divider-text::before, .divider-text::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, var(--cyan-glow), transparent);
+            box-shadow: 0 0 8px var(--cyan-glow);
+        }
+
+        /* HÖGER KOLUMN */
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            background: rgba(5, 10, 20, 0.6);
+            padding: 5px;
+            border-radius: 16px;
+            border: 1px solid var(--border-color);
+            box-shadow: inset 0 2px 8px rgba(0,0,0,0.5);
+            height: 100%;
+            justify-content: space-between;
+            z-index: 2;
+        }
+
+        /* Rumsknappar */
+        .room-group { grid-column: 2; grid-row: 1; }
+        
+        .room-btn {
+            flex: 1;
+            background: transparent;
+            border: 1px solid transparent;
+            color: var(--text-sub);
+            border-radius: 11px;
+            font-size: 0.75rem;
+            font-weight: 800;
+            letter-spacing: 0.5px;
+            cursor: pointer;
+            touch-action: manipulation;
+            transition: all 0.25s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            -webkit-appearance: none;
+        }
+
+        .room-btn.active {
+            background: linear-gradient(135deg, rgba(0, 255, 255, 0.2), rgba(59, 130, 246, 0.2));
+            color: #ffffff;
+            border-color: var(--cyan-glow);
+            box-shadow: 
+                0 0 12px var(--cyan-dim),
+                inset 0 0 10px rgba(0, 255, 255, 0.3);
+            text-shadow: 0 0 8px #ffffff;
+            animation: active-pulse 2s infinite alternate;
+        }
+
+        @keyframes active-pulse {
+            0% { box-shadow: 0 0 10px var(--cyan-dim), inset 0 0 8px rgba(0, 255, 255, 0.2); }
+            100% { box-shadow: 0 0 20px var(--cyan-glow), inset 0 0 14px rgba(0, 255, 255, 0.4); }
+        }
+
+        /* Lampknappar */
+        .light-group { grid-column: 2; grid-row: 2; }
+
+        .light-btn {
+            flex: 1;
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            color: var(--amber-glow);
+            padding: 5px 2px;
+            border-radius: 11px;
+            font-size: 0.68rem;
+            font-weight: 800;
+            cursor: pointer;
+            touch-action: manipulation;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 3px;
+            transition: all 0.15s ease;
+            -webkit-appearance: none;
+        }
+
+        .light-btn:active {
+            transform: scale(0.92);
+            background: var(--amber-glow);
+            color: #000000;
+            box-shadow: 0 0 15px var(--amber-glow);
+        }
+
+        /* Media / Volym & Stopp-knappar */
+        .volume-group { grid-column: 2; grid-row: 3; }
+
+        .vol-btn {
+            flex: 1;
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            color: #ffffff;
+            font-size: 1.3rem;
+            font-weight: 300;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            touch-action: manipulation;
+            transition: all 0.15s ease;
+            -webkit-appearance: none;
+        }
+
+        .vol-btn:active {
+            transform: scale(0.90);
+            background: #ffffff;
+            color: #000000;
+            box-shadow: 0 0 20px var(--blue-glow);
+        }
+
+        .stop-btn {
+            color: var(--red-glow);
+            font-size: 0.9rem;
+        }
+
+        .stop-btn:active {
+            background: var(--red-glow);
+            color: #ffffff;
+            box-shadow: 0 0 20px var(--red-glow);
+        }
+    </style>
+</head>
+<body>
+
+    <div class="dashboard">
+        <!-- ÖVRE LOGGRAD -->
+        <div class="logo-row" style="grid-column: 1; grid-row: 1;">
+            <button class="logo-btn" type="button" onclick="sendWebhook('p1')">
+                <img src="logo1.png" alt="P1">
+            </button>
+            <button class="logo-btn" type="button" onclick="sendWebhook('p2')">
+                <img src="logo2.png" alt="P2">
+            </button>
+            <button class="logo-btn" type="button" onclick="sendWebhook('p3')">
+                <img src="logo3.png" alt="P3">
+            </button>
+        </div>
+
+        <!-- RUMSVAL -->
+        <div class="control-group room-group">
+            <button class="room-btn active" id="btn-kok" type="button" onclick="selectRoom('kok')">KÖK</button>
+            <button class="room-btn" id="btn-vrum" type="button" onclick="selectRoom('vardagsrum')">V.RUM</button>
+        </div>
+
+        <!-- MITTEXT -->
+        <div class="divider-text">Välj radiokanal</div>
+
+        <!-- LAMPOR -->
+        <div class="control-group light-group">
+            <button class="light-btn" type="button" onclick="sendWebhook('light_on')">💡 PÅ</button>
+            <button class="light-btn" type="button" onclick="sendWebhook('light_off')">💡 AV</button>
+        </div>
+
+        <!-- UNDRE LOGGRAD -->
+        <div class="logo-row" style="grid-column: 1; grid-row: 3;">
+            <button class="logo-btn" type="button" onclick="sendWebhook('p4')">
+                <img src="logo4.png" alt="Kanal 4">
+            </button>
+            <button class="logo-btn" type="button" onclick="sendWebhook('p5')">
+                <img src="logo5.png" alt="Kanal 5">
+            </button>
+            <button class="logo-btn" type="button" onclick="sendWebhook('p6')">
+                <img src="logo6.png" alt="Kanal 6">
+            </button>
+        </div>
+
+        <!-- VOLYM & STOPP -->
+        <div class="control-group volume-group">
+            <button class="vol-btn" type="button" onclick="sendWebhook('vol_up')">+</button>
+            <button class="vol-btn stop-btn" type="button" onclick="sendWebhook('stop')">⏹</button>
+            <button class="vol-btn" type="button" onclick="sendWebhook('vol_down')">&minus;</button>
+        </div>
+    </div>
+
+    <script>
+        const HOMEY_IP = "192.168.68.69";
+        let activeRoom = "kok";
+
+        function selectRoom(room) {
+            activeRoom = room;
+            document.getElementById('btn-kok').classList.toggle('active', room === 'kok');
+            document.getElementById('btn-vrum').classList.toggle('active', room === 'vardagsrum');
+            sendWebhook('select_room');
+        }
+
+        function sendWebhook(action) {
+            const eventName = `${activeRoom}_${action}`;
+            // Lägger till en tidsstämpel för att förhindra att iOS cachar anropet
+            const url = `http://${HOMEY_IP}/webhook?event=${eventName}&t=${Date.now()}`;
+
+            console.log(`[Webhook Send] URL: ${url}`);
+
+            // Använd Image Ping istället för fetch för att runda Mixed Content & CORS-restriktioner i iOS Safari
+            const img = new Image();
+            img.src = url;
+        }
+    </script>
+</body>
+</html>
