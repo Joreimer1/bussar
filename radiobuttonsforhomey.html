@@ -14,6 +14,8 @@
             --amber-glow: #fbbf24;
             --amber-dim: rgba(251, 191, 36, 0.35);
 
+            --red-glow: #ef4444;
+
             --panel-bg: rgba(10, 15, 28, 0.85);
             --card-bg: rgba(20, 30, 50, 0.7);
             --border-color: rgba(255, 255, 255, 0.12);
@@ -145,7 +147,7 @@
         .control-group {
             display: flex;
             flex-direction: column;
-            gap: 6px;
+            gap: 4px;
             background: rgba(5, 10, 20, 0.6);
             padding: 5px;
             border-radius: 16px;
@@ -217,7 +219,7 @@
             box-shadow: 0 0 15px var(--amber-glow);
         }
 
-        /* Volymknappar */
+        /* Media / Volym & Stopp-knappar */
         .volume-group { grid-column: 2; grid-row: 3; }
 
         .vol-btn {
@@ -225,9 +227,9 @@
             background: var(--card-bg);
             border: 1px solid var(--border-color);
             color: #ffffff;
-            font-size: 1.5rem;
+            font-size: 1.3rem;
             font-weight: 300;
-            border-radius: 12px;
+            border-radius: 10px;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -240,6 +242,18 @@
             background: #ffffff;
             color: #000000;
             box-shadow: 0 0 20px var(--blue-glow);
+        }
+
+        /* Stopp-knapp styling */
+        .stop-btn {
+            color: var(--red-glow);
+            font-size: 0.9rem;
+        }
+
+        .stop-btn:active {
+            background: var(--red-glow);
+            color: #ffffff;
+            box-shadow: 0 0 20px var(--red-glow);
         }
     </style>
 </head>
@@ -287,9 +301,10 @@
             </button>
         </div>
 
-        <!-- VOLYM -->
+        <!-- VOLYM & STOPP -->
         <div class="control-group volume-group">
             <button class="vol-btn" onclick="sendWebhook('vol_up')">+</button>
+            <button class="vol-btn stop-btn" onclick="sendWebhook('stop')">⏹</button>
             <button class="vol-btn" onclick="sendWebhook('vol_down')">&minus;</button>
         </div>
     </div>
